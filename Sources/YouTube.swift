@@ -14,6 +14,7 @@ enum YouTube {
     private static let musicPlayer = "https://music.youtube.com/youtubei/v1/player?prettyPrint=false"
     private static let musicSearch = "https://music.youtube.com/youtubei/v1/search?prettyPrint=false"
     private static let musicBrowse = "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false"
+    private static let musicAccount = "https://music.youtube.com/youtubei/v1/account/account_menu?prettyPrint=false"
     /// YouTube Music "Songs" search filter.
     private static let songsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
 
@@ -130,7 +131,7 @@ enum YouTube {
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_home"]
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
-                                    userAgent: webUA, visitor: visitor, body: body)
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
         else { return [] }
         return parseHome(json)
     }
@@ -230,6 +231,72 @@ enum YouTube {
         }
     }
 
+    // MARK: - Account (login validation)
+
+    struct AccountInfo {
+        let name: String
+        let email: String?
+    }
+
+    /// Signed-in account details via account_menu — also the login-validity check.
+    static func accountInfo() async -> AccountInfo? {
+        let visitor = Auth.shared.visitorData ?? (await visitorData())
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client]]
+        guard let json = await post(musicAccount, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return nil }
+
+        guard
+            let actions = json["actions"] as? [[String: Any]],
+            let popup = (actions.first?["openPopupAction"] as? [String: Any])?["popup"] as? [String: Any],
+            let menu = popup["multiPageMenuRenderer"] as? [String: Any],
+            let header = menu["header"] as? [String: Any],
+            let account = header["activeAccountHeaderRenderer"] as? [String: Any]
+        else { return nil }
+
+        let name = runsFirst(account["accountName"])
+        guard !name.isEmpty else { return nil }
+        let email = runsFirst(account["email"])
+        return AccountInfo(name: name, email: email.isEmpty ? nil : email)
+    }
+
+    // MARK: - Library (signed-in)
+
+    /// The user's saved/created playlists (FEmusic_liked_playlists grid).
+    static func libraryPlaylists() async -> [HomeItem] {
+        guard Auth.shared.isLoggedIn else { return [] }
+        let visitor = Auth.shared.visitorData ?? (await visitorData())
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_liked_playlists"]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return [] }
+
+        var out: [HomeItem] = []
+        var seen = Set<String>()
+        collectCards(json, into: &out, seen: &seen)
+        return out
+    }
+
+    /// Walk the tree for playlist/album cards (used by the library grid).
+    private static func collectCards(_ node: Any, into out: inout [HomeItem], seen: inout Set<String>) {
+        if let dict = node as? [String: Any] {
+            if dict["musicTwoRowItemRenderer"] != nil, let item = parseHomeItem(dict),
+               let bid = item.browseId, seen.insert(bid).inserted {
+                out.append(item)
+                return
+            }
+            for (_, v) in dict { collectCards(v, into: &out, seen: &seen) }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectCards(v, into: &out, seen: &seen) }
+        }
+    }
+
     // MARK: - Parsing helpers
 
     /// First run's text (or simpleText) of a `{runs:[…]}` / `{simpleText:…}` node.
@@ -297,7 +364,8 @@ enum YouTube {
     // MARK: - InnerTube POST
 
     private static func post(_ endpoint: String, name: String, version: String,
-                             userAgent: String, visitor: String?, body: [String: Any]) async -> [String: Any]? {
+                             userAgent: String, visitor: String?, body: [String: Any],
+                             login: Bool = false) async -> [String: Any]? {
         guard let url = URL(string: endpoint),
               let payload = try? JSONSerialization.data(withJSONObject: body) else { return nil }
         var req = URLRequest(url: url)
@@ -310,6 +378,10 @@ enum YouTube {
         req.setValue("https://music.youtube.com", forHTTPHeaderField: "Origin")
         req.setValue("https://music.youtube.com/", forHTTPHeaderField: "Referer")
         if let visitor { req.setValue(visitor, forHTTPHeaderField: "X-Goog-Visitor-Id") }
+        // Signed-in requests (library, personalized home) carry the cookie + SAPISIDHASH.
+        if login {
+            for (key, value) in Auth.shared.headers() { req.setValue(value, forHTTPHeaderField: key) }
+        }
         guard let (data, _) = try? await URLSession.shared.data(for: req),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return json

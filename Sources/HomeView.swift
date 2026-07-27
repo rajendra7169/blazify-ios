@@ -5,10 +5,12 @@ import SwiftUI
 /// of real YouTube Music recommendations.
 struct HomeView: View {
     @ObservedObject var player: Player
+    @ObservedObject private var auth = Auth.shared
 
     @State private var sections: [HomeSection] = []
     @State private var loading = true
     @State private var path = NavigationPath()
+    @State private var showLogin = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -43,6 +45,10 @@ struct HomeView: View {
         .task {
             if sections.isEmpty { await load() }
         }
+        .onChange(of: auth.isLoggedIn) {
+            Task { await load() }   // swap to (or from) the personalized feed
+        }
+        .sheet(isPresented: $showLogin) { LoginView() }
     }
 
     private func tap(_ item: HomeItem) {
@@ -68,9 +74,13 @@ struct HomeView: View {
 
     private var header: some View {
         HStack {
-            Image(systemName: "person.crop.circle")
-                .font(.system(size: 26))
-                .foregroundStyle(.white)
+            Button {
+                if !auth.isLoggedIn { showLogin = true }
+            } label: {
+                Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                    .font(.system(size: 26))
+                    .foregroundStyle(auth.isLoggedIn ? Blaze.amber : .white)
+            }
             Spacer()
             HStack(spacing: 8) {
                 Image(systemName: "flame.fill")

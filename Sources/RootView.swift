@@ -17,9 +17,9 @@ struct RootView: View {
             case .explore:
                 NavigationStack { SearchView(player: player) }
             case .favorites:
-                SignInPrompt(icon: "heart.fill", message: "Sign in to see your favorites")
+                FavoritesView(player: player)
             case .profile:
-                SignInPrompt(icon: "person.fill", message: "Sign in to Blazify")
+                ProfileView()
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -87,24 +87,5 @@ struct BlazeTabBar: View {
         .overlay(alignment: .top) {
             Rectangle().fill(Color.white.opacity(0.06)).frame(height: 0.5)
         }
-    }
-}
-
-/// Placeholder for the tabs that need sign-in (Favorites / Profile), coming next chunk.
-struct SignInPrompt: View {
-    let icon: String
-    let message: String
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 48))
-                .foregroundStyle(Blaze.amber)
-            Text(message)
-                .font(.system(size: 16))
-                .foregroundStyle(.white.opacity(0.7))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Blaze.scaffold.ignoresSafeArea())
     }
 }
