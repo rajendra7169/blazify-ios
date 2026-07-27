@@ -49,7 +49,9 @@ def patch(path):
                 else:
                     print(f"  __LINKEDIT already roomy (vmsize {vmsize} >= filesize {filesize} + slack)")
                 return
-    print("  __LINKEDIT segment not found")
+        off += size  # advance to the next load command — without this the loop never moves
+    # Fail loudly: a silent miss here ships an IPA that dyld kills before main().
+    sys.exit(f"  ERROR: __LINKEDIT segment not found in {path}")
 
 
 if __name__ == "__main__":
