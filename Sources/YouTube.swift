@@ -17,13 +17,16 @@ enum YouTube {
     private static let songsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
 
     private static var cachedVisitor: String?
-    /// Resolved stream URLs cached until near their expiry (lets us prefetch).
-    private static var urlCache: [String: (url: URL, expires: Date)] = [:]
+    /// Resolved streams cached until near their expiry (lets us prefetch).
+    private static var urlCache: [String: (url: URL, duration: Double, expires: Date)] = [:]
 
     // MARK: - Stream (VISIONOS, uncapped → direct streaming)
 
-    static func streamURL(for videoId: String) async -> URL? {
-        if let hit = urlCache[videoId], hit.expires > Date() { return hit.url }
+    /// Returns the playable URL and the REAL duration (seconds) from the format —
+    /// AVPlayer misreads this fragmented MP4's own duration (~2×), so we carry the
+    /// true value from `approxDurationMs`/`lengthSeconds`.
+    static func streamURL(for videoId: String) async -> (url: URL, duration: Double)? {
+        if let hit = urlCache[videoId], hit.expires > Date() { return (hit.url, hit.duration) }
         let visitor = await visitorData()
         var client: [String: Any] = [
             "clientName": "VISIONOS", "clientVersion": visionVersion,
@@ -44,17 +47,22 @@ enum YouTube {
         else { return nil }
 
         // Best audio/mp4 (AAC) with a direct url — iOS can't play Opus/WebM.
-        var best: String?
+        var best: [String: Any]?
         var bestRate = -1
         for f in formats {
             let mime = f["mimeType"] as? String ?? ""
             guard mime.hasPrefix("audio/mp4"), let u = f["url"] as? String, !u.isEmpty else { continue }
             let rate = (f["bitrate"] as? Int) ?? (f["averageBitrate"] as? Int) ?? 0
-            if rate > bestRate { bestRate = rate; best = u }
+            if rate > bestRate { bestRate = rate; best = f }
         }
-        guard let best, let url = URL(string: best) else { return nil }
-        urlCache[videoId] = (url, Date().addingTimeInterval(4 * 3600))
-        return url
+        guard let best, let u = best["url"] as? String, let url = URL(string: u) else { return nil }
+
+        var dur = (Double(best["approxDurationMs"] as? String ?? "") ?? 0) / 1000
+        if dur <= 0, let ls = (json["videoDetails"] as? [String: Any])?["lengthSeconds"] as? String {
+            dur = Double(ls) ?? 0
+        }
+        urlCache[videoId] = (url, dur, Date().addingTimeInterval(4 * 3600))
+        return (url, dur)
     }
 
     // MARK: - Search (WEB_REMIX music, on-device)

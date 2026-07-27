@@ -3,9 +3,13 @@ import MediaPlayer
 import UIKit
 import Foundation
 
-/// Queue-based player. Resolves each track on-device (VISIONOS) and STREAMS the
-/// URL directly in AVPlayer — instant start, seek anywhere, background + lock
-/// screen with artwork, auto-advance. No server, no downloading first.
+/// Queue-based player. Resolves each track on-device (VISIONOS) and STREAMS the URL
+/// directly in AVPlayer — instant start, seek, background + lock screen, auto-advance.
+///
+/// AVPlayer misreads this fragmented-MP4 format's duration (~2×), so we always use
+/// the REAL duration from the format metadata and cap playback at it via
+/// `forwardPlaybackEndTime` — otherwise the song stalls at the real end (looking like
+/// it paused halfway) and never fires "ended", so it wouldn't auto-advance.
 final class Player: ObservableObject {
 
     @Published var queue: [Track] = []
@@ -14,9 +18,7 @@ final class Player: ObservableObject {
     @Published var isLoading = false
     @Published var currentTime = 0.0
     @Published var duration = 0.0
-    /// Drives the full-player sheet.
     @Published var showFullPlayer = false
-    /// Last playback error, surfaced in the UI when something fails.
     @Published var lastError: String?
 
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
@@ -27,6 +29,7 @@ final class Player: ObservableObject {
     private var timeObserver: Any?
     private var statusObs: NSKeyValueObservation?
     private var isSeeking = false
+    private var endHandled = false
     private var artwork: MPMediaItemArtwork?
 
     init() {
@@ -37,7 +40,7 @@ final class Player: ObservableObject {
             object: nil,
             queue: .main,
         ) { [weak self] _ in
-            self?.next()
+            self?.trackEnded()
         }
     }
 
@@ -64,6 +67,14 @@ final class Player: ObservableObject {
         }
     }
 
+    /// Advance once per track, whether triggered by the end notification or the
+    /// time-observer backup.
+    private func trackEnded() {
+        guard !endHandled else { return }
+        endHandled = true
+        next()
+    }
+
     // MARK: - Load / stream
 
     private func loadCurrent() {
@@ -71,6 +82,7 @@ final class Player: ObservableObject {
         duration = track.duration
         currentTime = 0
         isLoading = true
+        endHandled = false
         lastError = nil
         artwork = nil
         loadArtwork(track.thumbnailURL)
@@ -78,21 +90,21 @@ final class Player: ObservableObject {
 
         let videoId = track.videoId
         Task {
-            let url = await YouTube.streamURL(for: videoId)
+            let stream = await YouTube.streamURL(for: videoId)
             await MainActor.run {
                 guard self.current?.videoId == videoId else { return }
-                guard let url else {
+                guard let stream else {
                     self.isLoading = false
                     self.lastError = "Couldn't load this track. Try again."
                     return
                 }
-                self.playStream(url)
+                self.duration = stream.duration
+                self.playStream(stream.url, realDuration: stream.duration)
                 self.prefetchNext()
             }
         }
     }
 
-    /// Warm the next track's stream URL so tapping "next" resolves instantly.
     private func prefetchNext() {
         let n = index + 1
         guard queue.indices.contains(n) else { return }
@@ -100,26 +112,24 @@ final class Player: ObservableObject {
         Task.detached { _ = await YouTube.streamURL(for: vid) }
     }
 
-    private func playStream(_ url: URL) {
+    private func playStream(_ url: URL, realDuration: Double) {
         removeTimeObserver()
         statusObs = nil
 
         let asset = AVURLAsset(url: url, options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
         let item = AVPlayerItem(asset: asset)
+        if realDuration > 0 {
+            item.forwardPlaybackEndTime = CMTime(seconds: realDuration, preferredTimescale: 600)
+        }
         statusObs = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             guard let self else { return }
             DispatchQueue.main.async {
                 switch item.status {
-                case .readyToPlay:
-                    self.isLoading = false
-                    let d = item.duration.seconds
-                    if d.isFinite, d > 0 { self.duration = d }
-                    self.updateNowPlaying()
+                case .readyToPlay: self.isLoading = false
                 case .failed:
                     self.isLoading = false
                     self.lastError = item.error?.localizedDescription ?? "Playback failed"
-                default:
-                    break
+                default: break
                 }
             }
         }
@@ -132,10 +142,6 @@ final class Player: ObservableObject {
         ) { [weak self] time in
             guard let self, !self.isSeeking else { return }
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
-            if self.duration <= 0, let d = self.avPlayer?.currentItem?.duration.seconds, d.isFinite, d > 0 {
-                self.duration = d
-                self.updateNowPlaying()
-            }
         }
         p.play()
         isPlaying = true
