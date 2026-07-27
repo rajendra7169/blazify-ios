@@ -32,6 +32,15 @@ final class Player: ObservableObject {
     private var lastTempFile: URL?
     private let streamUA = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X)"
 
+    /// Dedicated session for fetching audio. iOS's URLSession otherwise reaches
+    /// googlevideo over QUIC (HTTP/3), which 403s these signed URLs; plain HTTPS
+    /// (HTTP/2 over TCP) serves them fine. Ephemeral = no cached HTTP/3 Alt-Svc.
+    private lazy var streamSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.assumesHTTP3Capable = false
+        return URLSession(configuration: cfg)
+    }()
+
     init() {
         configureSession()
         setupRemoteCommands()
@@ -107,7 +116,7 @@ final class Player: ObservableObject {
         let videoId = current?.videoId
         var req = URLRequest(url: url)
         req.setValue(streamUA, forHTTPHeaderField: "User-Agent")
-        let task = URLSession.shared.downloadTask(with: req) { [weak self] tmp, response, error in
+        let task = streamSession.downloadTask(with: req) { [weak self] tmp, response, error in
             guard let self else { return }
             if (error as NSError?)?.code == NSURLErrorCancelled { return }
             func fail(_ msg: String) {
