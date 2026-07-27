@@ -34,6 +34,7 @@ struct RootView: View {
         .tint(Blaze.amber)
         .sheet(isPresented: $player.showFullPlayer) {
             PlayerView(player: player)
+                .presentationDragIndicator(.visible)
         }
     }
 }

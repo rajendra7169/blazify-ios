@@ -2,6 +2,7 @@ import AVFoundation
 import MediaPlayer
 import UIKit
 import Foundation
+import SwiftUI
 
 /// Queue-based player. Resolves each track on-device (VISIONOS) and STREAMS the URL
 /// directly in AVPlayer — instant start, seek, background + lock screen, auto-advance.
@@ -12,6 +13,8 @@ import Foundation
 /// it paused halfway) and never fires "ended", so it wouldn't auto-advance.
 final class Player: ObservableObject {
 
+    enum RepeatMode { case off, all, one }
+
     @Published var queue: [Track] = []
     @Published var index = 0
     @Published var isPlaying = false
@@ -20,6 +23,15 @@ final class Player: ObservableObject {
     @Published var duration = 0.0
     @Published var showFullPlayer = false
     @Published var lastError: String?
+
+    @Published var isShuffled = false
+    @Published var repeatMode: RepeatMode = .off
+    @Published var favorites: Set<String> = []
+    /// Seed color for the player's dynamic gradient (from album art; amber fallback).
+    @Published var artColor: Color = Blaze.amber
+
+    /// Order before shuffle, so toggling shuffle off restores it.
+    private var originalQueue: [Track] = []
 
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
     var hasTrack: Bool { current != nil }
@@ -47,15 +59,114 @@ final class Player: ObservableObject {
     // MARK: - Queue control
 
     func play(_ tracks: [Track], startAt: Int) {
+        originalQueue = tracks
         queue = tracks
         index = startAt
+        if isShuffled { applyShuffle() }
         loadCurrent()
     }
 
     func next() {
-        guard index < queue.count - 1 else { return }
-        index += 1
+        if index < queue.count - 1 {
+            index += 1
+            loadCurrent()
+        } else if repeatMode == .all {
+            index = 0
+            loadCurrent()
+        }
+    }
+
+    // MARK: - Shuffle / repeat / favorite
+
+    func toggleShuffle() {
+        isShuffled.toggle()
+        guard let cur = current else { return }
+        if isShuffled {
+            applyShuffle()
+        } else {
+            queue = originalQueue
+            index = originalQueue.firstIndex(of: cur) ?? 0
+        }
+    }
+
+    /// Keep the current track, shuffle everything else after it.
+    private func applyShuffle() {
+        guard let cur = current else { return }
+        var rest = queue
+        rest.removeAll { $0 == cur }
+        rest.shuffle()
+        queue = [cur] + rest
+        index = 0
+    }
+
+    func cycleRepeat() {
+        switch repeatMode {
+        case .off: repeatMode = .all
+        case .all: repeatMode = .one
+        case .one: repeatMode = .off
+        }
+    }
+
+    func toggleFavorite() {
+        guard let id = current?.videoId else { return }
+        if favorites.contains(id) { favorites.remove(id) } else { favorites.insert(id) }
+    }
+
+    var isCurrentFavorite: Bool {
+        guard let id = current?.videoId else { return false }
+        return favorites.contains(id)
+    }
+
+    /// Jump to a specific queue position (from the Queue screen).
+    func jump(to i: Int) {
+        guard queue.indices.contains(i) else { return }
+        index = i
         loadCurrent()
+    }
+
+    // MARK: - Sleep timer
+
+    @Published var sleepEndDate: Date?         // countdown target; nil = off
+    @Published var sleepAtEndOfSong = false
+    private var sleepTimer: Timer?
+
+    var sleepActive: Bool { sleepEndDate != nil || sleepAtEndOfSong }
+    var sleepRemaining: TimeInterval? {
+        guard let end = sleepEndDate else { return nil }
+        return max(0, end.timeIntervalSinceNow)
+    }
+
+    func startSleepTimer(minutes: Int) {
+        sleepAtEndOfSong = false
+        sleepEndDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+        sleepTimer?.invalidate()
+        sleepTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self, let end = self.sleepEndDate else { return }
+            if Date() >= end {
+                self.stopForSleep()
+            } else {
+                self.objectWillChange.send()   // refresh the live countdown
+            }
+        }
+    }
+
+    func setSleepAtEndOfSong() {
+        cancelSleepTimer()
+        sleepAtEndOfSong = true
+    }
+
+    func cancelSleepTimer() {
+        sleepTimer?.invalidate()
+        sleepTimer = nil
+        sleepEndDate = nil
+        sleepAtEndOfSong = false
+    }
+
+    private func stopForSleep() {
+        cancelSleepTimer()
+        avPlayer?.pause()
+        isPlaying = false
+        updateNowPlaying()
     }
 
     func prev() {
@@ -72,6 +183,19 @@ final class Player: ObservableObject {
     private func trackEnded() {
         guard !endHandled else { return }
         endHandled = true
+        if sleepAtEndOfSong {
+            sleepAtEndOfSong = false
+            stopForSleep()
+            return
+        }
+        if repeatMode == .one {
+            endHandled = false
+            seek(to: 0)
+            avPlayer?.play()
+            isPlaying = true
+            updateNowPlaying()
+            return
+        }
         next()
     }
 
@@ -85,6 +209,7 @@ final class Player: ObservableObject {
         endHandled = false
         lastError = nil
         artwork = nil
+        artColor = Blaze.amber
         loadArtwork(track.thumbnailURL)
         updateNowPlaying()
 
@@ -204,7 +329,12 @@ final class Player: ObservableObject {
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             guard let self, let data, let img = UIImage(data: data) else { return }
             let art = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
-            DispatchQueue.main.async { self.artwork = art; self.updateNowPlaying() }
+            let seed = img.gradientSeed
+            DispatchQueue.main.async {
+                self.artwork = art
+                self.artColor = seed
+                self.updateNowPlaying()
+            }
         }.resume()
     }
 

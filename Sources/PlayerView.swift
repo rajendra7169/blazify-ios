@@ -1,118 +1,223 @@
 import SwiftUI
+import UIKit
 
-/// Full-screen Blazify player: art, title/artist, seekable progress with times,
-/// and amber transport (prev / play-pause / next) on a dark scaffold.
+/// Full-screen Blazify player — a SwiftUI port of the Android Blaze CLASSIC layout:
+/// album-art gradient background, centered "Now Playing" header, square art (r20),
+/// title + favorite + ⋮, the slim Apple-Music slider, the classic transport row
+/// (shuffle · prev · 72pt play · next · repeat), and a Queue / Sleep / Lyrics row.
 struct PlayerView: View {
     @ObservedObject var player: Player
     @Environment(\.dismiss) private var dismiss
 
-    @State private var dragValue: Double?
+    @State private var scrub: Double?
+    @State private var showQueue = false
+    @State private var showSleep = false
 
     var body: some View {
+        let art = UIScreen.main.bounds.width - 64
+
         ZStack {
-            Color.black.ignoresSafeArea()
+            // Dynamic gradient built from the song's color (amber fallback).
+            LinearGradient(
+                colors: [player.artColor, player.artColor.opacity(0.45), .black],
+                startPoint: .top, endPoint: .bottom,
+            )
+            .overlay(Color.black.opacity(0.2))
+            .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.6), value: player.artColor)
 
-            VStack(spacing: 22) {
-                // Top bar
-                HStack {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.title3).foregroundStyle(.white)
-                    }
-                    Spacer()
-                    Text("Now Playing")
-                        .font(.subheadline).foregroundStyle(.white.opacity(0.85))
-                    Spacer()
-                    Image(systemName: "chevron.down").opacity(0) // balance
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
+            VStack(spacing: 0) {
+                header
+                Spacer(minLength: 8)
+                albumArt(side: art)
+                Spacer(minLength: 8)
+                controls
+                bottomRow.padding(.top, 14)
+            }
+            .padding(.top, 18)
+            .padding(.bottom, 20)
+            .foregroundStyle(.white)
+        }
+        .sheet(isPresented: $showQueue) { QueueView(player: player) }
+        .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }
+    }
 
-                Spacer(minLength: 0)
+    // MARK: Header
 
-                // Album art
-                AsyncImage(url: player.current?.thumbnailURL) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    ZStack {
-                        Blaze.gradient
-                        Image(systemName: "music.note")
-                            .font(.system(size: 64)).foregroundStyle(.white.opacity(0.85))
-                    }
-                }
-                .frame(width: 300, height: 300)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
-                .overlay {
-                    if player.isLoading {
-                        ProgressView().tint(.white).scaleEffect(1.4)
-                    }
-                }
+    private var header: some View {
+        VStack(spacing: 2) {
+            Text("Now Playing")
+                .font(.system(size: 16, weight: .semibold))
+            Text(player.current?.artist ?? "")
+                .font(.system(size: 13, weight: .medium))
+                .opacity(0.8)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 48)
+    }
 
-                // Title + artist
-                VStack(spacing: 6) {
-                    Text(player.current?.title ?? "")
-                        .font(.title2).bold().foregroundStyle(.white).lineLimit(1)
-                    Text(player.current?.artist ?? "")
-                        .font(.subheadline).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
-                }
-                .padding(.horizontal)
+    // MARK: Album art
 
-                if let err = player.lastError {
-                    Text(err)
-                        .font(.caption2).foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
-                }
-
-                // Progress + times
-                VStack(spacing: 6) {
-                    Slider(
-                        value: Binding(
-                            get: { dragValue ?? player.progress },
-                            set: { dragValue = $0 },
-                        ),
-                        in: 0...1,
-                        onEditingChanged: { editing in
-                            if !editing, let v = dragValue {
-                                player.seek(to: v)
-                                dragValue = nil
-                            }
-                        },
-                    )
-                    .tint(Blaze.amber)
-
-                    HStack {
-                        Text(timeString((dragValue ?? player.progress) * player.duration))
-                        Spacer()
-                        Text(timeString(player.duration))
-                    }
-                    .font(.caption).foregroundStyle(.white.opacity(0.6))
-                }
-                .padding(.horizontal, 24)
-
-                // Transport
-                HStack(spacing: 44) {
-                    Button { player.prev() } label: {
-                        Image(systemName: "backward.fill").font(.title).foregroundStyle(.white)
-                    }
-                    Button { player.toggle() } label: {
-                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 74)).foregroundStyle(Blaze.amber)
-                    }
-                    Button { player.next() } label: {
-                        Image(systemName: "forward.fill").font(.title).foregroundStyle(.white)
-                    }
-                }
-
-                Spacer(minLength: 0)
+    private func albumArt(side: CGFloat) -> some View {
+        RemoteImage(url: player.current?.thumbnailURL) {
+            ZStack {
+                Blaze.gradient
+                Image(systemName: "music.note")
+                    .font(.system(size: 64))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+        }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+        .overlay {
+            if player.isLoading {
+                ProgressView().tint(.white).scaleEffect(1.4)
             }
         }
     }
 
-    private func timeString(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
-        let total = Int(seconds)
-        return String(format: "%d:%02d", total / 60, total % 60)
+    // MARK: Controls (title row + slider + transport)
+
+    private var controls: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(player.current?.title ?? "")
+                        .font(.system(size: 22, weight: .bold))
+                        .lineLimit(1)
+                    Text(player.current?.artist ?? "")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+
+                Button { player.toggleFavorite() } label: {
+                    Image(systemName: player.isCurrentFavorite ? "heart.fill" : "heart")
+                        .font(.system(size: 26))
+                        .foregroundStyle(player.isCurrentFavorite ? .red : .white)
+                }
+
+                Menu {
+                    if let url = shareURL {
+                        ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+                    }
+                    Button { player.toggleFavorite() } label: {
+                        Label(player.isCurrentFavorite ? "Remove from Favorites" : "Add to Favorites",
+                              systemImage: "heart")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(Color.white.opacity(0.15))
+                        .clipShape(Circle())
+                }
+            }
+            .padding(.horizontal, 32)
+
+            if let err = player.lastError {
+                Text(err)
+                    .font(.caption2).foregroundStyle(.white.opacity(0.9))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32).padding(.top, 8)
+            }
+
+            Spacer().frame(height: 24)
+
+            SlimSlider(
+                value: Binding(get: { scrub ?? player.progress }, set: { scrub = $0 }),
+                active: player.artColor,
+            ) { v in
+                player.seek(to: v)
+                scrub = nil
+            }
+            .padding(.horizontal, 32)
+
+            HStack {
+                Text(timeString((scrub ?? player.progress) * player.duration))
+                Spacer()
+                Text(timeString(player.duration))
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.white.opacity(0.8))
+            .padding(.horizontal, 36)
+            .padding(.top, 4)
+
+            Spacer().frame(height: 22)
+
+            transport
+        }
+    }
+
+    private var transport: some View {
+        HStack(spacing: 0) {
+            sideButton("shuffle", active: player.isShuffled) { player.toggleShuffle() }
+            sideButton("backward.end.fill") { player.prev() }
+
+            Button { player.toggle() } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(.black)
+                    .frame(width: 72, height: 72)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: player.isPlaying ? 24 : 36))
+                    .animation(.easeInOut(duration: 0.15), value: player.isPlaying)
+            }
+            .padding(.horizontal, 8)
+
+            sideButton("forward.end.fill") { player.next() }
+            sideButton(player.repeatMode == .one ? "repeat.1" : "repeat",
+                       active: player.repeatMode != .off) { player.cycleRepeat() }
+        }
+        .padding(.horizontal, 32)
+    }
+
+    private func sideButton(_ icon: String, active: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 26))
+                .foregroundStyle(active ? Blaze.amber : .white)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: Bottom row (Queue · Sleep · Lyrics)
+
+    private var bottomRow: some View {
+        HStack(spacing: 0) {
+            bottomButton("list.bullet", "Queue") { showQueue = true }
+            bottomButton(player.sleepActive ? "moon.zzz.fill" : "moon.zzz",
+                         sleepLabel, active: player.sleepActive) { showSleep = true }
+            bottomButton("quote.bubble", "Lyrics", dimmed: true) {}
+        }
+        .padding(.horizontal, 40)
+    }
+
+    private func bottomButton(_ icon: String, _ label: String,
+                              active: Bool = false, dimmed: Bool = false,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 20))
+                Text(label).font(.system(size: 11)).lineLimit(1)
+            }
+            .foregroundStyle(active ? Blaze.amber : .white.opacity(dimmed ? 0.35 : 0.85))
+            .frame(maxWidth: .infinity)
+        }
+        .disabled(dimmed)
+    }
+
+    private var sleepLabel: String {
+        if player.sleepAtEndOfSong { return "End of song" }
+        if let r = player.sleepRemaining { return timeString(r) }
+        return "Sleep timer"
+    }
+
+    private var shareURL: URL? {
+        guard let id = player.current?.videoId else { return nil }
+        return URL(string: "https://music.youtube.com/watch?v=\(id)")
     }
 }
