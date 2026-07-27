@@ -3,10 +3,9 @@ import MediaPlayer
 import UIKit
 import Foundation
 
-/// Queue-based player. Resolves each track on-device (ANDROID_VR), downloads the
-/// audio in ≤1 MiB chunks, and plays the local file (background + lock screen with
-/// artwork) — auto-advancing. Metadata shows instantly from search data. Prefetches
-/// the next track so the queue feels instant.
+/// Queue-based player. Resolves each track on-device (VISIONOS) and STREAMS the
+/// URL directly in AVPlayer — instant start, seek anywhere, background + lock
+/// screen with artwork, auto-advance. No server, no downloading first.
 final class Player: ObservableObject {
 
     @Published var queue: [Track] = []
@@ -26,10 +25,9 @@ final class Player: ObservableObject {
 
     private var avPlayer: AVPlayer?
     private var timeObserver: Any?
+    private var statusObs: NSKeyValueObservation?
     private var isSeeking = false
     private var artwork: MPMediaItemArtwork?
-    private var lastTempFile: URL?
-    private var prefetched: Set<String> = []
 
     init() {
         configureSession()
@@ -66,7 +64,7 @@ final class Player: ObservableObject {
         }
     }
 
-    // MARK: - Load / play
+    // MARK: - Load / stream
 
     private func loadCurrent() {
         guard let track = current else { return }
@@ -80,50 +78,43 @@ final class Player: ObservableObject {
 
         let videoId = track.videoId
         Task {
-            let dest = await Self.fetch(videoId)
+            let url = await YouTube.streamURL(for: videoId)
             await MainActor.run {
                 guard self.current?.videoId == videoId else { return }
-                guard let dest else {
+                guard let url else {
                     self.isLoading = false
                     self.lastError = "Couldn't load this track. Try again."
                     return
                 }
-                if let old = self.lastTempFile, old != dest { try? FileManager.default.removeItem(at: old) }
-                self.lastTempFile = dest
-                self.playLocal(dest)
-                self.prefetchNext()
+                self.playStream(url)
             }
         }
     }
 
-    /// Resolve + download a track to a temp .m4a (reusing the cache file if present).
-    /// Returns the file URL, or nil on failure.
-    private static func fetch(_ videoId: String) async -> URL? {
-        let dest = FileManager.default.temporaryDirectory.appendingPathComponent("blz-\(videoId).m4a")
-        if FileManager.default.fileExists(atPath: dest.path) { return dest }
-        guard
-            let url = await YouTube.streamURL(for: videoId),
-            let data = await AudioDownloader.download(url, userAgent: YouTube.ua),
-            !data.isEmpty,
-            (try? data.write(to: dest)) != nil
-        else { return nil }
-        return dest
-    }
-
-    /// Warm the next track in the background so tapping "next" is instant.
-    private func prefetchNext() {
-        let n = index + 1
-        guard queue.indices.contains(n) else { return }
-        let vid = queue[n].videoId
-        guard !prefetched.contains(vid) else { return }
-        prefetched.insert(vid)
-        Task.detached { _ = await Self.fetch(vid) }
-    }
-
-    private func playLocal(_ fileURL: URL) {
+    private func playStream(_ url: URL) {
         removeTimeObserver()
-        isLoading = false
-        let item = AVPlayerItem(url: fileURL)
+        statusObs = nil
+
+        let asset = AVURLAsset(url: url, options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
+        let item = AVPlayerItem(asset: asset)
+        statusObs = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                switch item.status {
+                case .readyToPlay:
+                    self.isLoading = false
+                    let d = item.duration.seconds
+                    if d.isFinite, d > 0 { self.duration = d }
+                    self.updateNowPlaying()
+                case .failed:
+                    self.isLoading = false
+                    self.lastError = item.error?.localizedDescription ?? "Playback failed"
+                default:
+                    break
+                }
+            }
+        }
+
         let p = AVPlayer(playerItem: item)
         avPlayer = p
         timeObserver = p.addPeriodicTimeObserver(
@@ -132,6 +123,10 @@ final class Player: ObservableObject {
         ) { [weak self] time in
             guard let self, !self.isSeeking else { return }
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
+            if self.duration <= 0, let d = self.avPlayer?.currentItem?.duration.seconds, d.isFinite, d > 0 {
+                self.duration = d
+                self.updateNowPlaying()
+            }
         }
         p.play()
         isPlaying = true

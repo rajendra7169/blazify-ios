@@ -43,7 +43,7 @@ struct SearchView: View {
         searching = true
         didSearch = true
         Task {
-            let r = await BackendClient.search(q)
+            let r = await YouTube.search(q)
             await MainActor.run {
                 results = r
                 searching = false
