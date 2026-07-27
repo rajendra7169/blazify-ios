@@ -3,10 +3,9 @@ import MediaPlayer
 import UIKit
 import Foundation
 
-/// Queue-based player. Holds a list of tracks, resolves each one's stream URL via
-/// the backend on demand, streams it (background + lock screen with artwork), and
-/// auto-advances. Shows track metadata instantly from search data while the URL
-/// resolves, so there's no blank "loading" wait.
+/// Queue-based player. Asks the server to prepare each track, then streams it from
+/// the server's /audio URL (background + lock screen with artwork) and auto-advances.
+/// Metadata shows instantly from search data while the song is fetched.
 final class Player: ObservableObject {
 
     @Published var queue: [Track] = []
@@ -17,10 +16,8 @@ final class Player: ObservableObject {
     @Published var duration = 0.0
     /// Drives the full-player sheet.
     @Published var showFullPlayer = false
-    /// Last playback/stream error, surfaced in the UI when something fails.
+    /// Last playback error, surfaced in the UI when something fails.
     @Published var lastError: String?
-    /// The last resolved stream URL — exposed so it can be copied for diagnosis.
-    @Published var lastURL: String?
 
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
     var hasTrack: Bool { current != nil }
@@ -30,8 +27,6 @@ final class Player: ObservableObject {
     private var timeObserver: Any?
     private var isSeeking = false
     private var artwork: MPMediaItemArtwork?
-    private var lastTempFile: URL?
-    private let streamUA = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X)"
 
     init() {
         configureSession()
@@ -84,59 +79,29 @@ final class Player: ObservableObject {
 
         let videoId = track.videoId
         Task {
-            let url = await BackendClient.streamURL(for: videoId)
+            let err = await BackendClient.prepare(videoId)
             await MainActor.run {
                 // Ignore if the user moved on to another track meanwhile.
                 guard self.current?.videoId == videoId else { return }
-                guard let url else {
+                if let err {
                     self.isLoading = false
-                    self.lastError = "Couldn't resolve this track."
+                    self.lastError = "Couldn't load this track (\(err))."
                     return
                 }
-                self.startPlayback(url)   // keeps isLoading until audio actually starts
+                guard let url = BackendClient.audioURL(for: videoId) else {
+                    self.isLoading = false
+                    self.lastError = "Couldn't load this track."
+                    return
+                }
+                self.playStream(url)
             }
         }
     }
 
-    /// Download the audio through the app's own URLSession (the same network egress
-    /// that resolved the URL), then play the local file. AVPlayer/mediaplaybackd
-    /// fetches from a different egress and gets HTTP 403 on these ip=-locked
-    /// googlevideo URLs; the app's URLSession matches the URL, so this succeeds — and
-    /// it doubles as the basis for offline downloads later.
-    private func startPlayback(_ url: URL) {
-        lastURL = url.absoluteString
-        let videoId = current?.videoId
-        TCPDownloader.get(url, userAgent: streamUA) { [weak self] data, status in
-            DispatchQueue.main.async {
-                guard let self, self.current?.videoId == videoId else { return }
-                guard let data, !data.isEmpty, status == 200 || status == 206 else {
-                    self.isLoading = false
-                    self.lastError = status.map { "Stream HTTP \($0)" } ?? "Download failed."
-                    return
-                }
-                let dest = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("blz-\(videoId ?? "track").m4a")
-                try? FileManager.default.removeItem(at: dest)
-                do {
-                    try data.write(to: dest)
-                } catch {
-                    self.isLoading = false
-                    self.lastError = "Couldn't save audio."
-                    return
-                }
-                if let old = self.lastTempFile, old != dest {
-                    try? FileManager.default.removeItem(at: old)
-                }
-                self.lastTempFile = dest
-                self.playLocal(dest)
-            }
-        }
-    }
-
-    private func playLocal(_ fileURL: URL) {
+    private func playStream(_ url: URL) {
         removeTimeObserver()
         isLoading = false
-        let item = AVPlayerItem(url: fileURL)
+        let item = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: item)
         avPlayer = p
         timeObserver = p.addPeriodicTimeObserver(

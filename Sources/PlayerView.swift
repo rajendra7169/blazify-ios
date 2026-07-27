@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// Full-screen Blazify player: art, title/artist, seekable progress with times,
 /// and amber transport (prev / play-pause / next) on a dark scaffold.
@@ -60,20 +59,10 @@ struct PlayerView: View {
                 .padding(.horizontal)
 
                 if let err = player.lastError {
-                    VStack(spacing: 8) {
-                        Text(err)
-                            .font(.caption2).foregroundStyle(.red)
-                            .multilineTextAlignment(.center)
-                        if let u = player.lastURL {
-                            Button {
-                                UIPasteboard.general.string = u
-                            } label: {
-                                Label("Copy stream URL", systemImage: "doc.on.doc")
-                                    .font(.caption).foregroundStyle(Blaze.amber)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 24)
+                    Text(err)
+                        .font(.caption2).foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
                 }
 
                 // Progress + times
