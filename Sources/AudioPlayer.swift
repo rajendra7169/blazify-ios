@@ -1,28 +1,61 @@
 import AVFoundation
 import MediaPlayer
+import Foundation
 
-/// Bare-minimum background-capable player. Its only job is to prove the pipeline:
-/// build without a Mac -> SideStore install -> audio that survives screen lock,
-/// with working lock-screen controls. It plays one fixed public file, so this
-/// test does NOT depend on the YouTube extractor yet — that comes next.
+/// Now plays REAL YouTube audio: it asks the Blazify extractor backend to resolve
+/// a videoId into a playable M4A URL, then streams that (directly from Google's
+/// CDN) with background playback + lock-screen controls.
 final class AudioPlayer: ObservableObject {
 
     @Published var isPlaying = false
-    let title = "Blazify Test Track"
+    @Published var title = "Tap to load"
+    @Published var status = ""
 
     private var player: AVPlayer?
 
-    // A stable, public sample track. Swapped for a real stream URL once the
-    // extractor backend exists.
-    private let url = URL(string: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3")!
+    // The live server we deployed. Everything is HTTPS end to end.
+    private let backend = "https://blazify-extractor-server.onrender.com"
 
-    func prepare() {
+    /// Resolve a YouTube videoId through the backend, then get ready to play it.
+    func load(videoId: String) {
         configureSession()
-        if player == nil {
-            player = AVPlayer(url: url)
-        }
         setupRemoteCommands()
-        updateNowPlaying()
+        status = "Resolving…"
+        title = "Loading…"
+
+        guard let url = URL(string: "\(backend)/stream?v=\(videoId)") else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+            guard let self else { return }
+            if let error = error {
+                DispatchQueue.main.async { self.status = "Network error: \(error.localizedDescription)" }
+                return
+            }
+            guard
+                let data = data,
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else {
+                DispatchQueue.main.async { self.status = "Bad response" }
+                return
+            }
+            if let err = json["error"] as? String {
+                DispatchQueue.main.async { self.status = "Server: \(err)" }
+                return
+            }
+            guard
+                let streamStr = json["url"] as? String,
+                let streamURL = URL(string: streamStr)
+            else {
+                DispatchQueue.main.async { self.status = "No stream URL" }
+                return
+            }
+            let songTitle = (json["title"] as? String) ?? "Unknown"
+            DispatchQueue.main.async {
+                self.title = songTitle
+                self.status = "Ready — press play"
+                self.player = AVPlayer(url: streamURL)
+                self.updateNowPlaying()
+            }
+        }.resume()
     }
 
     func toggle() {
@@ -33,6 +66,7 @@ final class AudioPlayer: ObservableObject {
             player.play()
         }
         isPlaying.toggle()
+        status = isPlaying ? "Playing" : "Paused"
         updateNowPlaying()
     }
 
@@ -40,8 +74,6 @@ final class AudioPlayer: ObservableObject {
 
     private func configureSession() {
         let session = AVAudioSession.sharedInstance()
-        // `.playback` is what keeps sound alive when the screen locks. The default
-        // category silences on lock — the classic "music stops when I lock it" bug.
         try? session.setCategory(.playback, mode: .default)
         try? session.setActive(true)
     }
