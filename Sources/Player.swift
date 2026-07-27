@@ -3,9 +3,10 @@ import MediaPlayer
 import UIKit
 import Foundation
 
-/// Queue-based player. Asks the server to prepare each track, then streams it from
-/// the server's /audio URL (background + lock screen with artwork) and auto-advances.
-/// Metadata shows instantly from search data while the song is fetched.
+/// Queue-based player. Resolves each track on-device (ANDROID_VR), downloads the
+/// audio in ≤1 MiB chunks, and plays the local file (background + lock screen with
+/// artwork) — auto-advancing. Metadata shows instantly from search data. Prefetches
+/// the next track so the queue feels instant.
 final class Player: ObservableObject {
 
     @Published var queue: [Track] = []
@@ -27,11 +28,12 @@ final class Player: ObservableObject {
     private var timeObserver: Any?
     private var isSeeking = false
     private var artwork: MPMediaItemArtwork?
+    private var lastTempFile: URL?
+    private var prefetched: Set<String> = []
 
     init() {
         configureSession()
         setupRemoteCommands()
-        // Auto-advance when a track finishes. Block-based (no @objc/NSObject needed).
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: nil,
@@ -64,11 +66,10 @@ final class Player: ObservableObject {
         }
     }
 
-    // MARK: - Playback
+    // MARK: - Load / play
 
     private func loadCurrent() {
         guard let track = current else { return }
-        // Show metadata immediately from the search result.
         duration = track.duration
         currentTime = 0
         isLoading = true
@@ -79,29 +80,50 @@ final class Player: ObservableObject {
 
         let videoId = track.videoId
         Task {
-            let err = await BackendClient.prepare(videoId)
+            let dest = await Self.fetch(videoId)
             await MainActor.run {
-                // Ignore if the user moved on to another track meanwhile.
                 guard self.current?.videoId == videoId else { return }
-                if let err {
+                guard let dest else {
                     self.isLoading = false
-                    self.lastError = "Couldn't load this track (\(err))."
+                    self.lastError = "Couldn't load this track. Try again."
                     return
                 }
-                guard let url = BackendClient.audioURL(for: videoId) else {
-                    self.isLoading = false
-                    self.lastError = "Couldn't load this track."
-                    return
-                }
-                self.playStream(url)
+                if let old = self.lastTempFile, old != dest { try? FileManager.default.removeItem(at: old) }
+                self.lastTempFile = dest
+                self.playLocal(dest)
+                self.prefetchNext()
             }
         }
     }
 
-    private func playStream(_ url: URL) {
+    /// Resolve + download a track to a temp .m4a (reusing the cache file if present).
+    /// Returns the file URL, or nil on failure.
+    private static func fetch(_ videoId: String) async -> URL? {
+        let dest = FileManager.default.temporaryDirectory.appendingPathComponent("blz-\(videoId).m4a")
+        if FileManager.default.fileExists(atPath: dest.path) { return dest }
+        guard
+            let url = await YouTube.streamURL(for: videoId),
+            let data = await AudioDownloader.download(url, userAgent: YouTube.ua),
+            !data.isEmpty,
+            (try? data.write(to: dest)) != nil
+        else { return nil }
+        return dest
+    }
+
+    /// Warm the next track in the background so tapping "next" is instant.
+    private func prefetchNext() {
+        let n = index + 1
+        guard queue.indices.contains(n) else { return }
+        let vid = queue[n].videoId
+        guard !prefetched.contains(vid) else { return }
+        prefetched.insert(vid)
+        Task.detached { _ = await Self.fetch(vid) }
+    }
+
+    private func playLocal(_ fileURL: URL) {
         removeTimeObserver()
         isLoading = false
-        let item = AVPlayerItem(url: url)
+        let item = AVPlayerItem(url: fileURL)
         let p = AVPlayer(playerItem: item)
         avPlayer = p
         timeObserver = p.addPeriodicTimeObserver(
