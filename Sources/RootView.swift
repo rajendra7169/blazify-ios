@@ -19,7 +19,7 @@ struct RootView: View {
             case .favorites:
                 FavoritesView(player: player)
             case .profile:
-                ProfileView()
+                ProfileView(player: player)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {

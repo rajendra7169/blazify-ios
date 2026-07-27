@@ -5,9 +5,18 @@ import SwiftUI
 struct PlaylistView: View {
     let item: HomeItem
     @ObservedObject var player: Player
+    @ObservedObject private var downloads = Downloads.shared
 
     @State private var tracks: [Track] = []
     @State private var loading = true
+
+    private var downloadLabel: String {
+        guard !tracks.isEmpty else { return "Download" }
+        let done = tracks.filter { downloads.isDownloaded($0.videoId) }.count
+        if done == tracks.count { return "Downloaded" }
+        if done > 0 { return "\(done)/\(tracks.count)" }
+        return "Download"
+    }
 
     var body: some View {
         ScrollView {
@@ -38,10 +47,13 @@ struct PlaylistView: View {
                 .padding(.horizontal, 24)
 
                 if !tracks.isEmpty {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
                         actionButton("Play", "play.fill") { player.play(tracks, startAt: 0); player.showFullPlayer = true }
                         actionButton("Shuffle", "shuffle") {
                             player.play(tracks.shuffled(), startAt: 0); player.showFullPlayer = true
+                        }
+                        actionButton(downloadLabel, "arrow.down.circle") {
+                            Downloads.shared.downloadAll(tracks)
                         }
                     }
                     .padding(.horizontal, 16)

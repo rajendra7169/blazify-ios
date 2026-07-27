@@ -214,6 +214,17 @@ final class Player: ObservableObject {
         updateNowPlaying()
 
         let videoId = track.videoId
+
+        // Offline first: play the downloaded file with no network if we have it.
+        if let local = Downloads.shared.localAudioURL(for: videoId) {
+            let dur = Downloads.shared.duration(for: videoId) ?? track.duration
+            duration = dur
+            isLoading = false
+            playStream(local, realDuration: dur)
+            prefetchNext()
+            return
+        }
+
         Task {
             let stream = await YouTube.streamURL(for: videoId)
             await MainActor.run {
@@ -326,6 +337,14 @@ final class Player: ObservableObject {
 
     private func loadArtwork(_ url: URL?) {
         guard let url else { return }
+        // Downloaded art is a local file:// URL — load it directly.
+        if url.isFileURL {
+            guard let data = try? Data(contentsOf: url), let img = UIImage(data: data) else { return }
+            artwork = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
+            artColor = img.gradientSeed
+            updateNowPlaying()
+            return
+        }
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             guard let self, let data, let img = UIImage(data: data) else { return }
             let art = MPMediaItemArtwork(boundsSize: img.size) { _ in img }

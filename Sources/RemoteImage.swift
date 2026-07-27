@@ -39,6 +39,14 @@ struct RemoteImage<Placeholder: View>: View {
             image = cached
             return
         }
+        // Downloaded art is a local file:// URL.
+        if url.isFileURL {
+            if let data = try? Data(contentsOf: url), let ui = UIImage(data: data) {
+                ImageCache.store.setObject(ui, forKey: url as NSURL)
+                image = ui
+            }
+            return
+        }
         guard let (data, _) = try? await URLSession.shared.data(from: url),
               let ui = UIImage(data: data) else { return }
         ImageCache.store.setObject(ui, forKey: url as NSURL)

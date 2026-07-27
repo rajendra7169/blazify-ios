@@ -3,8 +3,11 @@ import SwiftUI
 /// Profile tab: signed-out shows a sign-in call to action; signed-in shows the
 /// account and a sign-out button.
 struct ProfileView: View {
+    @ObservedObject var player: Player
     @ObservedObject private var auth = Auth.shared
+    @ObservedObject private var downloads = Downloads.shared
     @State private var showLogin = false
+    @State private var showDownloads = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -60,9 +63,28 @@ struct ProfileView: View {
                 }
                 .padding(.top, 8)
             }
+
+            Button { showDownloads = true } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.down.circle.fill")
+                    Text("Downloads")
+                    Spacer()
+                    Text("\(downloads.tracks.count)").foregroundStyle(.white.opacity(0.5))
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.white.opacity(0.4))
+                }
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(Color.white.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Blaze.scaffold.ignoresSafeArea())
         .sheet(isPresented: $showLogin) { LoginView() }
+        .sheet(isPresented: $showDownloads) { DownloadsView(player: player) }
     }
 }

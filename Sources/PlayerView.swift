@@ -7,6 +7,7 @@ import UIKit
 /// (shuffle · prev · 72pt play · next · repeat), and a Queue / Sleep / Lyrics row.
 struct PlayerView: View {
     @ObservedObject var player: Player
+    @ObservedObject private var downloads = Downloads.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var scrub: Double?
@@ -148,6 +149,17 @@ struct PlayerView: View {
                 }
 
                 Menu {
+                    let dState = downloads.state(player.current?.videoId ?? "")
+                    Button {
+                        if let t = player.current { downloads.toggle(t) }
+                    } label: {
+                        Label(dState == .done ? "Remove download"
+                                : dState == .downloading ? "Downloading…" : "Download for offline",
+                              systemImage: dState == .done ? "arrow.down.circle.fill"
+                                : dState == .downloading ? "hourglass" : "arrow.down.circle")
+                    }
+                    .disabled(dState == .downloading)
+
                     if let url = shareURL {
                         ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
                     }
