@@ -29,14 +29,17 @@ struct PlayerView: View {
 
             VStack(spacing: 0) {
                 header
-                Spacer(minLength: 8)
+                Spacer(minLength: 16)
                 albumArt(side: art)
-                Spacer(minLength: 8)
-                controls
-                bottomRow.padding(.top, 14)
+                Spacer(minLength: 22)      // art → title/progress group
+                titleAndProgress
+                Spacer(minLength: 30)      // group → transport (generous)
+                transport
+                Spacer(minLength: 24)      // transport → bottom row
+                bottomRow
             }
             .padding(.top, 6)
-            .padding(.bottom, 20)
+            .padding(.bottom, 16)
             .foregroundStyle(.white)
         }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
@@ -106,9 +109,9 @@ struct PlayerView: View {
         }
     }
 
-    // MARK: Controls (title row + slider + transport)
+    // MARK: Title + progress (tight group under the art)
 
-    private var controls: some View {
+    private var titleAndProgress: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -173,11 +176,7 @@ struct PlayerView: View {
             .font(.system(size: 12))
             .foregroundStyle(.white.opacity(0.8))
             .padding(.horizontal, 36)
-            .padding(.top, 4)
-
-            Spacer().frame(height: 22)
-
-            transport
+            .padding(.top, 6)
         }
     }
 
