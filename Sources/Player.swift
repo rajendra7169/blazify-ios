@@ -17,6 +17,8 @@ final class Player: ObservableObject {
     @Published var duration = 0.0
     /// Drives the full-player sheet.
     @Published var showFullPlayer = false
+    /// Last playback/stream error, surfaced in the UI when something fails.
+    @Published var lastError: String?
 
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
     var hasTrack: Bool { current != nil }
@@ -26,6 +28,9 @@ final class Player: ObservableObject {
     private var timeObserver: Any?
     private var isSeeking = false
     private var artwork: MPMediaItemArtwork?
+    private var downloadTask: URLSessionDownloadTask?
+    private var lastTempFile: URL?
+    private let streamUA = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X)"
 
     init() {
         configureSession()
@@ -71,6 +76,7 @@ final class Player: ObservableObject {
         duration = track.duration
         currentTime = 0
         isLoading = true
+        lastError = nil
         artwork = nil
         loadArtwork(track.thumbnailURL)
         updateNowPlaying()
@@ -81,16 +87,64 @@ final class Player: ObservableObject {
             await MainActor.run {
                 // Ignore if the user moved on to another track meanwhile.
                 guard self.current?.videoId == videoId else { return }
-                self.isLoading = false
-                guard let url else { return }
-                self.startPlayback(url)
+                guard let url else {
+                    self.isLoading = false
+                    self.lastError = "Couldn't resolve this track."
+                    return
+                }
+                self.startPlayback(url)   // keeps isLoading until audio actually starts
             }
         }
     }
 
+    /// Download the audio through the app's own URLSession (the same network egress
+    /// that resolved the URL), then play the local file. AVPlayer/mediaplaybackd
+    /// fetches from a different egress and gets HTTP 403 on these ip=-locked
+    /// googlevideo URLs; the app's URLSession matches the URL, so this succeeds — and
+    /// it doubles as the basis for offline downloads later.
     private func startPlayback(_ url: URL) {
+        downloadTask?.cancel()
+        let videoId = current?.videoId
+        var req = URLRequest(url: url)
+        req.setValue(streamUA, forHTTPHeaderField: "User-Agent")
+        let task = URLSession.shared.downloadTask(with: req) { [weak self] tmp, response, error in
+            guard let self else { return }
+            if (error as NSError?)?.code == NSURLErrorCancelled { return }
+            func fail(_ msg: String) {
+                DispatchQueue.main.async {
+                    guard self.current?.videoId == videoId else { return }
+                    self.isLoading = false
+                    self.lastError = msg
+                }
+            }
+            if let error { return fail(error.localizedDescription) }
+            if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                return fail("Stream HTTP \(http.statusCode)")
+            }
+            guard let tmp else { return fail("No audio data.") }
+            let dest = FileManager.default.temporaryDirectory
+                .appendingPathComponent("blz-\(videoId ?? "track").m4a")
+            try? FileManager.default.removeItem(at: dest)
+            guard (try? FileManager.default.moveItem(at: tmp, to: dest)) != nil else {
+                return fail("Couldn't save audio.")
+            }
+            DispatchQueue.main.async {
+                guard self.current?.videoId == videoId else { return }
+                if let old = self.lastTempFile, old != dest {
+                    try? FileManager.default.removeItem(at: old)
+                }
+                self.lastTempFile = dest
+                self.playLocal(dest)
+            }
+        }
+        downloadTask = task
+        task.resume()
+    }
+
+    private func playLocal(_ fileURL: URL) {
         removeTimeObserver()
-        let item = AVPlayerItem(url: url)
+        isLoading = false
+        let item = AVPlayerItem(url: fileURL)
         let p = AVPlayer(playerItem: item)
         avPlayer = p
         timeObserver = p.addPeriodicTimeObserver(

@@ -58,6 +58,14 @@ struct PlayerView: View {
                 }
                 .padding(.horizontal)
 
+                if let err = player.lastError {
+                    Text(err)
+                        .font(.caption2).foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .textSelection(.enabled)
+                }
+
                 // Progress + times
                 VStack(spacing: 6) {
                     Slider(
