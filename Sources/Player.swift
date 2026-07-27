@@ -19,6 +19,8 @@ final class Player: ObservableObject {
     @Published var showFullPlayer = false
     /// Last playback/stream error, surfaced in the UI when something fails.
     @Published var lastError: String?
+    /// The last resolved stream URL — exposed so it can be copied for diagnosis.
+    @Published var lastURL: String?
 
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
     var hasTrack: Bool { current != nil }
@@ -28,17 +30,8 @@ final class Player: ObservableObject {
     private var timeObserver: Any?
     private var isSeeking = false
     private var artwork: MPMediaItemArtwork?
-    private var downloadTask: URLSessionDownloadTask?
     private var lastTempFile: URL?
     private let streamUA = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X)"
-
-    /// Dedicated session for fetching audio. iOS's URLSession otherwise reaches
-    /// googlevideo over QUIC (HTTP/3), which 403s these signed URLs; plain HTTPS
-    /// (HTTP/2 over TCP) serves them fine. Ephemeral = no cached HTTP/3 Alt-Svc, so
-    /// its first (and only) request per download stays on TCP.
-    private lazy var streamSession: URLSession = {
-        URLSession(configuration: .ephemeral)
-    }()
 
     init() {
         configureSession()
@@ -111,34 +104,26 @@ final class Player: ObservableObject {
     /// googlevideo URLs; the app's URLSession matches the URL, so this succeeds — and
     /// it doubles as the basis for offline downloads later.
     private func startPlayback(_ url: URL) {
-        downloadTask?.cancel()
+        lastURL = url.absoluteString
         let videoId = current?.videoId
-        var req = URLRequest(url: url)
-        req.setValue(streamUA, forHTTPHeaderField: "User-Agent")
-        req.assumesHTTP3Capable = false   // belt-and-suspenders: don't upgrade to QUIC
-        let task = streamSession.downloadTask(with: req) { [weak self] tmp, response, error in
-            guard let self else { return }
-            if (error as NSError?)?.code == NSURLErrorCancelled { return }
-            func fail(_ msg: String) {
-                DispatchQueue.main.async {
-                    guard self.current?.videoId == videoId else { return }
-                    self.isLoading = false
-                    self.lastError = msg
-                }
-            }
-            if let error { return fail(error.localizedDescription) }
-            if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                return fail("Stream HTTP \(http.statusCode)")
-            }
-            guard let tmp else { return fail("No audio data.") }
-            let dest = FileManager.default.temporaryDirectory
-                .appendingPathComponent("blz-\(videoId ?? "track").m4a")
-            try? FileManager.default.removeItem(at: dest)
-            guard (try? FileManager.default.moveItem(at: tmp, to: dest)) != nil else {
-                return fail("Couldn't save audio.")
-            }
+        TCPDownloader.get(url, userAgent: streamUA) { [weak self] data, status in
             DispatchQueue.main.async {
-                guard self.current?.videoId == videoId else { return }
+                guard let self, self.current?.videoId == videoId else { return }
+                guard let data, !data.isEmpty, status == 200 || status == 206 else {
+                    self.isLoading = false
+                    self.lastError = status.map { "Stream HTTP \($0)" } ?? "Download failed."
+                    return
+                }
+                let dest = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("blz-\(videoId ?? "track").m4a")
+                try? FileManager.default.removeItem(at: dest)
+                do {
+                    try data.write(to: dest)
+                } catch {
+                    self.isLoading = false
+                    self.lastError = "Couldn't save audio."
+                    return
+                }
                 if let old = self.lastTempFile, old != dest {
                     try? FileManager.default.removeItem(at: old)
                 }
@@ -146,8 +131,6 @@ final class Player: ObservableObject {
                 self.playLocal(dest)
             }
         }
-        downloadTask = task
-        task.resume()
     }
 
     private func playLocal(_ fileURL: URL) {
