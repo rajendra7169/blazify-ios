@@ -7,7 +7,9 @@ struct HomeView: View {
     @ObservedObject var player: Player
     @ObservedObject private var auth = Auth.shared
 
-    @State private var sections: [HomeSection] = []
+    @State private var feed = HomeFeed.empty
+    @State private var moods: [MoodItem] = []
+    @State private var selectedChip: HomeChip?
     @State private var loading = true
     @State private var path = NavigationPath()
     @State private var showLogin = false
@@ -20,14 +22,25 @@ struct HomeView: View {
                     GreetingCard()
                     searchPill
 
+                    if !feed.chips.isEmpty {
+                        ChipsRow(chips: feed.chips, selected: selectedChip) { selectChip($0) }
+                    }
+
                     if loading {
                         ProgressView()
                             .tint(Blaze.amber)
                             .frame(maxWidth: .infinity)
                             .padding(.top, 60)
                     } else {
-                        ForEach(sections) { section in
-                            HomeRail(section: section) { tap($0) }
+                        ForEach(feed.sections) { section in
+                            if section.isSongs {
+                                QuickPicksGrid(section: section, player: player)
+                            } else {
+                                HomeRail(section: section) { tap($0) }
+                            }
+                        }
+                        if !moods.isEmpty {
+                            MoodTiles(moods: moods) { path.append($0) }
                         }
                     }
                 }
@@ -38,12 +51,15 @@ struct HomeView: View {
             .navigationDestination(for: HomeItem.self) { item in
                 PlaylistView(item: item, player: player)
             }
+            .navigationDestination(for: MoodItem.self) { mood in
+                MoodDetailView(mood: mood, player: player)
+            }
             .navigationDestination(for: SearchRoute.self) { _ in
                 SearchView(player: player)
             }
         }
         .task {
-            if sections.isEmpty { await load() }
+            if feed.sections.isEmpty { await load() }
         }
         .onChange(of: auth.isLoggedIn) {
             Task { await load() }   // swap to (or from) the personalized feed
@@ -63,10 +79,26 @@ struct HomeView: View {
 
     private func load() async {
         loading = true
-        let s = await YouTube.home()
+        async let feedTask = YouTube.home(params: selectedChip?.params)
+        async let moodsTask = YouTube.moods()
+        let (f, m) = await (feedTask, moodsTask)
         await MainActor.run {
-            sections = s
+            feed = f
+            moods = m
             loading = false
+        }
+    }
+
+    private func selectChip(_ chip: HomeChip) {
+        guard chip.title != selectedChip?.title else { return }
+        selectedChip = chip
+        Task {
+            loading = true
+            let f = await YouTube.home(params: chip.params)
+            await MainActor.run {
+                feed = f
+                loading = false
+            }
         }
     }
 

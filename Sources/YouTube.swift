@@ -123,20 +123,72 @@ enum YouTube {
 
     // MARK: - Home feed (WEB_REMIX browse FEmusic_home)
 
-    /// The logged-out YouTube Music home: carousels of playlists/albums/songs.
-    static func home() async -> [HomeSection] {
+    /// The YouTube Music home: filter chips + carousels (personalized when signed in).
+    /// `params` re-browses filtered to a chip's mood.
+    static func home(params: String? = nil) async -> HomeFeed {
         let visitor = await visitorData()
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": "en", "gl": "US"]
         if let visitor { client["visitorData"] = visitor }
-        let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_home"]
+        var body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_home"]
+        if let params { body["params"] = params }
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
                                     userAgent: webUA, visitor: visitor, body: body, login: true)
-        else { return [] }
+        else { return .empty }
         return parseHome(json)
     }
 
-    private static func parseHome(_ json: [String: Any]) -> [HomeSection] {
+    private static func parseHome(_ json: [String: Any]) -> HomeFeed {
+        guard
+            let contents = json["contents"] as? [String: Any],
+            let browse = contents["singleColumnBrowseResultsRenderer"] as? [String: Any],
+            let tabs = browse["tabs"] as? [[String: Any]],
+            let tab = tabs.first?["tabRenderer"] as? [String: Any],
+            let tabContent = tab["content"] as? [String: Any],
+            let sectionList = tabContent["sectionListRenderer"] as? [String: Any],
+            let sections = sectionList["contents"] as? [[String: Any]]
+        else { return .empty }
+
+        let chips = parseChips(sectionList)
+        var out: [HomeSection] = []
+        for section in sections {
+            guard let shelf = section["musicCarouselShelfRenderer"] as? [String: Any] else { continue }
+            let header = (shelf["header"] as? [String: Any])?["musicCarouselShelfBasicHeaderRenderer"] as? [String: Any]
+            let title = runsFirst(header?["title"])
+            let contentsArr = shelf["contents"] as? [[String: Any]] ?? []
+            let isSongs = contentsArr.first?["musicResponsiveListItemRenderer"] != nil
+            let items = contentsArr.compactMap(parseHomeItem)
+            if !items.isEmpty { out.append(HomeSection(title: title, items: items, isSongs: isSongs)) }
+        }
+        return HomeFeed(chips: chips, sections: out)
+    }
+
+    private static func parseChips(_ sectionList: [String: Any]) -> [HomeChip] {
+        guard let header = sectionList["header"] as? [String: Any],
+              let cloud = header["chipCloudRenderer"] as? [String: Any],
+              let chips = cloud["chips"] as? [[String: Any]] else { return [] }
+        var out: [HomeChip] = [HomeChip(title: "All", params: nil)]
+        for c in chips {
+            guard let cr = c["chipCloudChipRenderer"] as? [String: Any] else { continue }
+            let title = runsFirst(cr["text"])
+            let params = ((cr["navigationEndpoint"] as? [String: Any])?["browseEndpoint"] as? [String: Any])?["params"] as? String
+            if !title.isEmpty { out.append(HomeChip(title: title, params: params)) }
+        }
+        return out
+    }
+
+    // MARK: - Moods & genres
+
+    /// The "Moods & moments" / "Genres" tiles from FEmusic_moods_and_genres.
+    static func moods() async -> [MoodItem] {
+        let visitor = await visitorData()
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_moods_and_genres"]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body)
+        else { return [] }
         guard
             let contents = json["contents"] as? [String: Any],
             let browse = contents["singleColumnBrowseResultsRenderer"] as? [String: Any],
@@ -147,14 +199,38 @@ enum YouTube {
             let sections = sectionList["contents"] as? [[String: Any]]
         else { return [] }
 
-        var out: [HomeSection] = []
+        var out: [MoodItem] = []
         for section in sections {
-            guard let shelf = section["musicCarouselShelfRenderer"] as? [String: Any] else { continue }
-            let header = (shelf["header"] as? [String: Any])?["musicCarouselShelfBasicHeaderRenderer"] as? [String: Any]
-            let title = runsFirst(header?["title"])
-            let items = (shelf["contents"] as? [[String: Any]] ?? []).compactMap(parseHomeItem)
-            if !items.isEmpty { out.append(HomeSection(title: title, items: items)) }
+            let items = (section["gridRenderer"] as? [String: Any])?["items"] as? [[String: Any]] ?? []
+            for item in items {
+                guard let b = item["musicNavigationButtonRenderer"] as? [String: Any] else { continue }
+                let title = runsFirst(b["buttonText"])
+                guard !title.isEmpty else { continue }
+                let color = ((b["solid"] as? [String: Any])?["leftStripeColor"] as? NSNumber)?.uintValue ?? 0xFF29_2929
+                let click = (b["clickCommand"] as? [String: Any])?["browseEndpoint"] as? [String: Any]
+                out.append(MoodItem(title: title, colorARGB: color,
+                                    browseId: click?["browseId"] as? String,
+                                    params: click?["params"] as? String))
+            }
         }
+        return out
+    }
+
+    /// Playlists inside a mood/genre category.
+    static func moodPlaylists(browseId: String, params: String?) async -> [HomeItem] {
+        guard !browseId.isEmpty else { return [] }
+        let visitor = await visitorData()
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        var body: [String: Any] = ["context": ["client": client], "browseId": browseId]
+        if let params { body["params"] = params }
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body)
+        else { return [] }
+        var out: [HomeItem] = []
+        var seen = Set<String>()
+        collectCards(json, into: &out, seen: &seen)
         return out
     }
 

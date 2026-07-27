@@ -47,9 +47,36 @@ struct HomeItem: Identifiable, Hashable {
     }
 }
 
-/// One horizontal rail on the home feed (e.g. "New releases").
+/// One horizontal rail on the home feed (e.g. "New releases"). When `isSongs`,
+/// the items are individual songs and render as the Quick Picks grid.
 struct HomeSection: Identifiable, Hashable {
     let id = UUID()
     let title: String
     let items: [HomeItem]
+    let isSongs: Bool
+}
+
+/// A category chip under the greeting (All / Relax / Workout…). `params` re-browses
+/// FEmusic_home filtered to that mood; nil = the default feed ("All").
+struct HomeChip: Identifiable, Hashable {
+    let id = UUID()
+    let title: String
+    let params: String?
+}
+
+/// A Mood & Genres tile (colored, opens a page of playlists).
+struct MoodItem: Identifiable, Hashable {
+    let id = UUID()
+    let title: String
+    let colorARGB: UInt
+    let browseId: String?
+    let params: String?
+}
+
+/// The whole home payload: filter chips + content sections.
+struct HomeFeed {
+    let chips: [HomeChip]
+    let sections: [HomeSection]
+
+    static let empty = HomeFeed(chips: [], sections: [])
 }
