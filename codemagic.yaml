@@ -31,6 +31,11 @@ workflows:
             CODE_SIGN_IDENTITY="" \
             build
 
+      - name: Fix __LINKEDIT so third-party signing survives (iOS dyld launch fix)
+        script: |
+          python3 scripts/fix_linkedit.py \
+            build/Build/Products/Release-iphoneos/BlazifyPlayer.app/BlazifyPlayer
+
       - name: Package into an .ipa
         script: |
           cd build/Build/Products/Release-iphoneos
