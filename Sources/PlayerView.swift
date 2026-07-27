@@ -14,7 +14,8 @@ struct PlayerView: View {
     @State private var showSleep = false
 
     var body: some View {
-        let art = UIScreen.main.bounds.width - 64
+        // Smaller than before so the controls below get more room.
+        let art = min(UIScreen.main.bounds.width - 96, 320)
 
         ZStack {
             // Dynamic gradient built from the song's color (amber fallback).
@@ -34,7 +35,7 @@ struct PlayerView: View {
                 controls
                 bottomRow.padding(.top, 14)
             }
-            .padding(.top, 18)
+            .padding(.top, 6)
             .padding(.bottom, 20)
             .foregroundStyle(.white)
         }
@@ -42,24 +43,52 @@ struct PlayerView: View {
         .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }
     }
 
-    // MARK: Header
+    // MARK: Header (chevron-down to close + centered "Now Playing")
 
     private var header: some View {
-        VStack(spacing: 2) {
-            Text("Now Playing")
-                .font(.system(size: 16, weight: .semibold))
-            Text(player.current?.artist ?? "")
-                .font(.system(size: 13, weight: .medium))
-                .opacity(0.8)
-                .lineLimit(1)
+        ZStack {
+            VStack(spacing: 2) {
+                Text("Now Playing")
+                    .font(.system(size: 16, weight: .semibold))
+                Text(player.current?.artist ?? "")
+                    .font(.system(size: 13, weight: .medium))
+                    .opacity(0.8)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 48)
+
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 8)
         }
-        .padding(.horizontal, 48)
+        .contentShape(Rectangle())
+        // Swipe down anywhere on the header to close (full-screen cover has no grabber).
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { if $0.translation.height > 80 { dismiss() } },
+        )
     }
 
     // MARK: Album art
 
+    /// Request a larger image for the big full-screen art than the 720 the rails use.
+    private var hiResArtURL: URL? {
+        guard let raw = player.current?.thumbnail, !raw.isEmpty else { return nil }
+        if let r = raw.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
+            return URL(string: raw.replacingCharacters(in: r, with: "=w1080-h1080"))
+        }
+        return URL(string: raw)
+    }
+
     private func albumArt(side: CGFloat) -> some View {
-        RemoteImage(url: player.current?.thumbnailURL) {
+        RemoteImage(url: hiResArtURL) {
             ZStack {
                 Blaze.gradient
                 Image(systemName: "music.note")

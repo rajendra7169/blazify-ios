@@ -130,7 +130,7 @@ struct HomeView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.bottom, 0)
     }
 
     // MARK: - Search pill (opens full search)
@@ -212,13 +212,13 @@ struct GreetingCard: View {
                 Image(bundleImage: "blaze_hero")
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 210)
+                    .frame(height: 216)
                     .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 8)
-                    .offset(x: 16)
+                    .offset(x: 8)
                     .allowsHitTesting(false)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 48)   // reserve room so the hair overflows into the gap
+            .padding(.top, 20)   // card sits higher; mascot hair reaches the wordmark
             .padding(.bottom, 8)
     }
 }

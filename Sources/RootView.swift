@@ -32,9 +32,8 @@ struct RootView: View {
         }
         .preferredColorScheme(.dark)
         .tint(Blaze.amber)
-        .sheet(isPresented: $player.showFullPlayer) {
+        .fullScreenCover(isPresented: $player.showFullPlayer) {
             PlayerView(player: player)
-                .presentationDragIndicator(.visible)
         }
     }
 }
