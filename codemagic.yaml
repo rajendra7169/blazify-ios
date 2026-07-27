@@ -1,0 +1,41 @@
+# Codemagic build: turns this repo into an UNSIGNED .ipa on a cloud Mac.
+# You never own a Mac — Codemagic rents you one per build. Signing is OFF here;
+# SideStore signs on the iPhone afterwards with your free Apple ID.
+#
+# NOTE: `instance_type` and `xcode` values below are sensible defaults. If the
+# first build errors on either, the log tells us the allowed value and we swap it.
+workflows:
+  ios-unsigned:
+    name: Blazify iOS (unsigned)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: latest
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+
+      - name: Generate the Xcode project
+        script: xcodegen generate
+
+      - name: Build unsigned .app
+        script: |
+          xcodebuild \
+            -project BlazifyPlayer.xcodeproj \
+            -scheme BlazifyPlayer \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package into an .ipa
+        script: |
+          cd build/Build/Products/Release-iphoneos
+          mkdir -p Payload
+          cp -R BlazifyPlayer.app Payload/
+          zip -r "$CM_BUILD_DIR/BlazifyPlayer.ipa" Payload
+    artifacts:
+      - BlazifyPlayer.ipa

@@ -1,0 +1,35 @@
+# XcodeGen spec. There is no Mac here to create an .xcodeproj by hand, so
+# Codemagic runs `xcodegen generate` on its cloud Mac to build this file into a
+# real project before compiling. Edit this, never the generated .xcodeproj.
+name: BlazifyPlayer
+options:
+  bundleIdPrefix: com.rajendra
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+targets:
+  BlazifyPlayer:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    info:
+      path: Sources/Generated-Info.plist
+      properties:
+        CFBundleDisplayName: Blazify
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "1"
+        # The one line that lets a music player keep going with the screen locked.
+        UIBackgroundModes:
+          - audio
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rajendra.blazifyplayer
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"   # iPhone only
+        GENERATE_INFOPLIST_FILE: NO
