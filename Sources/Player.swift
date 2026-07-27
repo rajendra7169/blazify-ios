@@ -34,11 +34,10 @@ final class Player: ObservableObject {
 
     /// Dedicated session for fetching audio. iOS's URLSession otherwise reaches
     /// googlevideo over QUIC (HTTP/3), which 403s these signed URLs; plain HTTPS
-    /// (HTTP/2 over TCP) serves them fine. Ephemeral = no cached HTTP/3 Alt-Svc.
+    /// (HTTP/2 over TCP) serves them fine. Ephemeral = no cached HTTP/3 Alt-Svc, so
+    /// its first (and only) request per download stays on TCP.
     private lazy var streamSession: URLSession = {
-        let cfg = URLSessionConfiguration.ephemeral
-        cfg.assumesHTTP3Capable = false
-        return URLSession(configuration: cfg)
+        URLSession(configuration: .ephemeral)
     }()
 
     init() {
@@ -116,6 +115,7 @@ final class Player: ObservableObject {
         let videoId = current?.videoId
         var req = URLRequest(url: url)
         req.setValue(streamUA, forHTTPHeaderField: "User-Agent")
+        req.assumesHTTP3Capable = false   // belt-and-suspenders: don't upgrade to QUIC
         let task = streamSession.downloadTask(with: req) { [weak self] tmp, response, error in
             guard let self else { return }
             if (error as NSError?)?.code == NSURLErrorCancelled { return }
