@@ -240,7 +240,8 @@ enum YouTube {
 
     /// Signed-in account details via account_menu — also the login-validity check.
     static func accountInfo() async -> AccountInfo? {
-        let visitor = Auth.shared.visitorData ?? (await visitorData())
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": "en", "gl": "US"]
         if let visitor { client["visitorData"] = visitor }
@@ -268,7 +269,8 @@ enum YouTube {
     /// The user's saved/created playlists (FEmusic_liked_playlists grid).
     static func libraryPlaylists() async -> [HomeItem] {
         guard Auth.shared.isLoggedIn else { return [] }
-        let visitor = Auth.shared.visitorData ?? (await visitorData())
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": "en", "gl": "US"]
         if let visitor { client["visitorData"] = visitor }
