@@ -12,6 +12,8 @@ struct PlayerView: View {
     @State private var scrub: Double?
     @State private var showQueue = false
     @State private var showSleep = false
+    @State private var showLyrics = false
+    @State private var showDesign = false
 
     var body: some View {
         // Smaller than before so the controls below get more room.
@@ -42,6 +44,17 @@ struct PlayerView: View {
             .padding(.bottom, 16)
             .foregroundStyle(.white)
         }
+        // Swipe down anywhere to close/minimize (child gestures like the slider win locally).
+        .gesture(
+            DragGesture(minimumDistance: 10)
+                .onEnded { g in
+                    if g.translation.height > 90, g.translation.height > abs(g.translation.width) {
+                        dismiss()
+                    }
+                },
+        )
+        .fullScreenCover(isPresented: $showLyrics) { LyricsView(player: player) }
+        .sheet(isPresented: $showDesign) { PlayerDesignSheet() }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
         .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }
     }
@@ -71,12 +84,6 @@ struct PlayerView: View {
             }
             .padding(.horizontal, 8)
         }
-        .contentShape(Rectangle())
-        // Swipe down anywhere on the header to close (full-screen cover has no grabber).
-        .gesture(
-            DragGesture(minimumDistance: 20)
-                .onEnded { if $0.translation.height > 80 { dismiss() } },
-        )
     }
 
     // MARK: Album art
@@ -129,6 +136,15 @@ struct PlayerView: View {
                     Image(systemName: player.isCurrentFavorite ? "heart.fill" : "heart")
                         .font(.system(size: 26))
                         .foregroundStyle(player.isCurrentFavorite ? .red : .white)
+                }
+
+                Button { showDesign = true } label: {
+                    Image(systemName: "paintpalette")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .frame(width: 40, height: 40)
+                        .background(Color.white)
+                        .clipShape(Circle())
                 }
 
                 Menu {
@@ -219,9 +235,9 @@ struct PlayerView: View {
             bottomButton("list.bullet", "Queue") { showQueue = true }
             bottomButton(player.sleepActive ? "moon.zzz.fill" : "moon.zzz",
                          sleepLabel, active: player.sleepActive) { showSleep = true }
-            bottomButton("quote.bubble", "Lyrics", dimmed: true) {}
+            bottomButton("quote.bubble", "Lyrics") { showLyrics = true }
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 20)
     }
 
     private func bottomButton(_ icon: String, _ label: String,
