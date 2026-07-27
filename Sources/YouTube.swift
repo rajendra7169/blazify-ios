@@ -13,6 +13,7 @@ enum YouTube {
     private static let webUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
     private static let musicPlayer = "https://music.youtube.com/youtubei/v1/player?prettyPrint=false"
     private static let musicSearch = "https://music.youtube.com/youtubei/v1/search?prettyPrint=false"
+    private static let musicBrowse = "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false"
     /// YouTube Music "Songs" search filter.
     private static let songsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
 
@@ -119,7 +120,132 @@ enum YouTube {
         return out
     }
 
+    // MARK: - Home feed (WEB_REMIX browse FEmusic_home)
+
+    /// The logged-out YouTube Music home: carousels of playlists/albums/songs.
+    static func home() async -> [HomeSection] {
+        let visitor = await visitorData()
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_home"]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body)
+        else { return [] }
+        return parseHome(json)
+    }
+
+    private static func parseHome(_ json: [String: Any]) -> [HomeSection] {
+        guard
+            let contents = json["contents"] as? [String: Any],
+            let browse = contents["singleColumnBrowseResultsRenderer"] as? [String: Any],
+            let tabs = browse["tabs"] as? [[String: Any]],
+            let tab = tabs.first?["tabRenderer"] as? [String: Any],
+            let tabContent = tab["content"] as? [String: Any],
+            let sectionList = tabContent["sectionListRenderer"] as? [String: Any],
+            let sections = sectionList["contents"] as? [[String: Any]]
+        else { return [] }
+
+        var out: [HomeSection] = []
+        for section in sections {
+            guard let shelf = section["musicCarouselShelfRenderer"] as? [String: Any] else { continue }
+            let header = (shelf["header"] as? [String: Any])?["musicCarouselShelfBasicHeaderRenderer"] as? [String: Any]
+            let title = runsFirst(header?["title"])
+            let items = (shelf["contents"] as? [[String: Any]] ?? []).compactMap(parseHomeItem)
+            if !items.isEmpty { out.append(HomeSection(title: title, items: items)) }
+        }
+        return out
+    }
+
+    private static func parseHomeItem(_ item: [String: Any]) -> HomeItem? {
+        // Playlist / album / artist card.
+        if let r = item["musicTwoRowItemRenderer"] as? [String: Any] {
+            let title = runsFirst(r["title"])
+            guard !title.isEmpty else { return nil }
+            let nav = r["navigationEndpoint"] as? [String: Any]
+            let videoId = (nav?["watchEndpoint"] as? [String: Any])?["videoId"] as? String
+            var browseId = (nav?["browseEndpoint"] as? [String: Any])?["browseId"] as? String
+            if browseId == nil, let pid = (nav?["watchPlaylistEndpoint"] as? [String: Any])?["playlistId"] as? String {
+                browseId = "VL" + pid
+            }
+            return HomeItem(
+                title: title,
+                subtitle: runsJoined(r["subtitle"]),
+                thumbnail: musicThumb(r["thumbnailRenderer"]),
+                videoId: videoId,
+                browseId: browseId,
+                isCircular: browseId?.hasPrefix("UC") ?? false,
+            )
+        }
+        // A direct song (quick picks).
+        if let r = item["musicResponsiveListItemRenderer"] as? [String: Any] {
+            let vid = (r["playlistItemData"] as? [String: Any])?["videoId"] as? String
+                ?? overlayVideoId(r["overlay"])
+            guard let v = vid, !v.isEmpty else { return nil }
+            let cols = r["flexColumns"] as? [[String: Any]] ?? []
+            return HomeItem(title: flexText(cols, 0), subtitle: flexArtist(cols),
+                            thumbnail: musicThumb(r["thumbnail"]), videoId: v,
+                            browseId: nil, isCircular: false)
+        }
+        return nil
+    }
+
+    // MARK: - Playlist / album tracks
+
+    /// All songs inside a playlist or album (`browseId` from a home card).
+    static func playlist(browseId: String) async -> [Track] {
+        guard !browseId.isEmpty else { return [] }
+        let visitor = await visitorData()
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "browseId": browseId]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body)
+        else { return [] }
+
+        var out: [Track] = []
+        var seen = Set<String>()
+        collectTracks(json, into: &out, seen: &seen)
+        return out
+    }
+
+    /// Playlist/album responses vary in shape (single vs two column), so walk the
+    /// whole tree and pull every song row, de-duping by videoId.
+    private static func collectTracks(_ node: Any, into out: inout [Track], seen: inout Set<String>) {
+        if let dict = node as? [String: Any] {
+            if let r = dict["musicResponsiveListItemRenderer"] as? [String: Any] {
+                let vid = (r["playlistItemData"] as? [String: Any])?["videoId"] as? String
+                    ?? overlayVideoId(r["overlay"])
+                if let v = vid, !v.isEmpty, seen.insert(v).inserted {
+                    let cols = r["flexColumns"] as? [[String: Any]] ?? []
+                    out.append(Track(videoId: v, title: flexText(cols, 0), artist: flexArtist(cols),
+                                     thumbnail: musicThumb(r["thumbnail"]), duration: 0))
+                }
+                return
+            }
+            for (_, v) in dict { collectTracks(v, into: &out, seen: &seen) }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectTracks(v, into: &out, seen: &seen) }
+        }
+    }
+
     // MARK: - Parsing helpers
+
+    /// First run's text (or simpleText) of a `{runs:[…]}` / `{simpleText:…}` node.
+    private static func runsFirst(_ obj: Any?) -> String {
+        guard let o = obj as? [String: Any] else { return "" }
+        if let runs = o["runs"] as? [[String: Any]], let f = runs.first?["text"] as? String { return f }
+        return o["simpleText"] as? String ?? ""
+    }
+
+    /// All runs joined (e.g. "Album • 2024" or "Artist • 1.2M plays").
+    private static func runsJoined(_ obj: Any?) -> String {
+        guard let o = obj as? [String: Any], let runs = o["runs"] as? [[String: Any]] else {
+            return runsFirst(obj)
+        }
+        return runs.compactMap { $0["text"] as? String }.joined()
+    }
 
     private static func flexText(_ cols: [[String: Any]], _ i: Int) -> String {
         guard cols.indices.contains(i),

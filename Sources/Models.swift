@@ -29,3 +29,27 @@ struct Track: Identifiable, Equatable {
         duration = (json["duration"] as? Double) ?? (json["duration"] as? NSNumber)?.doubleValue ?? 0
     }
 }
+
+/// One card in a home rail — either a song (plays directly) or a
+/// playlist/album/artist (opens a detail list via `browseId`).
+struct HomeItem: Identifiable, Hashable {
+    let id = UUID()
+    let title: String
+    let subtitle: String
+    let thumbnail: String
+    let videoId: String?
+    let browseId: String?
+    let isCircular: Bool   // artists render as circles
+
+    var thumbnailURL: URL? { URL(string: thumbnail) }
+    var asTrack: Track {
+        Track(videoId: videoId ?? "", title: title, artist: subtitle, thumbnail: thumbnail, duration: 0)
+    }
+}
+
+/// One horizontal rail on the home feed (e.g. "New releases").
+struct HomeSection: Identifiable, Hashable {
+    let id = UUID()
+    let title: String
+    let items: [HomeItem]
+}
