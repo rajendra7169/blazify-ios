@@ -83,9 +83,10 @@ struct HomeView: View {
             }
             Spacer()
             HStack(spacing: 8) {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 24))
-                    .foregroundStyle(Blaze.amber)
+                Image("BlazeLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 30, height: 30)
                 Text("Blazify")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(.white)
@@ -133,8 +134,11 @@ struct SearchRoute: Hashable {}
 // MARK: - Greeting card
 
 /// Amber gradient greeting card (Flutter FeaturedAlbumCard): time-aware greeting
-/// on two lines, name, tagline, and a flame hero overflowing the top-right.
+/// on two lines, name, tagline, and the Blaze mascot overflowing the card's top —
+/// her hair pokes out above the card with a soft 3D drop shadow.
 struct GreetingCard: View {
+    @ObservedObject private var auth = Auth.shared
+
     private var greeting: (line1: String, line2: String) {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
@@ -146,38 +150,44 @@ struct GreetingCard: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Blaze.cardGradient
-
-            // Flame hero bleeding off the right edge (stands in for the mascot art).
-            Image(systemName: "flame.fill")
-                .font(.system(size: 150))
-                .foregroundStyle(.white.opacity(0.20))
-                .offset(x: 34, y: 6)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(greeting.line1)
-                    .font(.system(size: 24, weight: .bold))
-                Text(greeting.line2)
-                    .font(.system(size: 24, weight: .bold))
-                Text("Music Lover")
-                    .font(.system(size: 22, weight: .bold))
-                    .opacity(0.95)
-                    .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1)
-                    .padding(.top, 2)
-                Text("Enjoy the music 🎵")
-                    .font(.system(size: 13, weight: .medium))
-                    .opacity(0.85)
-                    .padding(.top, 2)
+        RoundedRectangle(cornerRadius: 20)
+            .fill(Blaze.cardGradient)
+            .frame(height: 160)
+            .overlay(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(greeting.line1)
+                        .font(.system(size: 24, weight: .bold))
+                    Text(greeting.line2)
+                        .font(.system(size: 24, weight: .bold))
+                    Text(auth.accountName ?? "Music Lover")
+                        .font(.system(size: 22, weight: .bold))
+                        .opacity(0.95)
+                        .lineLimit(1)
+                        .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1)
+                        .padding(.top, 2)
+                    Text("Enjoy the music 🎵")
+                        .font(.system(size: 13, weight: .medium))
+                        .opacity(0.85)
+                        .padding(.top, 2)
+                }
+                .foregroundStyle(.white)
+                .padding(20)
+                .frame(maxWidth: 210, alignment: .leading)
             }
-            .foregroundStyle(.white)
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(height: 160)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+            // Mascot: taller than the card so it overflows the top; bleeds off the
+            // right edge; drop shadow gives the 3D "popping out" look.
+            .overlay(alignment: .bottomTrailing) {
+                Image("HomeHero")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 210)
+                    .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 8)
+                    .offset(x: 16)
+                    .allowsHitTesting(false)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 48)   // reserve room so the hair overflows into the gap
+            .padding(.bottom, 8)
     }
 }
 
@@ -217,9 +227,7 @@ struct MusicCard: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 8) {
-                AsyncImage(url: item.thumbnailURL) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
+                RemoteImage(url: item.thumbnailURL) {
                     Color.white.opacity(0.06)
                         .overlay(
                             Image(systemName: item.isCircular ? "person.fill" : "music.note")

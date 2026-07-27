@@ -12,9 +12,7 @@ struct PlaylistView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                AsyncImage(url: item.thumbnailURL) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
+                RemoteImage(url: item.thumbnailURL) {
                     Color.white.opacity(0.06)
                         .overlay(Image(systemName: "music.note.list")
                             .font(.system(size: 48))

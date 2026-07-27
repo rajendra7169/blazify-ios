@@ -88,9 +88,7 @@ private struct LibraryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            AsyncImage(url: item.thumbnailURL) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
+            RemoteImage(url: item.thumbnailURL) {
                 Color.white.opacity(0.06)
                     .overlay(Image(systemName: "music.note.list")
                         .font(.system(size: 36))
