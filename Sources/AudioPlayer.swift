@@ -1,27 +1,43 @@
 import AVFoundation
 import MediaPlayer
+import UIKit
 import Foundation
 
-/// Now plays REAL YouTube audio: it asks the Blazify extractor backend to resolve
-/// a videoId into a playable M4A URL, then streams that (directly from Google's
-/// CDN) with background playback + lock-screen controls.
+/// Streams real YouTube audio resolved by the Blazify extractor backend, and
+/// publishes everything the player UI needs: art, artist, duration, live
+/// position, plus background playback and lock-screen controls (with artwork).
 final class AudioPlayer: ObservableObject {
 
-    @Published var isPlaying = false
     @Published var title = "Tap to load"
+    @Published var artist = ""
+    @Published var thumbnailURL: URL?
+    @Published var isPlaying = false
+    @Published var duration: Double = 0    // seconds, from the backend
+    @Published var currentTime: Double = 0 // seconds, from the player
     @Published var status = ""
 
-    private var player: AVPlayer?
+    /// 0…1 for the progress bar.
+    var progress: Double { duration > 0 ? min(max(currentTime / duration, 0), 1) : 0 }
 
-    // The live server we deployed. Everything is HTTPS end to end.
+    private var player: AVPlayer?
+    private var timeObserver: Any?
+    private var artwork: MPMediaItemArtwork?
+
     private let backend = "https://blazify-extractor-server.onrender.com"
 
-    /// Resolve a YouTube videoId through the backend, then get ready to play it.
+    // MARK: - Load
+
     func load(videoId: String) {
         configureSession()
         setupRemoteCommands()
         status = "Resolving…"
         title = "Loading…"
+        artist = ""
+        thumbnailURL = nil
+        artwork = nil
+        currentTime = 0
+        duration = 0
+        isPlaying = false
 
         guard let url = URL(string: "\(backend)/stream?v=\(videoId)") else { return }
         URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
@@ -48,29 +64,54 @@ final class AudioPlayer: ObservableObject {
                 DispatchQueue.main.async { self.status = "No stream URL" }
                 return
             }
-            let songTitle = (json["title"] as? String) ?? "Unknown"
             DispatchQueue.main.async {
-                self.title = songTitle
-                self.status = "Ready — press play"
-                self.player = AVPlayer(url: streamURL)
-                self.updateNowPlaying()
+                self.title = (json["title"] as? String) ?? "Unknown"
+                self.artist = (json["artist"] as? String) ?? ""
+                self.duration = (json["duration"] as? Double) ?? (json["duration"] as? NSNumber)?.doubleValue ?? 0
+                if let t = json["thumbnail"] as? String, let turl = URL(string: t) {
+                    self.thumbnailURL = turl
+                    self.loadArtwork(turl)
+                }
+                self.status = "Ready"
+                self.startPlayer(streamURL)
             }
         }.resume()
     }
 
+    private func startPlayer(_ url: URL) {
+        removeTimeObserver()
+        let item = AVPlayerItem(url: url)
+        let p = AVPlayer(playerItem: item)
+        player = p
+        timeObserver = p.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
+            queue: .main,
+        ) { [weak self] time in
+            guard let self else { return }
+            self.currentTime = time.seconds.isFinite ? time.seconds : 0
+        }
+        updateNowPlaying()
+    }
+
+    // MARK: - Controls
+
     func toggle() {
         guard let player else { return }
-        if isPlaying {
-            player.pause()
-        } else {
-            player.play()
-        }
+        if isPlaying { player.pause() } else { player.play() }
         isPlaying.toggle()
         status = isPlaying ? "Playing" : "Paused"
         updateNowPlaying()
     }
 
-    // MARK: - Audio session
+    func seek(to fraction: Double) {
+        guard duration > 0, let player else { return }
+        let target = fraction * duration
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+        currentTime = target
+        updateNowPlaying()
+    }
+
+    // MARK: - Session / remote / now-playing
 
     private func configureSession() {
         let session = AVAudioSession.sharedInstance()
@@ -78,29 +119,48 @@ final class AudioPlayer: ObservableObject {
         try? session.setActive(true)
     }
 
-    // MARK: - Lock-screen / Control Center
-
     private func setupRemoteCommands() {
-        let center = MPRemoteCommandCenter.shared()
-        center.playCommand.addTarget { [weak self] _ in
+        let c = MPRemoteCommandCenter.shared()
+        c.playCommand.addTarget { [weak self] _ in
             self?.player?.play(); self?.isPlaying = true; self?.updateNowPlaying(); return .success
         }
-        center.pauseCommand.addTarget { [weak self] _ in
+        c.pauseCommand.addTarget { [weak self] _ in
             self?.player?.pause(); self?.isPlaying = false; self?.updateNowPlaying(); return .success
         }
-        center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            self?.toggle(); return .success
+        c.togglePlayPauseCommand.addTarget { [weak self] _ in self?.toggle(); return .success }
+        c.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard
+                let self,
+                let e = event as? MPChangePlaybackPositionCommandEvent,
+                self.duration > 0
+            else { return .commandFailed }
+            self.seek(to: e.positionTime / self.duration)
+            return .success
         }
     }
 
+    private func loadArtwork(_ url: URL) {
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let self, let data, let img = UIImage(data: data) else { return }
+            let art = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
+            DispatchQueue.main.async { self.artwork = art; self.updateNowPlaying() }
+        }.resume()
+    }
+
     private func updateNowPlaying() {
-        let elapsed = player?.currentTime().seconds ?? 0
-        let info: [String: Any] = [
+        var info: [String: Any] = [
             MPMediaItemPropertyTitle: title,
-            MPMediaItemPropertyArtist: "Blazify",
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: elapsed,
+            MPMediaItemPropertyArtist: artist.isEmpty ? "Blazify" : artist,
+            MPMediaItemPropertyPlaybackDuration: duration,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
         ]
+        if let artwork { info[MPMediaItemPropertyArtwork] = artwork }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    private func removeTimeObserver() {
+        if let timeObserver { player?.removeTimeObserver(timeObserver) }
+        timeObserver = nil
     }
 }
