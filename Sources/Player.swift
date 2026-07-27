@@ -87,8 +87,17 @@ final class Player: ObservableObject {
                     return
                 }
                 self.playStream(url)
+                self.prefetchNext()
             }
         }
+    }
+
+    /// Warm the next track's stream URL so tapping "next" resolves instantly.
+    private func prefetchNext() {
+        let n = index + 1
+        guard queue.indices.contains(n) else { return }
+        let vid = queue[n].videoId
+        Task.detached { _ = await YouTube.streamURL(for: vid) }
     }
 
     private func playStream(_ url: URL) {

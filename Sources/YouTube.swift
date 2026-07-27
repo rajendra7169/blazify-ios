@@ -17,10 +17,13 @@ enum YouTube {
     private static let songsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
 
     private static var cachedVisitor: String?
+    /// Resolved stream URLs cached until near their expiry (lets us prefetch).
+    private static var urlCache: [String: (url: URL, expires: Date)] = [:]
 
     // MARK: - Stream (VISIONOS, uncapped → direct streaming)
 
     static func streamURL(for videoId: String) async -> URL? {
+        if let hit = urlCache[videoId], hit.expires > Date() { return hit.url }
         let visitor = await visitorData()
         var client: [String: Any] = [
             "clientName": "VISIONOS", "clientVersion": visionVersion,
@@ -49,8 +52,9 @@ enum YouTube {
             let rate = (f["bitrate"] as? Int) ?? (f["averageBitrate"] as? Int) ?? 0
             if rate > bestRate { bestRate = rate; best = u }
         }
-        guard let best else { return nil }
-        return URL(string: best)
+        guard let best, let url = URL(string: best) else { return nil }
+        urlCache[videoId] = (url, Date().addingTimeInterval(4 * 3600))
+        return url
     }
 
     // MARK: - Search (WEB_REMIX music, on-device)
@@ -148,7 +152,12 @@ enum YouTube {
             let t = mtr["thumbnail"] as? [String: Any],
             let thumbs = t["thumbnails"] as? [[String: Any]]
         else { return "" }
-        return thumbs.last?["url"] as? String ?? ""
+        let raw = thumbs.last?["url"] as? String ?? ""
+        // YT Music art comes small (e.g. =w120-h120); request a crisp size.
+        if let r = raw.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
+            return raw.replacingCharacters(in: r, with: "=w720-h720")
+        }
+        return raw
     }
 
     // MARK: - InnerTube POST
