@@ -115,7 +115,7 @@ struct HomeView: View {
             }
             Spacer()
             HStack(spacing: 8) {
-                Image("BlazeLogo")
+                Image(bundleImage: "blaze_logo")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 30, height: 30)
@@ -209,7 +209,7 @@ struct GreetingCard: View {
             // Mascot: taller than the card so it overflows the top; bleeds off the
             // right edge; drop shadow gives the 3D "popping out" look.
             .overlay(alignment: .bottomTrailing) {
-                Image("HomeHero")
+                Image(bundleImage: "blaze_hero")
                     .resizable()
                     .scaledToFit()
                     .frame(height: 210)

@@ -1,4 +1,13 @@
 import SwiftUI
+import UIKit
+
+extension Image {
+    /// Loads a loose bundle PNG (brand art ships as resources, not an asset
+    /// catalog, so Xcode's actool never touches it — see build history).
+    init(bundleImage name: String) {
+        self = Image(uiImage: UIImage(named: name) ?? UIImage())
+    }
+}
 
 /// Blazify's brand palette, ported from the BlazePlayer (Flutter) design reference.
 enum Blaze {
