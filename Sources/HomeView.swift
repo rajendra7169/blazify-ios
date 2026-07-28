@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var path = NavigationPath()
     @State private var showLogin = false
     @State private var showAccount = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -65,6 +66,11 @@ struct HomeView: View {
             Task { await load() }   // swap to (or from) the personalized feed
         }
         .sheet(isPresented: $showLogin) { LoginView() }
+        .sheet(isPresented: $showSettings) { SettingsView(player: player) }
+        // The account popup's Settings row asks us to open it.
+        .onReceive(NotificationCenter.default.publisher(for: .openBlazifySettings)) { _ in
+            showSettings = true
+        }
         .fullScreenCover(isPresented: $showAccount) {
             AccountPopup(player: player, isPresented: $showAccount)
                 .presentationBackground(.clear)
@@ -128,9 +134,11 @@ struct HomeView: View {
                     .foregroundStyle(.white)
             }
             Spacer()
-            Image(systemName: "gearshape")
-                .font(.system(size: 24))
-                .foregroundStyle(.white)
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 24))
+                    .foregroundStyle(.white)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
