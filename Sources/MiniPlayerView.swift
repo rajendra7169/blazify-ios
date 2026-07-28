@@ -65,7 +65,7 @@ struct MiniPlayerView: View {
                         }
                     },
             )
-            .sheet(isPresented: $showArtist) {
+            .fullScreenCover(isPresented: $showArtist) {
                 if let id = track.artistId ?? resolvedArtistId {
                     ArtistView(browseId: id, player: player)
                 }
