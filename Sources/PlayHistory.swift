@@ -47,11 +47,13 @@ enum DateAgo: Hashable {
     case other(Date)   // first of that month
 
     var title: String {
+        // Explicit returns throughout: the `.other` case needs a body, which
+        // turns off implicit returns for every branch.
         switch self {
-        case .today: "Today"
-        case .yesterday: "Yesterday"
-        case .thisWeek: "This week"
-        case .lastWeek: "Last week"
+        case .today: return "Today"
+        case .yesterday: return "Yesterday"
+        case .thisWeek: return "This week"
+        case .lastWeek: return "Last week"
         case .other(let date):
             let f = DateFormatter()
             f.dateFormat = "yyyy/MM"

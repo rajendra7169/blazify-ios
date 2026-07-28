@@ -61,14 +61,17 @@ final class AudioCache: ObservableObject {
             var req = URLRequest(url: url)
             req.setValue(YouTube.visionUA, forHTTPHeaderField: "User-Agent")
 
-            var stored = false
+            var didStore = false
             if let (tmp, response) = try? await URLSession.shared.download(for: req),
                (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 {
                 try? FileManager.default.removeItem(at: dest)
-                stored = (try? FileManager.default.moveItem(at: tmp, to: dest)) != nil
+                didStore = (try? FileManager.default.moveItem(at: tmp, to: dest)) != nil
             }
+            // Capture immutably: a `var` crossing into the main-actor closure is
+            // an error under the Swift 6 language mode.
+            let stored = didStore
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.inFlight.remove(id)
                 guard stored else { return }
