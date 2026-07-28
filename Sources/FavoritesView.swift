@@ -79,6 +79,7 @@ struct FavoritesView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .playerBottomInsetArea()
             .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Your Library")
             .navigationDestination(for: HomeItem.self) { item in

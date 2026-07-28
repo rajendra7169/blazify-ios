@@ -756,7 +756,7 @@ enum YouTube {
         return out
     }
 
-    /// Walk the tree for playlist/album cards (used by the library grid).
+    /// Walk the tree for playlist/album/artist cards (used by the library grids).
     private static func collectCards(_ node: Any, into out: inout [HomeItem], seen: inout Set<String>) {
         if let dict = node as? [String: Any] {
             if dict["musicTwoRowItemRenderer"] != nil, let item = parseHomeItem(dict),
@@ -764,9 +764,79 @@ enum YouTube {
                 out.append(item)
                 return
             }
+            // Artists (and chart rows) come back as list items, not two-row
+            // cards — without this the library artist pages parse as empty.
+            if let r = dict["musicResponsiveListItemRenderer"] as? [String: Any],
+               let item = parseListCard(r), let bid = item.browseId,
+               seen.insert(bid).inserted {
+                out.append(item)
+                return
+            }
             for (_, v) in dict { collectCards(v, into: &out, seen: &seen) }
         } else if let arr = node as? [Any] {
             for v in arr { collectCards(v, into: &out, seen: &seen) }
+        }
+    }
+
+    /// A list-shaped card: name in the first column, "N subscribers" in the
+    /// second, and the destination on the row's own navigation endpoint.
+    private static func parseListCard(_ r: [String: Any]) -> HomeItem? {
+        let nav = r["navigationEndpoint"] as? [String: Any]
+        guard let browseId = (nav?["browseEndpoint"] as? [String: Any])?["browseId"] as? String,
+              !browseId.isEmpty else { return nil }
+        let cols = r["flexColumns"] as? [[String: Any]] ?? []
+        let title = flexText(cols, 0)
+        guard !title.isEmpty else { return nil }
+        return HomeItem(title: title, subtitle: flexText(cols, 1),
+                        thumbnail: musicThumb(r["thumbnail"]), videoId: nil,
+                        browseId: browseId,
+                        isCircular: browseId.hasPrefix("UC"))
+    }
+
+    // MARK: - Charts (what's trending on YouTube Music)
+
+    /// The global/region charts page: trending videos plus the top artists.
+    /// Mirrors Android's `getChartsPage()` browse of `FEmusic_charts`.
+    static func charts() async -> (songs: [Track], artists: [HomeItem]) {
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client],
+                                   "browseId": "FEmusic_charts",
+                                   "params": "ggMGCgQIgAQ%3D"]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body,
+                                    login: Auth.shared.isLoggedIn)
+        else { return ([], []) }
+
+        // Top-songs shelves are list rows; the video charts are two-row cards.
+        var songs: [Track] = []
+        var songSeen = Set<String>()
+        collectTracks(json, into: &songs, seen: &songSeen)
+        collectChartVideos(json, into: &songs, seen: &songSeen)
+
+        var cards: [HomeItem] = []
+        var cardSeen = Set<String>()
+        collectCards(json, into: &cards, seen: &cardSeen)
+        let artists = cards.filter { $0.browseId?.hasPrefix("UC") == true }
+
+        return (songs, artists)
+    }
+
+    /// Two-row chart cards that point at a video rather than a browse page.
+    private static func collectChartVideos(_ node: Any, into out: inout [Track],
+                                           seen: inout Set<String>) {
+        if let dict = node as? [String: Any] {
+            if dict["musicTwoRowItemRenderer"] != nil, let item = parseHomeItem(dict),
+               let vid = item.videoId, !vid.isEmpty, seen.insert(vid).inserted {
+                out.append(item.asTrack)
+                return
+            }
+            for (_, v) in dict { collectChartVideos(v, into: &out, seen: &seen) }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectChartVideos(v, into: &out, seen: &seen) }
         }
     }
 

@@ -46,21 +46,24 @@ struct LibraryCollectionView: View {
 
     var body: some View {
         ScrollView {
-            if loading {
-                SkeletonGrid(count: 4)
-            } else if shown.isEmpty {
-                Text(auth.isLoggedIn
-                     ? "Nothing in your \(kind.title.lowercased()) yet."
-                     : "Sign in to see your \(kind.title.lowercased()).")
-                    .font(.system(size: 14))
-                    .foregroundStyle(palette.onSurfaceVariant)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 60)
-            } else if kind == .playlists {
-                playlistCards
-            } else {
-                grid
+            VStack(spacing: 0) {
+                if loading {
+                    SkeletonGrid(count: 4)
+                } else if shown.isEmpty {
+                    Text(auth.isLoggedIn
+                         ? "Nothing in your \(kind.title.lowercased()) yet."
+                         : "Sign in to see your \(kind.title.lowercased()).")
+                        .font(.system(size: 14))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+                } else if kind == .playlists {
+                    playlistCards
+                } else {
+                    grid
+                }
             }
+            .playerBottomPadding()
         }
         .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle(kind.title)

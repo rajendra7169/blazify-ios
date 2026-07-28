@@ -83,8 +83,8 @@ struct LibraryView: View {
                         }
                     }
 
-                    Spacer().frame(height: 12)
                 }
+                .playerBottomPadding()
             }
             .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Library")

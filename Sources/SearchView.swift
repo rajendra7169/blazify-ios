@@ -23,6 +23,7 @@ struct SearchView: View {
             }
         }
         .listStyle(.plain)
+        .playerBottomInsetArea()
         .scrollContentBackground(.hidden)
         .background(palette.scaffold.ignoresSafeArea())
         .overlay {

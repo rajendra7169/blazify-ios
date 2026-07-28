@@ -82,7 +82,7 @@ struct PlaylistView: View {
                     }
                 }
             }
-            .padding(.bottom, 24)
+            .playerBottomPadding()
         }
         .background(palette.scaffold.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)

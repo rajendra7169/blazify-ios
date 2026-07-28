@@ -30,6 +30,7 @@ struct MoodDetailView: View {
                 .padding(16)
             }
         }
+        .playerBottomInsetArea()
         .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle(mood.title)
         .navigationBarTitleDisplayMode(.inline)

@@ -225,9 +225,30 @@ extension EnvironmentValues {
     }
 }
 
-extension View {
-    /// Clears the mini-player and tab bar at the end of a scrolling page.
-    func playerAwareBottomPadding(_ inset: CGFloat, extra: CGFloat = 12) -> some View {
-        padding(.bottom, inset + extra)
+/// Adds room at the end of a scrolling page for the mini-player and tab bar,
+/// which float above the content rather than pushing it up.
+private struct PlayerBottomPadding: ViewModifier {
+    @Environment(\.playerBottomInset) private var inset
+
+    func body(content: Content) -> some View {
+        content.padding(.bottom, inset + 12)
     }
+}
+
+/// The same clearance applied to a scrolling *container* — the right tool for a
+/// `List`, whose rows we don't wrap ourselves.
+private struct PlayerBottomInsetArea: ViewModifier {
+    @Environment(\.playerBottomInset) private var inset
+
+    func body(content: Content) -> some View {
+        content.safeAreaPadding(.bottom, inset + 12)
+    }
+}
+
+extension View {
+    /// Put this on a scroll view's *content* so the last row clears the bars.
+    func playerBottomPadding() -> some View { modifier(PlayerBottomPadding()) }
+
+    /// Put this on a `List` (or any scrolling container) for the same clearance.
+    func playerBottomInsetArea() -> some View { modifier(PlayerBottomInsetArea()) }
 }

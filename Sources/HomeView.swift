@@ -45,7 +45,7 @@ struct HomeView: View {
                         }
                     }
                 }
-                .padding(.bottom, 24)
+                .playerBottomPadding()
             }
             .background(palette.scaffold.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)

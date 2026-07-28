@@ -8,14 +8,15 @@ struct HistoryView: View {
     @ObservedObject var player: Player
     @ObservedObject private var auth = Auth.shared
 
-    @State private var source: Source = .local
+    /// YouTube Music leads and is the default; the device log is the fallback.
+    @State private var source: Source = .remote
     @State private var remote: [YouTube.HistorySection] = []
     @State private var loading = false
     @State private var query = ""
     @State private var searching = false
 
     enum Source: String, CaseIterable, Identifiable {
-        case local, remote
+        case remote, local
         var id: String { rawValue }
         var title: String { self == .local ? "On this device" : "YouTube Music" }
     }
@@ -39,7 +40,12 @@ struct HistoryView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if auth.isLoggedIn { sourcePicker }
+                if auth.isLoggedIn {
+                    sourcePicker
+                } else {
+                    // Signed out there's no account history, so don't offer it.
+                    Color.clear.frame(height: 0).onAppear { source = .local }
+                }
 
                 if loading && source == .remote {
                     ForEach(0..<6, id: \.self) { _ in
@@ -80,7 +86,7 @@ struct HistoryView: View {
                     }
                 }
             }
-            .padding(.bottom, 16)
+            .playerBottomPadding()
         }
         .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle("History")

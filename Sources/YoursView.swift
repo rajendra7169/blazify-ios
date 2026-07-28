@@ -19,12 +19,12 @@ struct YoursView: View {
     @State private var showLogin = false
     @State private var showTogether = false
 
-    /// Trending is what you've played *most*, not most recently — Android reads
-    /// this from `mostPlayedSongs`, and "See more" opens the full Stats screen.
-    private var trendingSongs: [Track] { PlayHistory.mostPlayed(.all, limit: 12) }
+    /// What's trending on YouTube Music right now, from the charts page.
+    @State private var trendingSongs: [Track] = []
+    @State private var trendingArtists: [HomeItem] = []
     /// Fresh favourites: the last month's most-played, minus the all-time top.
     private var recommended: [Track] {
-        let top = Set(trendingSongs.prefix(6).map(\.videoId))
+        let top = Set(PlayHistory.mostPlayed(.all, limit: 6).map(\.videoId))
         return PlayHistory.mostPlayed(.month1, limit: 20)
             .filter { !top.contains($0.videoId) }
             .prefix(15).map { $0 }
@@ -38,6 +38,8 @@ struct YoursView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    header
+
                     if !PlayHistory.recent.isEmpty {
                         // "See more" opens the full dated history, as Android does.
                         BlazeSectionHeader(title: "Recently Played") { route = .history }
@@ -57,7 +59,7 @@ struct YoursView: View {
                         playlistRail
                     }
 
-                    if !trendingSongs.isEmpty || !artists.isEmpty {
+                    if !trendingSongs.isEmpty || !trendingArtists.isEmpty {
                         BlazeSectionHeader(title: "Trending") { route = .stats }
                         trendingRail
                     }
@@ -73,28 +75,11 @@ struct YoursView: View {
                     }
 
                     if loading { SkeletonRail() }
-                    Spacer().frame(height: 12)
                 }
+                .playerBottomPadding()
             }
             .background(palette.scaffold.ignoresSafeArea())
-            .navigationTitle("Yours")
-            .toolbar {
-                // Same pair Android puts in the Yours app bar.
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        if auth.isLoggedIn { showAccount = true } else { showLogin = true }
-                    } label: {
-                        Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
-                            .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showTogether = true } label: {
-                        Image(systemName: "person.2.wave.2.fill")
-                            .foregroundStyle(palette.onSurface)
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
             .navigationDestination(item: $moodRoute) { mood in
                 MoodDetailView(mood: mood, player: player)
@@ -107,6 +92,48 @@ struct YoursView: View {
                 .presentationBackground(.clear)
         }
         .task(id: auth.isLoggedIn) { await load() }
+    }
+
+    // MARK: Header — title, profile and Blaze Together all on one row
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Text("Yours")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(palette.onSurface)
+
+            Spacer(minLength: 0)
+
+            Button {
+                if auth.isLoggedIn { showAccount = true } else { showLogin = true }
+            } label: {
+                Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                    .font(.system(size: 26))
+                    .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
+            }
+
+            // Logo + wordmark, as Android labels it.
+            Button { showTogether = true } label: {
+                HStack(spacing: 6) {
+                    Image(bundleImage: "blaze_logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                    Text("Blaze Together")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(palette.onSurface)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(palette.onSurface.opacity(0.06))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     // MARK: Rails
@@ -192,8 +219,8 @@ struct YoursView: View {
     private var trendingRail: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 12) {
-                let songs = trendingSongs
-                let people = Array(artists.prefix(12))
+                let songs = Array(trendingSongs.prefix(12))
+                let people = Array(trendingArtists.prefix(12))
                 ForEach(Array(0..<max(songs.count, people.count)), id: \.self) { i in
                     if i < songs.count {
                         BlazeMusicCard(title: songs[i].title, subtitle: songs[i].artist,
@@ -249,7 +276,8 @@ struct YoursView: View {
     private func load() async {
         loading = true
         async let moodsTask = YouTube.moods()
-        let m = await moodsTask
+        async let chartsTask = YouTube.charts()
+        let (m, charts) = await (moodsTask, chartsTask)
         var pl: [HomeItem] = []
         var ar: [HomeItem] = []
         if auth.isLoggedIn {
@@ -261,6 +289,8 @@ struct YoursView: View {
             moods = m
             accountPlaylists = pl
             artists = ar
+            trendingSongs = charts.songs
+            trendingArtists = charts.artists
             loading = false
         }
     }

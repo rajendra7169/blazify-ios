@@ -9,8 +9,16 @@ struct RootView: View {
     @State private var tab: BlazeTab = .home
     @Environment(\.colorScheme) private var scheme
 
-    /// Mini-player (64 + 8 gap) plus the 70pt bar.
-    private var bottomInset: CGFloat { (player.hasTrack ? 72 : 0) + 70 }
+    /// Home-indicator height, so the bar clears it and content clears the bar.
+    private var safeBottom: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first?.safeAreaInsets.bottom ?? 0
+    }
+
+    /// Mini-player (64 + 8 gap) plus the 70pt bar plus the home indicator.
+    /// Pages add this as bottom padding themselves — see `playerBottomPadding()`.
+    private var bottomInset: CGFloat { (player.hasTrack ? 72 : 0) + 70 + safeBottom }
 
     private var palette: Palette { Palette(dark: theme.isDark(scheme)) }
 
@@ -31,14 +39,19 @@ struct RootView: View {
             }
         }
         .background(palette.scaffold.ignoresSafeArea())
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // An overlay, not a safeAreaInset: the inset never reduced the layout
+        // region here, so content kept scrolling under the bar. Pages now clear
+        // it explicitly with `playerBottomPadding()`, which is one mechanism
+        // instead of two disagreeing ones.
+        .overlay(alignment: .bottom) {
             VStack(spacing: 0) {
                 if player.hasTrack {
                     MiniPlayerView(player: player)
                         .padding(.bottom, 8)   // don't sit flush on the tab bar
                 }
-                BlazeTabBar(selection: $tab, palette: palette)
+                BlazeTabBar(selection: $tab, palette: palette, safeBottom: safeBottom)
             }
+            .ignoresSafeArea(edges: .bottom)
         }
         .environment(\.palette, palette)
         .environment(\.playerBottomInset, bottomInset)
@@ -77,6 +90,8 @@ enum BlazeTab: CaseIterable {
 struct BlazeTabBar: View {
     @Binding var selection: BlazeTab
     let palette: Palette
+    /// Home-indicator height, absorbed into the bar so its fill runs to the edge.
+    var safeBottom: CGFloat = 0
 
     var body: some View {
         HStack {
@@ -98,6 +113,7 @@ struct BlazeTabBar: View {
             }
         }
         .frame(height: 70)
+        .padding(.bottom, safeBottom)
         .background(palette.surface)
         .overlay(alignment: .top) {
             Rectangle().fill(palette.separator).frame(height: 0.5)

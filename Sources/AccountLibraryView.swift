@@ -68,6 +68,7 @@ struct AccountLibraryView: View {
                     .padding(16)
                 }
             }
+            .playerBottomInsetArea()
             .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)

@@ -28,7 +28,7 @@ struct ArtistView: View {
                             sectionView(section)
                         }
                     }
-                    .padding(.bottom, 24)
+                    .playerBottomPadding()
                 } else {
                     VStack(spacing: 10) {
                         Image(systemName: "person.slash").font(.system(size: 36))

@@ -63,8 +63,8 @@ struct StatsView: View {
                     }
                 }
 
-                Spacer().frame(height: 16)
             }
+            .playerBottomPadding()
         }
         .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle("Stats")

@@ -113,7 +113,7 @@ struct SongListScreen: View {
                         .padding(.top, 40)
                 }
             }
-            .padding(.bottom, 16)
+            .playerBottomPadding()
         }
         .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle(searching ? "" : title)
