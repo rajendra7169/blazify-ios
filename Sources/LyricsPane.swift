@@ -308,12 +308,12 @@ struct LyricsPane: View {
             loading = false
             ready = true
             // Still fetch the alternatives so the picker stays usable.
-            let found = await Lyrics.search(title: track.title, artist: track.artist)
+            let found = await Lyrics.search(title: track.title, artist: track.artist, videoId: track.videoId)
             await MainActor.run { candidates = found }
             return
         }
 
-        let found = await Lyrics.search(title: track.title, artist: track.artist)
+        let found = await Lyrics.search(title: track.title, artist: track.artist, videoId: track.videoId)
         await MainActor.run {
             candidates = found
             result = Lyrics.best(found)

@@ -178,6 +178,57 @@ enum YouTube {
         return out
     }
 
+    // MARK: - Lyrics (YouTube's own, via next -> MPLY browse)
+
+    /// Plain lyrics YouTube Music carries for a track, plus the upstream source
+    /// name it credits in the footer (usually Musixmatch). No login needed.
+    static func lyrics(videoId: String) async -> (text: String, source: String)? {
+        guard !videoId.isEmpty else { return nil }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+
+        // The lyrics tab hangs off `next` as a browseId beginning MPLY.
+        let nextURL = "https://music.youtube.com/youtubei/v1/next?prettyPrint=false"
+        guard let nextJSON = await post(nextURL, name: "67", version: remixVersion,
+                                        userAgent: webUA, visitor: visitor,
+                                        body: ["context": ["client": client], "videoId": videoId])
+        else { return nil }
+        guard let browseId = findLyricsBrowseId(nextJSON) else { return nil }
+
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor,
+                                    body: ["context": ["client": client], "browseId": browseId]),
+              let contents = json["contents"] as? [String: Any],
+              let list = contents["sectionListRenderer"] as? [String: Any],
+              let sections = list["contents"] as? [[String: Any]],
+              let shelf = sections.first?["musicDescriptionShelfRenderer"] as? [String: Any]
+        else { return nil }
+
+        let text = runsJoined(shelf["description"])
+        guard !text.isEmpty else { return nil }
+        // Footer reads "Source: Musixmatch".
+        let footer = runsJoined(shelf["footer"])
+        let source = footer.replacingOccurrences(of: "Source: ", with: "")
+        return (text, source.isEmpty ? "YouTube Music" : source)
+    }
+
+    private static func findLyricsBrowseId(_ node: Any) -> String? {
+        if let dict = node as? [String: Any] {
+            if let id = dict["browseId"] as? String, id.hasPrefix("MPLY") { return id }
+            for (_, v) in dict {
+                if let found = findLyricsBrowseId(v) { return found }
+            }
+        } else if let arr = node as? [Any] {
+            for v in arr {
+                if let found = findLyricsBrowseId(v) { return found }
+            }
+        }
+        return nil
+    }
+
     // MARK: - Artist
 
     /// Artists-only search filter.

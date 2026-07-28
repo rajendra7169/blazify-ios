@@ -50,11 +50,13 @@ enum Lyrics {
     // MARK: Fan-out
 
     /// Every candidate from every provider, best-first.
-    static func search(title: String, artist: String) async -> [LyricsCandidate] {
+    /// `videoId` unlocks YouTube's own lyrics when known.
+    static func search(title: String, artist: String, videoId: String = "") async -> [LyricsCandidate] {
         async let lrc = lrcLib(title: title, artist: artist)
         async let kugou = kuGou(title: title, artist: artist)
         async let apple = appleMusic(title: title, artist: artist)
-        let all = await apple + lrc + kugou
+        async let yt = youTube(videoId: videoId, title: title, artist: artist)
+        let all = await apple + lrc + kugou + yt
         // Synced first, then by provider rank, preserving arrival order within a rank.
         return all.enumerated().sorted { a, b in
             if a.element.synced != b.element.synced { return a.element.synced }
@@ -69,7 +71,7 @@ enum Lyrics {
         case "apple music": return 0
         case "lrclib": return 1
         case "kugou": return 2
-        default: return 3
+        default: return 3   // YouTube / Musixmatch — plain only
         }
     }
 
@@ -203,6 +205,15 @@ enum Lyrics {
             }
         }
         return out
+    }
+
+    // MARK: YouTube Music (plain lyrics, credited to their upstream source)
+
+    private static func youTube(videoId: String, title: String, artist: String) async -> [LyricsCandidate] {
+        guard !videoId.isEmpty, let found = await YouTube.lyrics(videoId: videoId) else { return [] }
+        return [LyricsCandidate(provider: found.source, trackName: title, artistName: artist,
+                                result: LyricsResult(lines: [], plain: found.text,
+                                                     synced: false, raw: nil))]
     }
 
     // MARK: KuGou (search → candidates by hash → base64 LRC)
