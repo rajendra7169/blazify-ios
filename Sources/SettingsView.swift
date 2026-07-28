@@ -264,8 +264,14 @@ struct SettingsView: View {
     // MARK: Rows
 
     private func settingRow(_ row: Row, index: Int) -> some View {
-        // Icon chips cycle through three accents by row index, as on Android.
-        let tints: [Color] = [palette.accent, Blaze.orange, player.artColor]
+        // Icon chips cycle through three shades, all derived from the live
+        // accent, so they follow the album-art colour instead of sitting on a
+        // fixed orange.
+        let tints: [Color] = [
+            palette.accent,
+            palette.accent.tone(palette.dark ? 72 : 46, chroma: 0.72),
+            palette.accent.tone(palette.dark ? 88 : 34, chroma: 0.5),
+        ]
         let tint = tints[index % 3]
         let live = row.action != .none
 

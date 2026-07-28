@@ -83,7 +83,7 @@ struct AddToPlaylistSheet: View {
 
     private func row(_ playlist: UserPlaylist) -> some View {
         HStack(spacing: 14) {
-            RemoteImage(url: playlist.thumbnailURL) {
+            RemoteImage(url: playlist.thumbnailURL, size: 56) {
                 palette.onSurface.opacity(0.06)
                     .overlay(Image(systemName: "music.note.list")
                         .foregroundStyle(palette.onSurface.opacity(0.35)))

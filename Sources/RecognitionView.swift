@@ -90,7 +90,7 @@ struct RecognitionView: View {
 
     private func result(_ match: Recognizer.Match) -> some View {
         VStack(spacing: 12) {
-            RemoteImage(url: match.artworkURL) { palette.onSurface.opacity(0.06) }
+            RemoteImage(url: match.artworkURL, size: 140) { palette.onSurface.opacity(0.06) }
                 .frame(width: 140, height: 140)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 

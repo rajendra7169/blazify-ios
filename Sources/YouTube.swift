@@ -1058,9 +1058,11 @@ enum YouTube {
             let thumbs = t["thumbnails"] as? [[String: Any]]
         else { return "" }
         let raw = thumbs.last?["url"] as? String ?? ""
-        // YT Music art comes small (e.g. =w120-h120); request a crisp size.
+        // A middling canonical size: `RemoteImage` rewrites this per use, and
+        // anything that doesn't pass a size gets something sane rather than the
+        // 720² we used to request for every 48pt row.
         if let r = raw.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
-            return raw.replacingCharacters(in: r, with: "=w720-h720")
+            return raw.replacingCharacters(in: r, with: "=w544-h544")
         }
         return raw
     }

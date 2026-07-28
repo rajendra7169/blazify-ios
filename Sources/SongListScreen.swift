@@ -169,7 +169,7 @@ struct SongListScreen: View {
 
     private var header: some View {
         VStack(spacing: 0) {
-            RemoteImage(url: source.first?.artURL(size: 720)) {
+            RemoteImage(url: source.first?.artURL(size: 720), size: 240) {
                 palette.onSurface.opacity(0.06)
                     .overlay(Image(systemName: "music.note.list")
                         .font(.system(size: 56))

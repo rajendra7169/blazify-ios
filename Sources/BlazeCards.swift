@@ -137,7 +137,7 @@ struct PlaylistArtwork: View {
     }
 
     private func cell(_ url: String) -> some View {
-        RemoteImage(url: URL(string: url)) { Color.black.opacity(0.15) }
+        RemoteImage(url: URL(string: url), size: 200) { Color.black.opacity(0.15) }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
     }
@@ -156,7 +156,7 @@ struct BlazeMusicCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: isCircular ? .center : .leading, spacing: 0) {
-                RemoteImage(url: thumbnail.flatMap { URL(string: $0) }) {
+                RemoteImage(url: thumbnail.flatMap { URL(string: $0) }, size: 140) {
                     palette.onSurface.opacity(0.06)
                         .overlay(Image(systemName: fallbackIcon)
                             .font(.system(size: 40))
@@ -243,7 +243,7 @@ struct BlazeGradientCard: View {
                 if let thumbnail, let url = URL(string: thumbnail) {
                     // Art fills the card; the seed colour washes up from the
                     // bottom so the title always stays readable over it.
-                    RemoteImage(url: url) { seed }
+                    RemoteImage(url: url, size: width) { seed }
                         .frame(width: width, height: height)
                         .clipped()
                     LinearGradient(stops: [

@@ -11,10 +11,21 @@ import Combine
 final class AudioCache: ObservableObject {
     static let shared = AudioCache()
 
-    /// Cap on disk, adjustable from Settings (Android's MaxSongCacheSize).
-    var limitBytes: Int64 {
-        let saved = UserDefaults.standard.integer(forKey: "songCacheLimitMB")
-        return Int64(saved > 0 ? saved : 512) * 1024 * 1024
+    /// Whether songs are cached at all (Android's EnableSongCacheKey).
+    var isEnabled: Bool {
+        UserDefaults.standard.object(forKey: "enableSongCache") as? Bool ?? true
+    }
+
+    /// Cap in MB, matching Android's MaxSongCacheSize: -1 is unlimited,
+    /// 0 disables, anything else is a megabyte figure. Default 512.
+    var limitMB: Int {
+        guard UserDefaults.standard.object(forKey: "songCacheLimitMB") != nil else { return 512 }
+        return UserDefaults.standard.integer(forKey: "songCacheLimitMB")
+    }
+
+    /// Byte cap, or nil when unlimited.
+    var limitBytes: Int64? {
+        limitMB < 0 ? nil : Int64(limitMB) * 1024 * 1024
     }
 
     @Published private(set) var tracks: [Track] = []
@@ -58,6 +69,7 @@ final class AudioCache: ObservableObject {
     /// Store this track's audio in the background while it streams.
     func cache(_ track: Track, from url: URL) {
         let id = track.videoId
+        guard isEnabled, limitMB != 0 else { return }
         guard !id.isEmpty, !isCached(id), !inFlight.contains(id) else { return }
         // Downloads already keep a permanent copy; don't duplicate it.
         guard Downloads.shared.localAudioURL(for: id) == nil else { return }
@@ -113,12 +125,12 @@ final class AudioCache: ObservableObject {
 
     /// Drop the least-recently-played files until we're back under the cap.
     private func evictIfNeeded() {
-        guard measure() > limitBytes else { return }
+        guard let cap = limitBytes, measure() > cap else { return }
         let order = tracks.sorted {
             (lastUsed[$0.videoId] ?? .distantPast) < (lastUsed[$1.videoId] ?? .distantPast)
         }
         for track in order {
-            guard measure() > limitBytes else { break }
+            guard measure() > cap else { break }
             remove(track.videoId)
         }
     }

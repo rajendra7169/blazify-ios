@@ -16,7 +16,7 @@ struct QueueView: View {
                         dismiss()
                     } label: {
                         HStack(spacing: 12) {
-                            RemoteImage(url: pair.element.thumbnailURL) {
+                            RemoteImage(url: pair.element.thumbnailURL, size: 48) {
                                 palette.onSurface.opacity(0.10)
                             }
                             .frame(width: 48, height: 48)

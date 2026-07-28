@@ -416,7 +416,7 @@ struct MusicCard: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 8) {
-                RemoteImage(url: item.thumbnailURL) {
+                RemoteImage(url: item.thumbnailURL, size: 140) {
                     palette.onSurface.opacity(0.06)
                         .overlay(
                             Image(systemName: item.isCircular ? "person.fill" : "music.note")

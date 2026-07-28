@@ -109,7 +109,7 @@ struct MiniPlayerView: View {
                 .stroke(player.artColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
 
-            RemoteImage(url: track.artURL(size: 240)) { ArtPlaceholder() }
+            RemoteImage(url: track.artURL(size: 240), size: 40) { ArtPlaceholder() }
                 .frame(width: 40, height: 40)
                 .clipShape(Circle())
                 .overlay {

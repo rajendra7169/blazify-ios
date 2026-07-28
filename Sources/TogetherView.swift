@@ -1,8 +1,12 @@
 import SwiftUI
 import UIKit
 
-/// Listen Together: host a room or join one by code, then everyone follows the
-/// host's playback. Works with Blazify on Android — same server, same protocol.
+/// Blaze Together, ported from ListenTogetherScreen.kt: header, connection
+/// status, the room card with its shareable code, connected users, pending join
+/// requests, the join/create form and the room settings.
+///
+/// Everyone follows the host's playback. Same server and protocol as Blazify on
+/// Android, so an iPhone and an Android phone can share a room.
 struct TogetherView: View {
     @Environment(\.palette) private var palette
     @ObservedObject private var lt = ListenTogether.shared
@@ -10,197 +14,336 @@ struct TogetherView: View {
 
     @State private var joinCode = ""
     @State private var name = ListenTogether.shared.username
+    @State private var copied = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
+                    header
+                    connectionStatus
+
                     if lt.state == .inRoom {
-                        roomView
+                        roomCard
+                        if !lt.pendingJoins.isEmpty { joinRequests }
+                        connectedUsers
+                        leaveButton
                     } else {
-                        lobbyView
+                        joinCreate
+                        backgroundNote
                     }
+
+                    settingsLink
                 }
                 .padding(20)
+                .playerBottomPadding()
             }
             .background(palette.scaffold.ignoresSafeArea())
-            .navigationTitle("Together")
+            .navigationTitle("Blaze Together")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }.tint(palette.accent)
                 }
             }
+            .navigationDestination(isPresented: $showSettings) { TogetherSettingsView() }
         }
     }
 
-    // MARK: Lobby
+    // MARK: Header
 
-    private var lobbyView: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 8) {
-                Image(systemName: "person.2.wave.2")
-                    .font(.system(size: 40)).foregroundStyle(palette.accent)
-                Text("Listen with friends")
-                    .font(.system(size: 20, weight: .bold)).foregroundStyle(palette.onSurface)
-                Text("Everyone hears the same song at the same time. Works with Blazify on Android too.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(palette.onSurfaceVariant)
-                    .multilineTextAlignment(.center)
+    private var header: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "person.2.wave.2.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(palette.accent)
+            Text("Listen Together")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(palette.onSurface)
+            Text("Listen to music with your friends in real time. Create a room to host, or join an existing room with a code.")
+                .font(.system(size: 13))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 4)
+    }
+
+    // MARK: Connection
+
+    private var connectionStatus: some View {
+        let (label, colour): (String, Color) = {
+            switch lt.state {
+            case .inRoom: return ("Connected", .green)
+            case .connecting: return ("Connecting…", palette.accent)
+            case .failed(let why): return (why.isEmpty ? "Connection error" : why, .red)
+            case .idle: return ("Disconnected", palette.onSurfaceVariant)
             }
-            .padding(.top, 12)
+        }()
 
+        return card {
+            HStack(spacing: 12) {
+                Circle().fill(colour).frame(width: 10, height: 10)
+                Text(label)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(palette.onSurface)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if lt.state == .inRoom {
+                    Text(lt.isHost ? "You are the host" : "You are a guest")
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                }
+            }
+        }
+    }
+
+    // MARK: Room
+
+    private var roomCard: some View {
+        card {
+            VStack(spacing: 12) {
+                Text("Room code")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(palette.onSurfaceVariant)
+
+                Text(lt.roomCode)
+                    .font(.system(size: 34, weight: .black, design: .monospaced))
+                    .tracking(4)
+                    .foregroundStyle(palette.accent)
+
+                HStack(spacing: 10) {
+                    Button {
+                        UIPasteboard.general.string = lt.roomCode
+                        copied = true
+                        Task {
+                            try? await Task.sleep(nanoseconds: 1_500_000_000)
+                            copied = false
+                        }
+                    } label: {
+                        pill(copied ? "Copied" : "Copy code", icon: copied ? "checkmark" : "doc.on.doc")
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        share("Join my Blazify room with code \(lt.roomCode)")
+                    } label: {
+                        pill("Share", icon: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var connectedUsers: some View {
+        card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("In the room · \(lt.members.count)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(palette.onSurfaceVariant)
+
+                ForEach(lt.members) { member in
+                    HStack(spacing: 12) {
+                        avatar(member.name)
+                        Text(member.name)
+                            .font(.system(size: 15))
+                            .foregroundStyle(palette.onSurface)
+                            .lineLimit(1)
+                        if member.isHost {
+                            Text("HOST")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(palette.onAccent)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(palette.accent)
+                                .clipShape(Capsule())
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+    }
+
+    private var joinRequests: some View {
+        card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Join requests")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(palette.onSurfaceVariant)
+
+                ForEach(lt.pendingJoins) { member in
+                    HStack(spacing: 12) {
+                        avatar(member.name)
+                        Text(member.name)
+                            .font(.system(size: 15))
+                            .foregroundStyle(palette.onSurface)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Button { lt.approve(member) } label: {
+                            Image(systemName: "checkmark").foregroundStyle(.green)
+                        }
+                        .buttonStyle(.plain)
+                        Button { lt.reject(member) } label: {
+                            Image(systemName: "xmark").foregroundStyle(.red)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var leaveButton: some View {
+        Button { lt.leave() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                Text("Leave room").font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(Color.red)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Join / create
+
+    private var joinCreate: some View {
+        VStack(spacing: 14) {
             card {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Your name").font(.system(size: 13, weight: .semibold))
+                    Text("Your name")
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(palette.onSurfaceVariant)
                     TextField("Name", text: $name)
                         .textFieldStyle(.plain)
                         .foregroundStyle(palette.onSurface)
                         .tint(palette.accent)
-                        .padding(.horizontal, 14).padding(.vertical, 11)
+                        .padding(.vertical, 10).padding(.horizontal, 14)
                         .background(palette.onSurface.opacity(0.06))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(Capsule())
                         .onChange(of: name) { lt.saveUsername(name) }
                 }
             }
 
-            Button {
-                lt.saveUsername(name)
-                lt.createRoom()
-            } label: {
-                Text("Start a room")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(palette.heroGradient)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-
             card {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Join a room").font(.system(size: 13, weight: .semibold))
+                    Text("Create room")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(palette.onSurface)
+                    Text("Create a room and share the code with your friends.")
+                        .font(.system(size: 12.5))
                         .foregroundStyle(palette.onSurfaceVariant)
-                    HStack(spacing: 10) {
-                        TextField("Room code", text: $joinCode)
-                            .textFieldStyle(.plain)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .foregroundStyle(palette.onSurface)
-                            .tint(palette.accent)
-                            .padding(.horizontal, 14).padding(.vertical, 11)
-                            .background(palette.onSurface.opacity(0.06))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                        Button {
-                            lt.saveUsername(name)
-                            lt.joinRoom(code: joinCode)
-                        } label: {
-                            Text("Join")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.black)
-                                .padding(.horizontal, 20).frame(height: 44)
-                                .background(palette.accent)
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(joinCode.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button {
+                        lt.saveUsername(name)
+                        lt.createRoom()
+                    } label: {
+                        Text("Create")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(palette.onAccent)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(palette.accent)
+                            .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
 
-            if case .connecting = lt.state {
-                ProgressView().tint(palette.accent)
-            }
-            if case .failed(let message) = lt.state {
-                Text(message)
-                    .font(.system(size: 13)).foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
+            card {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Join existing room")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(palette.onSurface)
+                    TextField("Enter a room code", text: $joinCode)
+                        .textFieldStyle(.plain)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .foregroundStyle(palette.onSurface)
+                        .tint(palette.accent)
+                        .padding(.vertical, 10).padding(.horizontal, 14)
+                        .background(palette.onSurface.opacity(0.06))
+                        .clipShape(Capsule())
+                    Button {
+                        lt.saveUsername(name)
+                        lt.joinRoom(code: joinCode)
+                    } label: {
+                        Text("Join")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(palette.onSurface)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(palette.onSurface.opacity(0.08))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(joinCode.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
         }
     }
 
-    // MARK: In a room
+    private var backgroundNote: some View {
+        Text("When you're connected but not in a room, Listen Together disconnects after 30 minutes in the background to save battery.")
+            .font(.system(size: 11.5))
+            .foregroundStyle(palette.onSurfaceVariant)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 8)
+    }
 
-    private var roomView: some View {
-        VStack(spacing: 18) {
-            card {
-                VStack(spacing: 10) {
-                    Text(lt.isHost ? "You're hosting" : "In the room")
-                        .font(.system(size: 13, weight: .semibold))
+    private var settingsLink: some View {
+        Button { showSettings = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "gearshape")
+                    .foregroundStyle(palette.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Together settings")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(palette.onSurface)
+                    Text("Server, auto-approve, sync volume")
+                        .font(.system(size: 12))
                         .foregroundStyle(palette.onSurfaceVariant)
-                    Text(lt.roomCode)
-                        .font(.system(size: 34, weight: .bold, design: .monospaced))
-                        .tracking(4)
-                        .foregroundStyle(palette.accent)
-                    Button {
-                        UIPasteboard.general.string = lt.roomCode
-                    } label: {
-                        Label("Copy code", systemImage: "doc.on.doc")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(palette.onSurface)
-                    }
-                    .buttonStyle(.plain)
-                    if lt.isHost {
-                        Text("Share this code — what you play, they hear.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(palette.onSurfaceVariant)
-                            .multilineTextAlignment(.center)
-                    }
                 }
-                .frame(maxWidth: .infinity)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.onSurface.opacity(0.35))
             }
-
-            if !lt.pendingJoins.isEmpty {
-                card {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Wants to join").font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(palette.onSurfaceVariant)
-                        ForEach(lt.pendingJoins) { member in
-                            HStack {
-                                Text(member.name).foregroundStyle(palette.onSurface).lineLimit(1)
-                                Spacer()
-                                Button("Allow") { lt.approve(member) }
-                                    .buttonStyle(.plain)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(palette.accent)
-                                Button("Deny") { lt.reject(member) }
-                                    .buttonStyle(.plain)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(palette.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-            }
-
-            card {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Listening (\(lt.members.count))")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(palette.onSurfaceVariant)
-                    ForEach(lt.members) { member in
-                        HStack(spacing: 10) {
-                            Image(systemName: member.isHost ? "crown.fill" : "person.fill")
-                                .font(.system(size: 13))
-                                .foregroundStyle(member.isHost ? palette.accent : palette.onSurfaceVariant)
-                            Text(member.name).foregroundStyle(palette.onSurface).lineLimit(1)
-                            Spacer()
-                        }
-                    }
-                }
-            }
-
-            Button { lt.leave() } label: {
-                Text("Leave room")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity).frame(height: 46)
-                    .overlay(Capsule().stroke(.red.opacity(0.6), lineWidth: 1.5))
-            }
-            .buttonStyle(.plain)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Bits
+
+    private func avatar(_ name: String) -> some View {
+        Circle()
+            .fill(palette.accent.opacity(0.2))
+            .frame(width: 36, height: 36)
+            .overlay(
+                Text(String(name.prefix(1)).uppercased())
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(palette.accent),
+            )
+    }
+
+    private func pill(_ text: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 13))
+            Text(text).font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundStyle(palette.onSurface)
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(palette.onSurface.opacity(0.08))
+        .clipShape(Capsule())
     }
 
     private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -208,6 +351,97 @@ struct TogetherView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(palette.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func share(_ text: String) {
+        let sheet = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        guard let root = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
+            .first?.rootViewController else { return }
+        // We're inside a sheet, so present from whatever is on top.
+        (root.presentedViewController ?? root).present(sheet, animated: true)
+    }
+}
+
+/// The room options Android keeps behind Listen Together > Settings.
+struct TogetherSettingsView: View {
+    @Environment(\.palette) private var palette
+
+    @AppStorage("ltAutoApproveJoins") private var autoApproveJoins = false
+    @AppStorage("ltAutoApproveSuggestions") private var autoApproveSuggestions = false
+    @AppStorage("ltSyncVolume") private var syncVolume = false
+    @AppStorage("ltServerURL") private var serverURL = ListenTogether.defaultServer
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                group {
+                    toggle("Auto-approve join requests",
+                           "Let people in without reviewing each request.",
+                           $autoApproveJoins)
+                    Divider().overlay(palette.separator)
+                    toggle("Auto-approve song suggestions",
+                           "Queue guests' suggestions without confirming.",
+                           $autoApproveSuggestions)
+                    Divider().overlay(palette.separator)
+                    toggle("Sync host volume",
+                           "Guests match the host's volume level.",
+                           $syncVolume)
+                }
+
+                group {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Server URL")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(palette.onSurface)
+                        Text("Must match your friends' server, or you won't see each other's rooms.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(palette.onSurfaceVariant)
+                        TextField("Server", text: $serverURL)
+                            .textFieldStyle(.plain)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .foregroundStyle(palette.onSurface)
+                            .tint(palette.accent)
+                            .padding(.vertical, 10).padding(.horizontal, 14)
+                            .background(palette.onSurface.opacity(0.06))
+                            .clipShape(Capsule())
+                        Button("Reset to default") { serverURL = ListenTogether.defaultServer }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(palette.accent)
+                    }
+                    .padding(16)
+                }
+            }
+            .padding(16)
+            .playerBottomPadding()
+        }
+        .background(palette.scaffold.ignoresSafeArea())
+        .navigationTitle("Together settings")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(palette.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func toggle(_ title: String, _ subtitle: String,
+                        _ binding: Binding<Bool>) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(palette.onSurface)
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(palette.onSurfaceVariant)
+            }
+            Spacer(minLength: 8)
+            Toggle("", isOn: binding).labelsHidden().tint(palette.accent)
+        }
+        .padding(16)
     }
 }

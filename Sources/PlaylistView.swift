@@ -22,7 +22,7 @@ struct PlaylistView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                RemoteImage(url: item.thumbnailURL) {
+                RemoteImage(url: item.thumbnailURL, size: 220) {
                     palette.onSurface.opacity(0.06)
                         .overlay(Image(systemName: "music.note.list")
                             .font(.system(size: 48))

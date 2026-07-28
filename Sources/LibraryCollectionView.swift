@@ -147,7 +147,7 @@ struct LibraryCollectionView: View {
                     }
                 } label: {
                     VStack(alignment: .leading, spacing: 8) {
-                        RemoteImage(url: item.thumbnailURL) {
+                        RemoteImage(url: item.thumbnailURL, size: 180) {
                             palette.onSurface.opacity(0.06)
                                 .overlay(Image(systemName: kind == .artists ? "person.fill" : "square.stack")
                                     .font(.system(size: 36))

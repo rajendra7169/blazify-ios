@@ -153,7 +153,7 @@ private struct LibraryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            RemoteImage(url: item.thumbnailURL) {
+            RemoteImage(url: item.thumbnailURL, size: 180) {
                 palette.onSurface.opacity(0.06)
                     .overlay(Image(systemName: "music.note.list")
                         .font(.system(size: 36))

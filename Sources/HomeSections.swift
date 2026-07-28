@@ -67,7 +67,7 @@ struct QuickPicksGrid: View {
 
     private func cell(_ item: HomeItem) -> some View {
         HStack(spacing: 10) {
-            RemoteImage(url: item.thumbnailURL) { palette.onSurface.opacity(0.06) }
+            RemoteImage(url: item.thumbnailURL, size: 48) { palette.onSurface.opacity(0.06) }
                 .frame(width: 48, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 2) {

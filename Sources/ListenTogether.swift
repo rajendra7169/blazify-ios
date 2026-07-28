@@ -41,7 +41,20 @@ final class ListenTogether: ObservableObject {
     /// Guard so following a host action doesn't echo straight back out.
     private var applyingRemote = false
 
-    private let serverURL = URL(string: "wss://metroserverx.meowery.eu/ws")!
+    /// Blazify Android's default room server.
+    static let defaultServer = "wss://metroserverx.meowery.eu/ws"
+
+    /// Whatever the Together settings say, falling back to the default.
+    private var serverURL: URL {
+        let saved = UserDefaults.standard.string(forKey: "ltServerURL") ?? ""
+        return URL(string: saved.isEmpty ? Self.defaultServer : saved)
+            ?? URL(string: Self.defaultServer)!
+    }
+
+    /// Host-side automation from Together settings.
+    private var autoApproveJoins: Bool {
+        UserDefaults.standard.bool(forKey: "ltAutoApproveJoins")
+    }
 
     // MARK: Connection
 
@@ -181,7 +194,13 @@ final class ListenTogether: ObservableObject {
 
         case "join_request":
             let member = Member(id: Proto.string(f, 1), name: Proto.string(f, 2), isHost: false)
-            if !member.id.isEmpty { pendingJoins.append(member) }
+            guard !member.id.isEmpty else { break }
+            // Hosts can opt out of vetting every request (Together settings).
+            if autoApproveJoins {
+                approve(member)
+            } else {
+                pendingJoins.append(member)
+            }
 
         case "user_joined":
             let member = Member(id: Proto.string(f, 1), name: Proto.string(f, 2), isHost: false)

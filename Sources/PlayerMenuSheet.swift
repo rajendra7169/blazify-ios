@@ -18,7 +18,7 @@ struct PlayerMenuSheet: View {
         VStack(spacing: 0) {
             // Track header.
             HStack(spacing: 12) {
-                RemoteImage(url: player.current?.artURL(size: 300)) { ArtPlaceholder() }
+                RemoteImage(url: player.current?.artURL(size: 300), size: 52) { ArtPlaceholder() }
                     .frame(width: 52, height: 52)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 3) {
