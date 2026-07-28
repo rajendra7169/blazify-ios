@@ -15,6 +15,20 @@ struct YoursView: View {
     @State private var route: LibraryRoute?
     @State private var moodRoute: MoodItem?
     @State private var loading = false
+    @State private var showAccount = false
+    @State private var showLogin = false
+    @State private var showTogether = false
+
+    /// Trending is what you've played *most*, not most recently — Android reads
+    /// this from `mostPlayedSongs`, and "See more" opens the full Stats screen.
+    private var trendingSongs: [Track] { PlayHistory.mostPlayed(.all, limit: 12) }
+    /// Fresh favourites: the last month's most-played, minus the all-time top.
+    private var recommended: [Track] {
+        let top = Set(trendingSongs.prefix(6).map(\.videoId))
+        return PlayHistory.mostPlayed(.month1, limit: 20)
+            .filter { !top.contains($0.videoId) }
+            .prefix(15).map { $0 }
+    }
 
     /// Android cycles these glyphs across the mood rail.
     private let moodIcons = ["waveform", "antenna.radiowaves.left.and.right", "slider.horizontal.3",
@@ -25,27 +39,26 @@ struct YoursView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if !PlayHistory.recent.isEmpty {
-                        BlazeSectionHeader(title: "Recently Played") {
-                            route = .tracks("Recently Played", PlayHistory.recent)
-                        }
+                        // "See more" opens the full dated history, as Android does.
+                        BlazeSectionHeader(title: "Recently Played") { route = .history }
                         rail(PlayHistory.recent.prefix(15).map { $0 }, queueTitle: "Recently Played")
                     }
 
-                    if !PlayHistory.top.isEmpty {
+                    if !recommended.isEmpty {
                         BlazeSectionHeader(title: "Recommended for You")
-                        rail(PlayHistory.top.prefix(15).map { $0 }, queueTitle: "Recommended")
+                        rail(recommended, queueTitle: "Recommended")
                     }
 
                     BlazeSectionHeader(title: "Browse Categories")
                     categories
 
                     if !playlistCards.isEmpty {
-                        BlazeSectionHeader(title: "Your Playlists")
+                        BlazeSectionHeader(title: "Your Playlists") { route = .playlists }
                         playlistRail
                     }
 
-                    if !PlayHistory.top.isEmpty || !artists.isEmpty {
-                        BlazeSectionHeader(title: "Trending")
+                    if !trendingSongs.isEmpty || !artists.isEmpty {
+                        BlazeSectionHeader(title: "Trending") { route = .stats }
                         trendingRail
                     }
 
@@ -65,19 +78,33 @@ struct YoursView: View {
             }
             .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Yours")
-            .navigationDestination(item: $route) { r in
-                switch r {
-                case .tracks(let title, let tracks):
-                    TrackListView(title: title, tracks: tracks, player: player)
-                case .artist(let id):
-                    ArtistView(browseId: id, player: player)
-                case .playlist(let item):
-                    PlaylistView(item: item, player: player)
+            .toolbar {
+                // Same pair Android puts in the Yours app bar.
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        if auth.isLoggedIn { showAccount = true } else { showLogin = true }
+                    } label: {
+                        Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                            .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showTogether = true } label: {
+                        Image(systemName: "person.2.wave.2.fill")
+                            .foregroundStyle(palette.onSurface)
+                    }
                 }
             }
+            .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
             .navigationDestination(item: $moodRoute) { mood in
                 MoodDetailView(mood: mood, player: player)
             }
+        }
+        .sheet(isPresented: $showLogin) { LoginView() }
+        .sheet(isPresented: $showTogether) { TogetherView() }
+        .fullScreenCover(isPresented: $showAccount) {
+            AccountPopup(player: player, isPresented: $showAccount)
+                .presentationBackground(.clear)
         }
         .task(id: auth.isLoggedIn) { await load() }
     }
@@ -99,15 +126,19 @@ struct YoursView: View {
         }
     }
 
-    /// Six square gradient tiles, three per row.
+    /// Six square gradient tiles, three per row. Each opens its own collection —
+    /// Songs, Albums, Artists and Playlists are filtered browsers; Downloads and
+    /// Favorites are auto-playlists, exactly as Android routes them.
     private var categories: some View {
         let items: [(String, String, Color, LibraryRoute)] = [
-            ("Songs", "music.note", Color(hex: 0xFF6B6B), .tracks("Songs", PlayHistory.recent)),
-            ("Albums", "square.stack", Color(hex: 0x4ECDC4), .tracks("Albums", [])),
-            ("Artists", "person.2.fill", Color(hex: 0xFFBE0B), .tracks("Artists", [])),
-            ("Playlists", "list.bullet.rectangle", Color(hex: 0x8B5CF6), .tracks("Playlists", [])),
-            ("Downloads", "arrow.down.circle", Color(hex: 0xEC4899), .tracks("Downloads", downloads.tracks)),
-            ("Favorites", "heart.fill", Color(hex: 0xEF4444), .tracks("Favorites", player.favoriteTracks)),
+            ("Songs", "music.note", Color(hex: 0xFF6B6B), .songs),
+            ("Albums", "square.stack", Color(hex: 0x4ECDC4), .albums),
+            ("Artists", "person.2.fill", Color(hex: 0xFFBE0B), .artists),
+            ("Playlists", "list.bullet.rectangle", Color(hex: 0x8B5CF6), .playlists),
+            ("Downloads", "arrow.down.circle", Color(hex: 0xEC4899),
+             .tracks("Downloads", downloads.tracks)),
+            ("Favorites", "heart.fill", Color(hex: 0xEF4444),
+             .tracks("Favorites", player.favoriteTracks)),
         ]
         return VStack(spacing: 16) {
             ForEach(Array(stride(from: 0, to: items.count, by: 3)), id: \.self) { start in
@@ -115,11 +146,7 @@ struct YoursView: View {
                     ForEach(Array(start..<min(start + 3, items.count)), id: \.self) { i in
                         let item = items[i]
                         BlazeCategoryTile(label: item.0, icon: item.1, color: item.2) {
-                            switch item.0 {
-                            case "Artists": if let first = artists.first, let id = first.browseId { route = .artist(id) }
-                            case "Playlists": if let first = accountPlaylists.first { route = .playlist(first) }
-                            default: route = item.3
-                            }
+                            route = item.3
                         }
                     }
                 }
@@ -162,7 +189,7 @@ struct YoursView: View {
     private var trendingRail: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 12) {
-                let songs = Array(PlayHistory.top.prefix(12))
+                let songs = trendingSongs
                 let people = Array(artists.prefix(12))
                 ForEach(Array(0..<max(songs.count, people.count)), id: \.self) { i in
                     if i < songs.count {

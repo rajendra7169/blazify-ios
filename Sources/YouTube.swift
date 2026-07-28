@@ -488,6 +488,57 @@ enum YouTube {
         }
     }
 
+    // MARK: - Listening history (server side)
+
+    /// One dated group of the account's YouTube Music history.
+    struct HistorySection: Identifiable {
+        var id: String { title }
+        let title: String    // "Today", "Yesterday", "This week", … — YouTube's own labels
+        let tracks: [Track]
+    }
+
+    /// The account's own play history, already grouped by date by YouTube.
+    /// Mirrors Android's `musicHistory()` browse of `FEmusic_history`.
+    static func musicHistory() async -> [HistorySection] {
+        guard Auth.shared.isLoggedIn else { return [] }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_history"]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return [] }
+
+        var out: [HistorySection] = []
+        var seen = Set<String>()
+        collectHistory(json, into: &out, seen: &seen)
+        return out.filter { !$0.tracks.isEmpty }
+    }
+
+    /// Each dated group arrives as its own `musicShelfRenderer` with a title.
+    private static func collectHistory(_ node: Any, into out: inout [HistorySection],
+                                       seen: inout Set<String>) {
+        if let dict = node as? [String: Any] {
+            if let shelf = dict["musicShelfRenderer"] as? [String: Any] {
+                let title = runsJoined(shelf["title"])
+                var tracks: [Track] = []
+                // Deduping is per shelf, so the same song can legitimately show
+                // up under both Today and Yesterday.
+                var shelfSeen = Set<String>()
+                collectTracks(shelf["contents"] as Any, into: &tracks, seen: &shelfSeen)
+                if !title.isEmpty, !tracks.isEmpty, seen.insert(title).inserted {
+                    out.append(HistorySection(title: title, tracks: tracks))
+                }
+                return
+            }
+            for (_, v) in dict { collectHistory(v, into: &out, seen: &seen) }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectHistory(v, into: &out, seen: &seen) }
+        }
+    }
+
     // MARK: - Account (login validation)
 
     struct AccountInfo {

@@ -88,16 +88,7 @@ struct LibraryView: View {
             }
             .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Library")
-            .navigationDestination(item: $route) { r in
-                switch r {
-                case .tracks(let title, let tracks):
-                    TrackListView(title: title, tracks: tracks, player: player)
-                case .artist(let id):
-                    ArtistView(browseId: id, player: player)
-                case .playlist(let item):
-                    PlaylistView(item: item, player: player)
-                }
-            }
+            .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
         }
         .task(id: auth.isLoggedIn) { await load() }
     }
@@ -166,9 +157,60 @@ struct LibraryView: View {
     }
 }
 
-/// Where a Library card leads.
+/// Where a Library or Yours card leads.
 enum LibraryRoute: Hashable {
     case tracks(String, [Track])
     case artist(String)
     case playlist(HomeItem)
+    /// Browse categories, which open filtered collections rather than one list.
+    case songs
+    case albums
+    case artists
+    case playlists
+    case history
+    case stats
+}
+
+/// One place that turns a `LibraryRoute` into its screen, so Library, Yours and
+/// Stats all navigate identically.
+struct LibraryRouteView: View {
+    let route: LibraryRoute
+    @ObservedObject var player: Player
+
+    var body: some View {
+        switch route {
+        case .tracks(let title, let tracks):
+            SongListScreen(title: title, tracks: tracks, player: player)
+        case .artist(let id):
+            ArtistView(browseId: id, player: player)
+        case .playlist(let item):
+            PlaylistView(item: item, player: player)
+        case .songs:
+            SongListScreen(title: "Songs", filters: SongCategories.filters(player: player),
+                           player: player)
+        case .albums:
+            LibraryCollectionView(kind: .albums, player: player)
+        case .artists:
+            LibraryCollectionView(kind: .artists, player: player)
+        case .playlists:
+            LibraryCollectionView(kind: .playlists, player: player)
+        case .history:
+            HistoryView(player: player)
+        case .stats:
+            StatsView(player: player)
+        }
+    }
+}
+
+/// The capsule filters behind the Songs category — Android's SongFilter
+/// (Library / Liked / Downloaded / Uploaded), plus our own on-disk cache.
+enum SongCategories {
+    static func filters(player: Player) -> [SongListFilter] {
+        [
+            SongListFilter("Library", PlayHistory.recent),
+            SongListFilter("Liked", player.favoriteTracks),
+            SongListFilter("Downloaded", Downloads.shared.tracks),
+            SongListFilter("Cached", AudioCache.shared.tracks),
+        ]
+    }
 }
