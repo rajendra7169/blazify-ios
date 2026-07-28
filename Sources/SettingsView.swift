@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var showStorage = false
     @State private var showAbout = false
     @State private var showLookFeel = false
+    @State private var showTogether = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -24,7 +25,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together }
     }
 
     private struct Group: Identifiable {
@@ -57,7 +58,8 @@ struct SettingsView: View {
                 Row(icon: "link", title: "Integrations",
                     subtitle: "Discord Rich Presence, Last.fm scrobbling"),
                 Row(icon: "person.2", title: "Blaze Together",
-                    subtitle: "Listen Together sync and room settings"),
+                    subtitle: "Username, server, auto-approve, blocked users, logs",
+                    action: .together),
             ]),
             Group(title: "Privacy & data", rows: [
                 Row(icon: "lock", title: "Privacy", subtitle: "History, pauses, listening data"),
@@ -150,6 +152,11 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAbout) {
             NavigationStack { AboutView() }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .sheet(isPresented: $showTogether) {
+            NavigationStack { TogetherSettingsView() }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
@@ -295,6 +302,7 @@ struct SettingsView: View {
             case .storage: showStorage = true
             case .about: showAbout = true
             case .lookFeel: showLookFeel = true
+            case .together: showTogether = true
             case .none: break
             }
         } label: {

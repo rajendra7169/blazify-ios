@@ -24,6 +24,11 @@ final class ListenTogether: ObservableObject {
     @Published private(set) var members: [Member] = []
     @Published private(set) var pendingJoins: [Member] = []
     @Published var username = UserDefaults.standard.string(forKey: "ltUsername") ?? "Blazify listener"
+    /// Connection events, newest last — Android's "View logs".
+    @Published private(set) var logs: [String] = []
+    /// Names you've blocked from your rooms.
+    @Published private(set) var blocked: [String] =
+        UserDefaults.standard.stringArray(forKey: "ltBlocked") ?? []
 
     /// Set by the app so incoming host actions can drive playback.
     var onRemote: ((RemoteAction) -> Void)?
@@ -56,6 +61,37 @@ final class ListenTogether: ObservableObject {
         UserDefaults.standard.bool(forKey: "ltAutoApproveJoins")
     }
 
+    // MARK: Logs
+
+    /// Timestamped, capped — enough to debug a room without growing forever.
+    func log(_ message: String) {
+        let stamp = Self.logFormatter.string(from: Date())
+        logs.append("[\(stamp)] \(message)")
+        if logs.count > 200 { logs.removeFirst(logs.count - 200) }
+    }
+
+    func clearLogs() { logs = [] }
+
+    private static let logFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
+
+    // MARK: Blocking
+
+    func block(_ name: String) {
+        guard !name.isEmpty, !blocked.contains(name) else { return }
+        blocked.append(name)
+        UserDefaults.standard.set(blocked, forKey: "ltBlocked")
+        log("Blocked \(name)")
+    }
+
+    func unblock(_ name: String) {
+        blocked.removeAll { $0 == name }
+        UserDefaults.standard.set(blocked, forKey: "ltBlocked")
+    }
+
     // MARK: Connection
 
     private func connect() {
@@ -65,6 +101,7 @@ final class ListenTogether: ObservableObject {
         let session = URLSession(configuration: .default)
         task = session.webSocketTask(with: request)
         task?.resume()
+        log("Connecting to \(serverURL.absoluteString)")
         receive()
     }
 
@@ -75,6 +112,7 @@ final class ListenTogether: ObservableObject {
             case .failure(let error):
                 Task { @MainActor in
                     if self.state != .idle { self.state = .failed(error.localizedDescription) }
+                    self.log("Disconnected: \(error.localizedDescription)")
                     self.task = nil
                 }
             case .success(let message):
@@ -97,6 +135,7 @@ final class ListenTogether: ObservableObject {
         state = .connecting
         isHost = true
         connect()
+        log("Creating a room as \(username)")
         send("create_room", Proto.field(1, username))
     }
 
@@ -106,10 +145,12 @@ final class ListenTogether: ObservableObject {
         state = .connecting
         isHost = false
         connect()
+        log("Joining room \(clean)")
         send("join_room", Proto.field(1, clean) + Proto.field(2, username))
     }
 
     func leave() {
+        log("Left the room")
         send("leave_room", Data())
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
@@ -195,6 +236,12 @@ final class ListenTogether: ObservableObject {
         case "join_request":
             let member = Member(id: Proto.string(f, 1), name: Proto.string(f, 2), isHost: false)
             guard !member.id.isEmpty else { break }
+            log("Join request from \(member.name)")
+            if blocked.contains(member.name) {
+                log("Rejected \(member.name) — blocked")
+                reject(member)
+                break
+            }
             // Hosts can opt out of vetting every request (Together settings).
             if autoApproveJoins {
                 approve(member)

@@ -160,6 +160,18 @@ struct TogetherView: View {
                                 .clipShape(Capsule())
                         }
                         Spacer(minLength: 0)
+                        // Only the host can throw someone out and keep them out.
+                        if lt.isHost, !member.isHost {
+                            Menu {
+                                Button("Block \(member.name)", role: .destructive) {
+                                    lt.reject(member)
+                                    lt.block(member.name)
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .foregroundStyle(palette.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
             }
@@ -364,18 +376,47 @@ struct TogetherView: View {
     }
 }
 
-/// The room options Android keeps behind Listen Together > Settings.
+/// Listen Together settings, ported from ListenTogetherSettings.kt — reachable
+/// both from the Together sheet and from Settings > Connections.
 struct TogetherSettingsView: View {
     @Environment(\.palette) private var palette
+    @ObservedObject private var lt = ListenTogether.shared
 
     @AppStorage("ltAutoApproveJoins") private var autoApproveJoins = false
     @AppStorage("ltAutoApproveSuggestions") private var autoApproveSuggestions = false
     @AppStorage("ltSyncVolume") private var syncVolume = false
     @AppStorage("ltServerURL") private var serverURL = ListenTogether.defaultServer
 
+    @State private var name = ListenTogether.shared.username
+    @State private var showLogs = false
+    @State private var showBlocked = false
+
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
+                group {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Username")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(palette.onSurface)
+                        Text(lt.state == .inRoom
+                             ? "The username can't be changed while you're in a room."
+                             : "How you appear to everyone else in the room.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(palette.onSurfaceVariant)
+                        TextField("Username", text: $name)
+                            .textFieldStyle(.plain)
+                            .foregroundStyle(palette.onSurface)
+                            .tint(palette.accent)
+                            .disabled(lt.state == .inRoom)
+                            .padding(.vertical, 10).padding(.horizontal, 14)
+                            .background(palette.onSurface.opacity(0.06))
+                            .clipShape(Capsule())
+                            .onChange(of: name) { lt.saveUsername(name) }
+                    }
+                    .padding(16)
+                }
+
                 group {
                     toggle("Auto-approve join requests",
                            "Let people in without reviewing each request.",
@@ -388,6 +429,18 @@ struct TogetherSettingsView: View {
                     toggle("Sync host volume",
                            "Guests match the host's volume level.",
                            $syncVolume)
+                }
+
+                group {
+                    row("Blocked users",
+                        lt.blocked.isEmpty ? "No blocked users" : "\(lt.blocked.count) blocked") {
+                        showBlocked = true
+                    }
+                    Divider().overlay(palette.separator)
+                    row("Connection logs",
+                        lt.logs.isEmpty ? "No logs yet" : "\(lt.logs.count) events") {
+                        showLogs = true
+                    }
                 }
 
                 group {
@@ -420,12 +473,37 @@ struct TogetherSettingsView: View {
         .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle("Together settings")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showLogs) { TogetherLogsView() }
+        .sheet(isPresented: $showBlocked) { TogetherBlockedView() }
     }
 
     private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 0) { content() }
             .background(palette.surface)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func row(_ title: String, _ value: String,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(palette.onSurface)
+                    Text(value)
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.onSurface.opacity(0.35))
+            }
+            .padding(16)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func toggle(_ title: String, _ subtitle: String,
@@ -443,5 +521,88 @@ struct TogetherSettingsView: View {
             Toggle("", isOn: binding).labelsHidden().tint(palette.accent)
         }
         .padding(16)
+    }
+}
+
+/// Connection events, with a copy button — Android's log viewer.
+struct TogetherLogsView: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var lt = ListenTogether.shared
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                if lt.logs.isEmpty {
+                    Text("No logs yet")
+                        .font(.system(size: 14))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                        .padding(.top, 60)
+                } else {
+                    Text(lt.logs.joined(separator: "\n"))
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(palette.onSurface)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                }
+            }
+            .background(palette.scaffold.ignoresSafeArea())
+            .navigationTitle("Connection logs")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button("Copy") { UIPasteboard.general.string = lt.logs.joined(separator: "\n") }
+                        Button("Clear", role: .destructive) { lt.clearLogs() }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The block list, with swipe-to-unblock.
+struct TogetherBlockedView: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var lt = ListenTogether.shared
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if lt.blocked.isEmpty {
+                    Text("No blocked users")
+                        .font(.system(size: 14))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(lt.blocked, id: \.self) { name in
+                            Text(name).foregroundStyle(palette.onSurface)
+                                .listRowBackground(palette.surface)
+                        }
+                        .onDelete { offsets in
+                            offsets.map { lt.blocked[$0] }.forEach(lt.unblock)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(palette.scaffold.ignoresSafeArea())
+            .navigationTitle("Blocked users")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
     }
 }
