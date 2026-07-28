@@ -15,22 +15,68 @@ struct LyricsResult: Equatable {
     var raw: String?
 }
 
-/// One alternate lyrics version for the language/source picker.
-struct LyricsCandidate: Identifiable {
-    let id: Int
+/// One candidate in the source picker, tagged with the provider it came from.
+struct LyricsCandidate: Identifiable, Equatable {
+    let id = UUID()
+    let provider: String
     let trackName: String
     let artistName: String
     let result: LyricsResult
+
     var synced: Bool { result.synced }
+
+    /// First lines with the `[mm:ss.xx]` stamps stripped, for the picker preview.
+    var preview: String {
+        let body = result.raw ?? result.plain ?? ""
+        return body
+            .replacingOccurrences(of: #"\[[^\]]*\]"#, with: "", options: .regularExpression)
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .prefix(2)
+            .joined(separator: " · ")
+    }
+
+    /// Majority script of the text, e.g. "Devanagari" / "Roman" — a language hint.
+    var script: String? { Lyrics.detectScript(result.raw ?? result.plain ?? "") }
 }
 
-/// Lyrics from LrcLib (open synced-lyrics API, no auth). Tries several search
-/// strategies — YT Music titles carry "(Official Video)", "feat.", "- Topic"
-/// etc. that make a naive LrcLib lookup miss most songs.
+/// Multi-source lyrics. LrcLib and KuGou both work without any auth, so both are
+/// queried concurrently and every candidate is offered in the picker.
 enum Lyrics {
-    static let sourceName = "LrcLib"
+    static let sourceName = "LrcLib"   // the default/most common source
 
+    // MARK: Fan-out
+
+    /// Every candidate from every provider, best-first.
     static func search(title: String, artist: String) async -> [LyricsCandidate] {
+        async let lrc = lrcLib(title: title, artist: artist)
+        async let kugou = kuGou(title: title, artist: artist)
+        let all = await lrc + kugou
+        // Synced first, then by provider rank, preserving arrival order within a rank.
+        return all.enumerated().sorted { a, b in
+            if a.element.synced != b.element.synced { return a.element.synced }
+            let ra = rank(a.element.provider), rb = rank(b.element.provider)
+            if ra != rb { return ra < rb }
+            return a.offset < b.offset
+        }.map(\.element)
+    }
+
+    private static func rank(_ provider: String) -> Int {
+        switch provider.lowercased() {
+        case "lrclib": return 0
+        case "kugou": return 1
+        default: return 2
+        }
+    }
+
+    static func best(_ candidates: [LyricsCandidate]) -> LyricsResult? {
+        candidates.first(where: { $0.synced })?.result ?? candidates.first?.result
+    }
+
+    // MARK: LrcLib
+
+    private static func lrcLib(title: String, artist: String) async -> [LyricsCandidate] {
         let t = cleanTitle(title)
         let a = cleanArtist(artist)
 
@@ -43,17 +89,13 @@ enum Lyrics {
         if !t.isEmpty { attempts.append([.init(name: "q", value: t)]) }
 
         for items in attempts {
-            let candidates = await request(items)
+            let candidates = await lrcLibRequest(items)
             if !candidates.isEmpty { return candidates }
         }
         return []
     }
 
-    static func best(_ candidates: [LyricsCandidate]) -> LyricsResult? {
-        candidates.first(where: { $0.synced })?.result ?? candidates.first?.result
-    }
-
-    private static func request(_ items: [URLQueryItem]) async -> [LyricsCandidate] {
+    private static func lrcLibRequest(_ items: [URLQueryItem]) async -> [LyricsCandidate] {
         var comps = URLComponents(string: "https://lrclib.net/api/search")!
         comps.queryItems = items
         guard let url = comps.url else { return [] }
@@ -66,22 +108,120 @@ enum Lyrics {
 
         var out: [LyricsCandidate] = []
         for item in arr {
-            let id = (item["id"] as? Int) ?? out.count
             let name = item["trackName"] as? String ?? ""
             let by = item["artistName"] as? String ?? ""
             if let lrc = item["syncedLyrics"] as? String, !lrc.isEmpty {
-                out.append(LyricsCandidate(id: id, trackName: name, artistName: by,
+                out.append(LyricsCandidate(provider: "LrcLib", trackName: name, artistName: by,
                                            result: LyricsResult(lines: parseLRC(lrc),
                                                                 plain: item["plainLyrics"] as? String,
                                                                 synced: true, raw: lrc)))
             } else if let plain = item["plainLyrics"] as? String, !plain.isEmpty {
-                out.append(LyricsCandidate(id: id, trackName: name, artistName: by,
+                out.append(LyricsCandidate(provider: "LrcLib", trackName: name, artistName: by,
                                            result: LyricsResult(lines: [], plain: plain,
                                                                 synced: false, raw: nil)))
             }
         }
         return out
     }
+
+    // MARK: KuGou (search → candidates by hash → base64 LRC)
+
+    private static func kuGou(title: String, artist: String) async -> [LyricsCandidate] {
+        let keyword = "\(cleanTitle(title)) - \(cleanArtist(artist))"
+        guard let encoded = keyword.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return [] }
+
+        let searchURL = "https://mobileservice.kugou.com/api/v3/search/song?version=9108&plat=0&pagesize=8&showtype=0&keyword=\(encoded)"
+        guard let songs = await kuGouJSON(searchURL),
+              let data = songs["data"] as? [String: Any],
+              let info = data["info"] as? [[String: Any]]
+        else { return [] }
+
+        var out: [LyricsCandidate] = []
+        for song in info.prefix(3) {
+            guard let hash = song["hash"] as? String, !hash.isEmpty else { continue }
+            guard let found = await kuGouJSON("https://lyrics.kugou.com/search?ver=1&man=yes&client=pc&hash=\(hash)"),
+                  let candidates = found["candidates"] as? [[String: Any]],
+                  let first = candidates.first,
+                  let key = first["accesskey"] as? String
+            else { continue }
+            let id = "\(first["id"] ?? "")"
+            guard let payload = await kuGouJSON(
+                "https://lyrics.kugou.com/download?fmt=lrc&charset=utf8&client=pc&ver=1&id=\(id)&accesskey=\(key)"),
+                let base64 = payload["content"] as? String,
+                let decoded = Data(base64Encoded: base64),
+                let lrc = String(data: decoded, encoding: .utf8)
+            else { continue }
+
+            let normalized = normalizeKuGou(lrc)
+            guard !normalized.isEmpty else { continue }
+            out.append(LyricsCandidate(
+                provider: "KuGou",
+                trackName: song["songname"] as? String ?? "",
+                artistName: song["singername"] as? String ?? "",
+                result: LyricsResult(lines: parseLRC(normalized), plain: nil,
+                                     synced: true, raw: normalized)))
+            if out.count >= 2 { break }
+        }
+        return out
+    }
+
+    private static func kuGouJSON(_ url: String) async -> [String: Any]? {
+        guard let u = URL(string: url) else { return nil }
+        var req = URLRequest(url: u)
+        req.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        guard let (data, _) = try? await URLSession.shared.data(for: req) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    /// Keep only timestamped lines and drop the credit block KuGou prepends.
+    private static func normalizeKuGou(_ lrc: String) -> String {
+        let stamped = lrc.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .filter { $0.range(of: #"^\[\d\d:\d\d\.\d{2,3}\]"#, options: .regularExpression) != nil }
+        // Credit lines look like "[..] something : something".
+        let credit = #"^\[[^\]]*\].+[:：].+$"#
+        var lines = stamped
+        if let lastCredit = lines.prefix(30).lastIndex(where: {
+            $0.range(of: credit, options: .regularExpression) != nil
+        }) {
+            lines = Array(lines[(lastCredit + 1)...])
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: Script detection (local, no API)
+
+    /// Majority Unicode block of the text — a language hint for the picker.
+    static func detectScript(_ text: String) -> String? {
+        let body = text.replacingOccurrences(of: #"\[[^\]]*\]"#, with: "", options: .regularExpression)
+        var counts: [String: Int] = [:]
+        for scalar in body.unicodeScalars {
+            let v = scalar.value
+            let label: String?
+            switch v {
+            case 0x0900...0x097F: label = "Devanagari"
+            case 0x0A00...0x0A7F: label = "Gurmukhi"
+            case 0x0980...0x09FF: label = "Bengali"
+            case 0x0A80...0x0AFF: label = "Gujarati"
+            case 0x0B00...0x0B7F: label = "Odia"
+            case 0x0B80...0x0BFF: label = "Tamil"
+            case 0x0C00...0x0C7F: label = "Telugu"
+            case 0x0C80...0x0CFF: label = "Kannada"
+            case 0x0D00...0x0D7F: label = "Malayalam"
+            case 0x0600...0x06FF, 0x0750...0x077F: label = "Urdu"
+            case 0x3040...0x30FF: label = "Japanese"
+            case 0x4E00...0x9FFF: label = "Chinese"
+            case 0xAC00...0xD7AF: label = "Korean"
+            case 0x0400...0x04FF: label = "Cyrillic"
+            case 0x0041...0x005A, 0x0061...0x007A: label = "Roman"
+            default: label = nil
+            }
+            if let label { counts[label, default: 0] += 1 }
+        }
+        return counts.max(by: { $0.value < $1.value })?.key
+    }
+
+    // MARK: Title cleaning
 
     private static func cleanTitle(_ s: String) -> String {
         var x = s
@@ -123,5 +263,27 @@ enum Lyrics {
             }
         }
         return out.sorted { $0.time < $1.time }
+    }
+}
+
+/// Remembers which source the user picked for a song, like Android's lyrics table.
+enum LyricsStore {
+    private static func key(_ videoId: String) -> String { "lyricsPick_\(videoId)" }
+
+    static func save(_ candidate: LyricsCandidate, for videoId: String) {
+        guard let body = candidate.result.raw ?? candidate.result.plain else { return }
+        UserDefaults.standard.set(["provider": candidate.provider,
+                                   "body": body,
+                                   "synced": candidate.result.synced], forKey: key(videoId))
+    }
+
+    static func load(for videoId: String) -> (provider: String, result: LyricsResult)? {
+        guard let dict = UserDefaults.standard.dictionary(forKey: key(videoId)),
+              let provider = dict["provider"] as? String,
+              let body = dict["body"] as? String else { return nil }
+        let synced = dict["synced"] as? Bool ?? false
+        return (provider, synced
+                ? LyricsResult(lines: Lyrics.parseLRC(body), plain: nil, synced: true, raw: body)
+                : LyricsResult(lines: [], plain: body, synced: false, raw: nil))
     }
 }

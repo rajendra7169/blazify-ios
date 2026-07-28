@@ -14,6 +14,7 @@ struct LyricsPane: View {
     @State private var result: LyricsResult?
     @State private var loading = true
     @State private var showVersions = false
+    @State private var provider = Lyrics.sourceName
 
     // Position smoothing anchors (see the withFrameNanos loop in Kotlin).
     @State private var anchorPos: Double = 0
@@ -45,6 +46,8 @@ struct LyricsPane: View {
         .sheet(isPresented: $showVersions) {
             LyricsVersionPicker(candidates: candidates, current: result) { pick in
                 result = pick.result
+                provider = pick.provider
+                if let id = player.current?.videoId { LyricsStore.save(pick, for: id) }
                 showVersions = false
             }
         }
@@ -137,7 +140,7 @@ struct LyricsPane: View {
                 ZStack(alignment: .top) {
                     // "Lyrics from …" floats just above line 0 and scrolls with it.
                     if result != nil {
-                        Text("Lyrics from \(Lyrics.sourceName)")
+                        Text("Lyrics from \(provider)")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.white.opacity(0.6))
                             .frame(maxWidth: .infinity)
@@ -298,10 +301,23 @@ struct LyricsPane: View {
             return
         }
 
+        // Whatever source you last chose for this song wins.
+        if let saved = LyricsStore.load(for: track.videoId) {
+            provider = saved.provider
+            result = saved.result
+            loading = false
+            ready = true
+            // Still fetch the alternatives so the picker stays usable.
+            let found = await Lyrics.search(title: track.title, artist: track.artist)
+            await MainActor.run { candidates = found }
+            return
+        }
+
         let found = await Lyrics.search(title: track.title, artist: track.artist)
         await MainActor.run {
             candidates = found
             result = Lyrics.best(found)
+            provider = found.first(where: { $0.result == Lyrics.best(found) })?.provider ?? Lyrics.sourceName
             loading = false
         }
         // Let the first frame land at its position, then start animating.
@@ -322,28 +338,46 @@ struct LyricsVersionPicker: View {
             List {
                 ForEach(candidates) { c in
                     Button { onPick(c) } label: {
-                        HStack(spacing: 10) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(c.trackName).foregroundStyle(.white).lineLimit(1)
-                                Text(c.artistName).font(.caption)
-                                    .foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                            }
-                            Spacer()
-                            if c.synced {
-                                Image(systemName: "waveform").foregroundStyle(Blaze.amber).font(.caption)
-                            }
-                            if c.result == current {
-                                Image(systemName: "checkmark").foregroundStyle(Blaze.amber)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(c.preview.isEmpty ? c.trackName : c.preview)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+
+                            HStack(spacing: 6) {
+                                Text(c.provider)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Blaze.amber)
+                                if let script = c.script {
+                                    Text(script)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                        .padding(.horizontal, 6).padding(.vertical, 1)
+                                        .background(Color.white.opacity(0.12))
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                                if c.synced {
+                                    Image(systemName: "waveform")
+                                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
+                                }
+                                Spacer(minLength: 0)
+                                if c.result == current {
+                                    Image(systemName: "checkmark").foregroundStyle(Blaze.amber)
+                                }
                             }
                         }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .listRowBackground(Color.white.opacity(0.05))
                 }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Blaze.scaffold.ignoresSafeArea())
-            .navigationTitle("Lyrics version")
+            .navigationTitle("Choose lyrics source")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
