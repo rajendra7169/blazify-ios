@@ -186,9 +186,11 @@ final class Player: ObservableObject {
 
     @Published var sleepEndDate: Date?         // countdown target; nil = off
     @Published var sleepAtEndOfSong = false
+    /// Stop after this many more songs (Android's "+/- N songs" option).
+    @Published var sleepSongsRemaining: Int?
     private var sleepTimer: Timer?
 
-    var sleepActive: Bool { sleepEndDate != nil || sleepAtEndOfSong }
+    var sleepActive: Bool { sleepEndDate != nil || sleepAtEndOfSong || sleepSongsRemaining != nil }
     var sleepRemaining: TimeInterval? {
         guard let end = sleepEndDate else { return nil }
         return max(0, end.timeIntervalSinceNow)
@@ -213,11 +215,17 @@ final class Player: ObservableObject {
         sleepAtEndOfSong = true
     }
 
+    func startSleepAfterSongs(_ count: Int) {
+        cancelSleepTimer()
+        sleepSongsRemaining = max(1, count)
+    }
+
     func cancelSleepTimer() {
         sleepTimer?.invalidate()
         sleepTimer = nil
         sleepEndDate = nil
         sleepAtEndOfSong = false
+        sleepSongsRemaining = nil
     }
 
     private func stopForSleep() {
@@ -245,6 +253,15 @@ final class Player: ObservableObject {
             sleepAtEndOfSong = false
             stopForSleep()
             return
+        }
+        if let left = sleepSongsRemaining {
+            let next = left - 1
+            if next <= 0 {
+                sleepSongsRemaining = nil
+                stopForSleep()
+                return
+            }
+            sleepSongsRemaining = next
         }
         if repeatMode == .one {
             endHandled = false
