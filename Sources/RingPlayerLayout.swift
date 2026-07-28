@@ -180,12 +180,11 @@ struct SeekableAlbumRing: View {
     let ringColor: Color
     let trackColor: Color
     let thumbColor: Color
+    var stroke: CGFloat = 7        // gallery previews use 5
+    var artPadding: CGFloat = 18   // gallery previews use 9
     let onSeek: (Double) -> Void
 
     @State private var dragFraction: Double?
-
-    private let stroke: CGFloat = 7
-    private let artPadding: CGFloat = 18
 
     var body: some View {
         let shown = min(max(dragFraction ?? progress, 0), 1)
