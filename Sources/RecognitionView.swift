@@ -5,13 +5,15 @@ import AVFoundation
 /// "What's playing?" — song recognition, the iOS counterpart to Blazify
 /// Android's ShazamKit screen.
 ///
-/// iOS has ShazamKit built in, so this listens on the mic and matches locally
-/// against Shazam's catalog — no third-party service and no API key of ours.
+/// Same approach as the Android app: record a few seconds, turn it into a
+/// Shazam *signature*, and POST that to Shazam's public tag endpoint. No
+/// account, no API key, no entitlement — Android hand-ports the signature
+/// algorithm; on iOS ShazamKit generates the identical format for us.
 struct RecognitionView: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var player: Player
-    @StateObject private var engine = Recognizer()
+    @StateObject private var recognizer = Recognizer()
 
     var body: some View {
         ZStack {
@@ -33,27 +35,27 @@ struct RecognitionView: View {
 
                 pulsingMic
 
-                Text(engine.status)
+                Text(recognizer.status)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(palette.onSurfaceVariant)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
 
-                if let match = engine.match {
+                if let match = recognizer.match {
                     result(match)
                 }
 
                 Spacer()
 
-                if engine.isListening {
-                    Button("Stop") { engine.stop() }
+                if recognizer.isListening {
+                    Button("Stop") { recognizer.stop() }
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(palette.accent)
                 } else {
                     Button {
-                        Task { await engine.start() }
+                        Task { await recognizer.start() }
                     } label: {
-                        Text(engine.match == nil ? "Listen" : "Listen again")
+                        Text(recognizer.match == nil ? "Listen" : "Listen again")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(palette.onAccent)
                             .padding(.horizontal, 36).padding(.vertical, 14)
@@ -65,18 +67,18 @@ struct RecognitionView: View {
                 Spacer().frame(height: 40)
             }
         }
-        .task { await engine.start() }
-        .onDisappear { engine.stop() }
+        .task { await recognizer.start() }
+        .onDisappear { recognizer.stop() }
     }
 
     private var pulsingMic: some View {
         ZStack {
             Circle()
                 .fill(palette.accent.opacity(0.16))
-                .frame(width: engine.isListening ? 190 : 150,
-                       height: engine.isListening ? 190 : 150)
+                .frame(width: recognizer.isListening ? 190 : 150,
+                       height: recognizer.isListening ? 190 : 150)
                 .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
-                           value: engine.isListening)
+                           value: recognizer.isListening)
             Circle()
                 .fill(palette.accent)
                 .frame(width: 110, height: 110)
@@ -125,7 +127,12 @@ struct RecognitionView: View {
     }
 }
 
-/// Wraps ShazamKit's managed session, which does its own mic capture.
+/// Records a few seconds, builds a Shazam signature locally, and asks Shazam's
+/// public endpoint what it is — mirroring `Shazam.kt` on Android.
+///
+/// Deliberately *not* `SHSession`: catalog matching through SHSession needs the
+/// ShazamKit App Service enabled on the App ID, which a sideloaded build can't
+/// have. `SHSignatureGenerator` is local and carries no such requirement.
 @MainActor
 final class Recognizer: ObservableObject {
     struct Match {
@@ -135,47 +142,125 @@ final class Recognizer: ObservableObject {
     }
 
     @Published var isListening = false
-    @Published var status = "Tap Listen and hold your phone to the music"
+    @Published var status = "Hold your phone towards the music"
     @Published var match: Match?
 
-    private let session = SHManagedSession()
+    private let engine = AVAudioEngine()
+    private let sampleSeconds = 5.0
 
     func start() async {
         guard !isListening else { return }
         match = nil
 
         guard await requestMic() else {
-            status = "Microphone access is off. Enable it in Settings to recognise songs."
+            status = "Microphone access is off. Turn it on in Settings to recognise songs."
             return
         }
 
         isListening = true
         status = "Listening…"
 
-        let result = await session.result()
-        isListening = false
-
-        switch result {
-        case .match(let shazam):
-            guard let item = shazam.mediaItems.first else {
-                status = "Couldn't identify that one. Try again."
-                return
+        do {
+            let signature = try await captureSignature()
+            status = "Identifying…"
+            if let found = await lookup(signature) {
+                match = found
+                status = "Got it"
+            } else {
+                status = "No match — try again with the music a little louder."
             }
-            match = Match(title: item.title ?? "Unknown",
-                          artist: item.artist ?? "",
-                          artworkURL: item.artworkURL)
-            status = "Found it"
-        case .noMatch:
-            status = "No match — try again with the music a bit louder."
-        case .error(let error, _):
-            status = error.localizedDescription
+        } catch {
+            status = "Couldn't listen: \(error.localizedDescription)"
         }
+        stopEngine()
+        isListening = false
     }
 
     func stop() {
-        session.cancel()
+        stopEngine()
         isListening = false
-        if match == nil { status = "Tap Listen and hold your phone to the music" }
+        if match == nil { status = "Hold your phone towards the music" }
+    }
+
+    // MARK: Capture
+
+    private func captureSignature() async throws -> SHSignature {
+        let session = AVAudioSession.sharedInstance()
+        // Recording needs a category that permits input; restored in stopEngine().
+        try session.setCategory(.playAndRecord, mode: .default,
+                                options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
+        try session.setActive(true)
+
+        let generator = SHSignatureGenerator()
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+
+        input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, time in
+            try? generator.append(buffer, at: time)
+        }
+        engine.prepare()
+        try engine.start()
+
+        try await Task.sleep(nanoseconds: UInt64(sampleSeconds * 1_000_000_000))
+        return generator.signature()
+    }
+
+    private func stopEngine() {
+        if engine.isRunning { engine.stop() }
+        engine.inputNode.removeTap(onBus: 0)
+        // Hand the session back to playback so music keeps working.
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .default)
+        try? session.setActive(true)
+    }
+
+    // MARK: Lookup
+
+    private func lookup(_ signature: SHSignature) async -> Match? {
+        let uri = "data:audio/vnd.shazam.sig;base64,"
+            + signature.dataRepresentation.base64EncodedString()
+        let millis = Int(Date().timeIntervalSince1970 * 1000)
+
+        var comps = URLComponents(
+            string: "https://amp.shazam.com/discovery/v5/en/US/iphone/-/tag/\(UUID().uuidString.lowercased())/\(UUID().uuidString.lowercased())")!
+        comps.queryItems = [
+            .init(name: "sync", value: "true"), .init(name: "webv3", value: "true"),
+            .init(name: "sampling", value: "true"), .init(name: "connected", value: ""),
+            .init(name: "shazamapiversion", value: "v3"), .init(name: "sharehub", value: "true"),
+            .init(name: "video", value: "v3"),
+        ]
+        guard let url = comps.url else { return nil }
+
+        let body: [String: Any] = [
+            // Shazam wants a plausible fix; a random one keeps this from being a
+            // location report, and the match doesn't depend on it.
+            "geolocation": ["altitude": Double.random(in: 100...500),
+                            "latitude": Double.random(in: -90...90),
+                            "longitude": Double.random(in: -180...180)],
+            "signature": ["samplems": Int(signature.duration * 1000),
+                          "timestamp": millis, "uri": uri],
+            "timestamp": millis,
+            "timezone": TimeZone.current.identifier,
+        ]
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 20
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("en_US", forHTTPHeaderField: "Content-Language")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        guard let (data, response) = try? await URLSession.shared.data(for: req),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let track = json["track"] as? [String: Any]
+        else { return nil }
+
+        let images = track["images"] as? [String: Any]
+        let art = (images?["coverarthq"] as? String) ?? (images?["coverart"] as? String)
+        return Match(title: track["title"] as? String ?? "Unknown",
+                     artist: track["subtitle"] as? String ?? "",
+                     artworkURL: art.flatMap(URL.init(string:)))
     }
 
     private func requestMic() async -> Bool {
