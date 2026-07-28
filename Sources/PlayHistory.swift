@@ -8,14 +8,19 @@ struct PlayEvent: Codable, Hashable {
     let at: Date
 }
 
-/// How far back a Stats view reaches. Mirrors Android's `StatPeriod`.
+/// How far back a Stats view reaches. Mirrors Android's `StatPeriod`, plus the
+/// `day` bucket that Android's `MyTopFilter` adds for the Top-50 playlist.
 enum StatPeriod: String, CaseIterable, Identifiable {
-    case week1, month1, month3, month6, year1, all
+    case day, week1, month1, month3, month6, year1, all
 
     var id: String { rawValue }
 
+    /// The periods Android offers on the Top playlist (`MyTopFilter`).
+    static var topFilters: [StatPeriod] { [.all, .day, .week1, .month1, .year1] }
+
     var title: String {
         switch self {
+        case .day: "Today"
         case .week1: "1 week"
         case .month1: "1 month"
         case .month3: "3 months"
@@ -30,6 +35,7 @@ enum StatPeriod: String, CaseIterable, Identifiable {
         let cal = Calendar.current
         let now = Date()
         switch self {
+        case .day: return cal.startOfDay(for: now)
         case .week1: return cal.date(byAdding: .weekOfYear, value: -1, to: now) ?? now
         case .month1: return cal.date(byAdding: .month, value: -1, to: now) ?? now
         case .month3: return cal.date(byAdding: .month, value: -3, to: now) ?? now
@@ -220,8 +226,14 @@ enum PlayHistory {
             .sorted { $0.bucket.order < $1.bucket.order }
     }
 
+    /// How many songs the Top playlist holds — Android's `TopSize`, default 50.
+    static var topSize: Int {
+        let saved = UserDefaults.standard.integer(forKey: "topSize")
+        return saved > 0 ? saved : 50
+    }
+
     /// Top songs of all time, kept for the Library banner.
-    static var top: [Track] { mostPlayed(.all, limit: 50) }
+    static var top: [Track] { mostPlayed(.all, limit: topSize) }
 
     static func clear() {
         UserDefaults.standard.removeObject(forKey: eventsKey)

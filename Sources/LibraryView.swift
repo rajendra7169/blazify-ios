@@ -30,10 +30,10 @@ struct LibraryView: View {
                            seed: Color(hex: 0xB71C5A), icon: "heart.fill",
                            route: .tracks("Liked", likedTracks))
 
-                    banner(title: "Your Top 50", subtitle: "",
+                    banner(title: "Your Top \(PlayHistory.topSize)", subtitle: "",
                            thumbs: PlayHistory.top.prefix(4).map(\.thumbnail),
                            seed: Color(hex: 0xEF6C00), icon: "chart.line.uptrend.xyaxis",
-                           route: .tracks("Your Top 50", Array(PlayHistory.top.prefix(50))))
+                           route: .topPlaylist)
 
                     HStack(spacing: 12) {
                         BlazePlaylistCard(
@@ -169,6 +169,7 @@ enum LibraryRoute: Hashable {
     case playlists
     case history
     case stats
+    case topPlaylist
 }
 
 /// One place that turns a `LibraryRoute` into its screen, so Library, Yours and
@@ -198,6 +199,9 @@ struct LibraryRouteView: View {
             HistoryView(player: player)
         case .stats:
             StatsView(player: player)
+        case .topPlaylist:
+            SongListScreen(title: "Your Top \(PlayHistory.topSize)",
+                           filters: SongCategories.topFilters, player: player)
         }
     }
 }
@@ -212,5 +216,12 @@ enum SongCategories {
             SongListFilter("Downloaded", Downloads.shared.tracks),
             SongListFilter("Cached", AudioCache.shared.tracks),
         ]
+    }
+
+    /// Top-50 periods, mirroring Android's `MyTopFilter` on the Top playlist.
+    static var topFilters: [SongListFilter] {
+        StatPeriod.topFilters.map {
+            SongListFilter($0.title, PlayHistory.mostPlayed($0, limit: PlayHistory.topSize))
+        }
     }
 }
