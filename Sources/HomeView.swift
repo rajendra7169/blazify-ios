@@ -10,6 +10,7 @@ struct HomeView: View {
     /// pushing a copy of the search page on top of Home.
     @Binding var tab: BlazeTab
     @ObservedObject private var auth = Auth.shared
+    @ObservedObject private var look = LookFeel.shared
 
     @State private var feed = HomeFeed.empty
     @State private var moods: [MoodItem] = []
@@ -28,8 +29,9 @@ struct HomeView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     header
-                    GreetingCard()
-                    searchPill
+                    // Both are optional from Look & Feel > Home.
+                    if look.showHomeGreeting { GreetingCard() }
+                    if look.showHomeSearchBar { searchPill }
 
                     if !feed.chips.isEmpty {
                         ChipsRow(chips: feed.chips, selected: selectedChip) { selectChip($0) }
@@ -410,13 +412,14 @@ struct HomeRail: View {
 /// A 140-wide card: art (square or circular) + title + subtitle.
 struct MusicCard: View {
     @Environment(\.palette) private var palette
+    @ObservedObject private var look = LookFeel.shared
     let item: HomeItem
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 8) {
-                RemoteImage(url: item.thumbnailURL, size: 140) {
+                RemoteImage(url: item.thumbnailURL, size: look.gridItemSize.cardWidth) {
                     palette.onSurface.opacity(0.06)
                         .overlay(
                             Image(systemName: item.isCircular ? "person.fill" : "music.note")
@@ -424,7 +427,7 @@ struct MusicCard: View {
                                 .foregroundStyle(palette.onSurface.opacity(0.35)),
                         )
                 }
-                .frame(width: 140, height: 140)
+                .frame(width: look.gridItemSize.cardWidth, height: look.gridItemSize.cardWidth)
                 .clipShape(RoundedRectangle(cornerRadius: item.isCircular ? 70 : 12))
                 .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
 
@@ -442,7 +445,7 @@ struct MusicCard: View {
                         .multilineTextAlignment(.leading)
                 }
             }
-            .frame(width: 140, alignment: .leading)
+            .frame(width: look.gridItemSize.cardWidth, alignment: .leading)
         }
         .buttonStyle(.plain)
     }

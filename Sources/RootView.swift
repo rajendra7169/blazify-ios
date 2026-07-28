@@ -6,8 +6,9 @@ import UIKit
 /// pinned above it, and the full player as a sheet.
 struct RootView: View {
     @ObservedObject private var theme = AppTheme.shared
+    @ObservedObject private var look = LookFeel.shared
     @StateObject private var player = Player()
-    @State private var tab: BlazeTab = .home
+    @State private var tab: BlazeTab = LookFeel.shared.defaultTab.tab
     @Environment(\.colorScheme) private var scheme
 
     /// Home-indicator height. Measured once on appear — reading UIKit's window
@@ -16,12 +17,14 @@ struct RootView: View {
 
     /// Mini-player (64 + 8 gap) plus the 70pt bar plus the home indicator.
     /// Pages add this as bottom padding themselves — see `playerBottomPadding()`.
-    private var bottomInset: CGFloat { (player.hasTrack ? 72 : 0) + 70 + safeBottom }
+    private var bottomInset: CGFloat {
+        (player.hasTrack ? 72 : 0) + (look.slimNavBar ? 54 : 70) + safeBottom
+    }
 
     @State private var showRecognition = false
     /// Tabs built so far — we don't pay for a tab until it's opened, but once
     /// it's open it stays alive so its scroll position and data survive.
-    @State private var visited: Set<BlazeTab> = [.home]
+    @State private var visited: Set<BlazeTab> = [LookFeel.shared.defaultTab.tab]
 
     private var palette: Palette { Palette(dark: theme.isDark(scheme)) }
 
@@ -100,7 +103,7 @@ struct RootView: View {
                     MiniPlayerView(player: player)
                         .padding(.bottom, 8)   // don't sit flush on the tab bar
                 }
-                BlazeTabBar(selection: $tab, palette: palette)
+                BlazeTabBar(selection: $tab, palette: palette, look: look)
             }
             // Stay put when the keyboard opens: without this the whole bar
             // (and the mini-player) rides up and sits on top of the keyboard.
@@ -147,11 +150,12 @@ enum BlazeTab: CaseIterable {
     }
 }
 
-/// Flutter's custom 70pt bottom bar. The active tint follows the album-art
-/// accent, so the bar recolours with the rest of the app.
+/// Flutter's custom bottom bar, now honouring the Look & Feel nav-bar style and
+/// slim toggle. The active tint follows the album-art accent either way.
 struct BlazeTabBar: View {
     @Binding var selection: BlazeTab
     let palette: Palette
+    @ObservedObject var look: LookFeel
 
     var body: some View {
         HStack {
@@ -162,11 +166,22 @@ struct BlazeTabBar: View {
                 } label: {
                     VStack(spacing: 4) {
                         Image(systemName: t.icon)
-                            .font(.system(size: 24))
-                        Text(t.label)
-                            .font(.system(size: 11, weight: active ? .semibold : .regular))
+                            .font(.system(size: look.slimNavBar ? 21 : 24))
+                        // Slim mode drops the labels, as Android's does.
+                        if !look.slimNavBar {
+                            Text(t.label)
+                                .font(.system(size: 11, weight: active ? .semibold : .regular))
+                        }
                     }
-                    .foregroundStyle(active ? palette.accent : palette.onSurfaceVariant)
+                    .foregroundStyle(active ? activeInk : palette.onSurfaceVariant)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, look.slimNavBar ? 6 : 8)
+                    .background(indicator(active))
+                    .overlay(alignment: .bottom) {
+                        if look.navBarStyle == .underline, active {
+                            Capsule().fill(palette.accent).frame(width: 22, height: 2.5)
+                        }
+                    }
                     .frame(maxWidth: .infinity)
                     // Without this the button only accepts taps that land on a
                     // glyph, not anywhere in its column.
@@ -175,12 +190,40 @@ struct BlazeTabBar: View {
                 .buttonStyle(.plain)
             }
         }
-        // 70pt exactly — `safeAreaInset` already leaves room for the home
-        // indicator, so padding for it again is what made the bar too tall.
-        .frame(height: 70)
+        // `safeAreaInset` already leaves room for the home indicator, so padding
+        // for it again is what once made the bar too tall.
+        .frame(height: look.slimNavBar ? 54 : 70)
         .background(palette.surface)
         .overlay(alignment: .top) {
             Rectangle().fill(palette.separator).frame(height: 0.5)
+        }
+    }
+
+    /// Pill and gradient put the icon on the accent; the others tint it.
+    private var activeInk: Color {
+        switch look.navBarStyle {
+        case .pill, .gradient: palette.onAccent
+        case .underline, .outlined: palette.accent
+        }
+    }
+
+    @ViewBuilder
+    private func indicator(_ active: Bool) -> some View {
+        if active {
+            switch look.navBarStyle {
+            case .pill:
+                Capsule().fill(palette.accent)
+            case .gradient:
+                Capsule().fill(LinearGradient(
+                    colors: [palette.accent, palette.accent.mixed(with: .black, 0.32)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+            case .outlined:
+                Capsule().strokeBorder(palette.accent, lineWidth: 1.5)
+            case .underline:
+                Color.clear
+            }
+        } else {
+            Color.clear
         }
     }
 }

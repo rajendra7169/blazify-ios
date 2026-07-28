@@ -143,9 +143,11 @@ struct PlaylistArtwork: View {
     }
 }
 
-/// 140pt rail card — square art, or a circle for artists.
+/// Rail card — square art, or a circle for artists. Its width follows the
+/// Look & Feel grid-size setting.
 struct BlazeMusicCard: View {
     @Environment(\.palette) private var palette
+    @ObservedObject private var look = LookFeel.shared
     let title: String
     var subtitle: String = ""
     var thumbnail: String?
@@ -156,13 +158,13 @@ struct BlazeMusicCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: isCircular ? .center : .leading, spacing: 0) {
-                RemoteImage(url: thumbnail.flatMap { URL(string: $0) }, size: 140) {
+                RemoteImage(url: thumbnail.flatMap { URL(string: $0) }, size: look.gridItemSize.cardWidth) {
                     palette.onSurface.opacity(0.06)
                         .overlay(Image(systemName: fallbackIcon)
                             .font(.system(size: 40))
                             .foregroundStyle(palette.onSurface.opacity(0.35)))
                 }
-                .frame(width: 140, height: 140)
+                .frame(width: look.gridItemSize.cardWidth, height: look.gridItemSize.cardWidth)
                 .clipShape(isCircular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 12)))
 
                 Spacer().frame(height: 8)
@@ -184,7 +186,7 @@ struct BlazeMusicCard: View {
                                alignment: isCircular ? .center : .leading)
                 }
             }
-            .frame(width: 140)
+            .frame(width: look.gridItemSize.cardWidth)
             .padding(.bottom, 4)
         }
         .buttonStyle(.plain)
