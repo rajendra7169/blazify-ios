@@ -19,8 +19,8 @@ struct RootView: View {
                 NavigationStack { SearchView(player: player) }
             case .favorites:
                 FavoritesView(player: player)
-            case .profile:
-                ProfileView(player: player)
+            case .library:
+                LibraryView(player: player)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -41,14 +41,14 @@ struct RootView: View {
 }
 
 enum BlazeTab: CaseIterable {
-    case home, explore, favorites, profile
+    case home, explore, favorites, library
 
     var icon: String {
         switch self {
         case .home: "house.fill"
         case .explore: "safari.fill"
         case .favorites: "heart.fill"
-        case .profile: "person.fill"
+        case .library: "books.vertical.fill"
         }
     }
     var label: String {
@@ -56,7 +56,7 @@ enum BlazeTab: CaseIterable {
         case .home: "Home"
         case .explore: "Explore"
         case .favorites: "Favorites"
-        case .profile: "Profile"
+        case .library: "Library"
         }
     }
 }

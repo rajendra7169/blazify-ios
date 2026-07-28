@@ -616,6 +616,25 @@ enum YouTube {
         await library("FEmusic_liked_playlists")
     }
 
+    /// The user's own uploads (FEmusic_library_privately_owned_tracks).
+    static func uploadedSongs() async -> [Track] {
+        guard Auth.shared.isLoggedIn else { return [] }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client],
+                                   "browseId": "FEmusic_library_privately_owned_tracks"]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return [] }
+        var out: [Track] = []
+        var seen = Set<String>()
+        collectTracks(json, into: &out, seen: &seen)
+        return out
+    }
+
     /// Any library shelf: liked playlists / albums / subscribed artists.
     static func library(_ browseId: String) async -> [HomeItem] {
         guard Auth.shared.isLoggedIn else { return [] }

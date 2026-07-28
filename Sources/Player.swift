@@ -180,6 +180,22 @@ final class Player: ObservableObject {
         favorites = Set(saved.map(\.videoId))
     }
 
+    /// Play counts, so Top 50 reflects what you actually listen to.
+    private func countPlay(_ track: Track) {
+        var counts = UserDefaults.standard.dictionary(forKey: "playCounts") as? [String: Int] ?? [:]
+        counts[track.videoId, default: 0] += 1
+        UserDefaults.standard.set(counts, forKey: "playCounts")
+
+        var seen = UserDefaults.standard.data(forKey: "playedTracks")
+            .flatMap { try? JSONDecoder().decode([Track].self, from: $0) } ?? []
+        seen.removeAll { $0.videoId == track.videoId }
+        seen.insert(track, at: 0)
+        if seen.count > 300 { seen = Array(seen.prefix(300)) }
+        if let data = try? JSONEncoder().encode(seen) {
+            UserDefaults.standard.set(data, forKey: "playedTracks")
+        }
+    }
+
     /// Jump to a specific queue position (from the Queue screen).
     func jump(to i: Int) {
         guard queue.indices.contains(i) else { return }
@@ -329,6 +345,7 @@ final class Player: ObservableObject {
         updateNowPlaying()
 
         let videoId = track.videoId
+        countPlay(track)
         Task { @MainActor in ListenTogether.shared.broadcastTrack(track, position: 0) }
 
         // Offline first: play the downloaded file with no network if we have it.
@@ -498,5 +515,21 @@ final class Player: ObservableObject {
     private func removeTimeObserver() {
         if let timeObserver { avPlayer?.removeTimeObserver(timeObserver) }
         timeObserver = nil
+    }
+}
+
+/// Local listening history, backing "Recently played" and "Your Top 50".
+enum PlayHistory {
+    static var recent: [Track] {
+        guard let data = UserDefaults.standard.data(forKey: "playedTracks"),
+              let tracks = try? JSONDecoder().decode([Track].self, from: data) else { return [] }
+        return tracks
+    }
+
+    static var top: [Track] {
+        let counts = UserDefaults.standard.dictionary(forKey: "playCounts") as? [String: Int] ?? [:]
+        return recent
+            .filter { (counts[$0.videoId] ?? 0) > 0 }
+            .sorted { (counts[$0.videoId] ?? 0) > (counts[$1.videoId] ?? 0) }
     }
 }
