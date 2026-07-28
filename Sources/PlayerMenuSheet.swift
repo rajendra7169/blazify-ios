@@ -6,6 +6,7 @@ struct PlayerMenuSheet: View {
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var showAddToPlaylist = false
 
     var onQueue: () -> Void
     var onSleep: () -> Void
@@ -53,6 +54,7 @@ struct PlayerMenuSheet: View {
                         if let t = player.current { downloads.toggle(t) }
                     }
 
+                    row("plus.circle", "Add to playlist") { showAddToPlaylist = true }
                     row("quote.bubble", "Lyrics") { dismiss(); onLyrics() }
                     row("list.bullet", "View queue") { dismiss(); onQueue() }
                     row(player.sleepActive ? "moon.zzz.fill" : "moon.zzz",
@@ -72,6 +74,9 @@ struct PlayerMenuSheet: View {
         .background(Blaze.surface.ignoresSafeArea())
         .presentationDetents([.medium])
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showAddToPlaylist) {
+            if let track = player.current { AddToPlaylistSheet(track: track) }
+        }
     }
 
     private func row(_ icon: String, _ title: String, tint: Color = .white,

@@ -87,6 +87,15 @@ struct MoodItem: Identifiable, Hashable {
     let params: String?
 }
 
+/// One of the user's own editable playlists.
+struct UserPlaylist: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let thumbnail: String
+
+    var thumbnailURL: URL? { URL(string: thumbnail) }
+}
+
 /// One shelf on an artist page — either a song list or a row of cards.
 struct ArtistSection: Identifiable {
     let id = UUID()

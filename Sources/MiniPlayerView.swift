@@ -6,8 +6,8 @@ import SwiftUI
 /// change track; tap it to open the full player.
 struct MiniPlayerView: View {
     @ObservedObject var player: Player
-    @ObservedObject private var downloads = Downloads.shared
     @State private var showArtist = false
+    @State private var showAddToPlaylist = false
 
     var body: some View {
         if let track = player.current {
@@ -29,10 +29,7 @@ struct MiniPlayerView: View {
                 circleButton("person", tint: track.artistId == nil ? .white.opacity(0.35) : .white) {
                     if track.artistId != nil { showArtist = true }
                 }
-                circleButton(downloadIcon,
-                             tint: downloads.isDownloaded(track.videoId) ? Blaze.amber : .white) {
-                    downloads.toggle(track)
-                }
+                circleButton("plus") { showAddToPlaylist = true }
                 circleButton(player.isCurrentFavorite ? "heart.fill" : "heart",
                              tint: player.isCurrentFavorite ? .red : .white) {
                     player.toggleFavorite()
@@ -69,6 +66,9 @@ struct MiniPlayerView: View {
                     ArtistView(browseId: id, player: player)
                 }
             }
+            .sheet(isPresented: $showAddToPlaylist) {
+                AddToPlaylistSheet(track: track)
+            }
         }
     }
 
@@ -98,15 +98,6 @@ struct MiniPlayerView: View {
         .frame(width: 48, height: 48)
         .contentShape(Circle())
         .onTapGesture { player.toggle() }
-    }
-
-    private var downloadIcon: String {
-        guard let id = player.current?.videoId else { return "plus" }
-        switch downloads.state(id) {
-        case .done: return "arrow.down.circle.fill"
-        case .downloading: return "hourglass"
-        case .none: return "plus"
-        }
     }
 
     private func circleButton(_ icon: String, tint: Color = .white,

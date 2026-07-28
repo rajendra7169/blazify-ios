@@ -455,6 +455,102 @@ enum YouTube {
         return out
     }
 
+    // MARK: - Playlist writes (signed-in)
+
+    /// The user's own editable playlists (the ones an EDIT menu item marks).
+    static func editablePlaylists() async -> [UserPlaylist] {
+        guard Auth.shared.isLoggedIn else { return [] }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_liked_playlists"]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return [] }
+
+        var out: [UserPlaylist] = []
+        var seen = Set<String>()
+        collectEditablePlaylists(json, into: &out, seen: &seen)
+        return out
+    }
+
+    private static func collectEditablePlaylists(_ node: Any, into out: inout [UserPlaylist],
+                                                 seen: inout Set<String>) {
+        if let dict = node as? [String: Any] {
+            if let r = dict["musicTwoRowItemRenderer"] as? [String: Any] {
+                let nav = r["navigationEndpoint"] as? [String: Any]
+                let raw = (nav?["browseEndpoint"] as? [String: Any])?["browseId"] as? String ?? ""
+                let id = raw.hasPrefix("VL") ? String(raw.dropFirst(2)) : raw
+                // Only playlists the user can edit carry an EDIT menu entry.
+                let editable = menuHasIcon(r["menu"], "EDIT")
+                if editable, !id.isEmpty, id != "LM", id != "SE", seen.insert(id).inserted {
+                    out.append(UserPlaylist(id: id, title: runsFirst(r["title"]),
+                                            thumbnail: musicThumb(r["thumbnailRenderer"])))
+                }
+                return
+            }
+            for (_, v) in dict { collectEditablePlaylists(v, into: &out, seen: &seen) }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectEditablePlaylists(v, into: &out, seen: &seen) }
+        }
+    }
+
+    private static func menuHasIcon(_ menu: Any?, _ iconType: String) -> Bool {
+        guard let m = (menu as? [String: Any])?["menuRenderer"] as? [String: Any],
+              let items = m["items"] as? [[String: Any]] else { return false }
+        for item in items {
+            guard let nav = item["menuNavigationItemRenderer"] as? [String: Any],
+                  let icon = nav["icon"] as? [String: Any] else { continue }
+            if icon["iconType"] as? String == iconType { return true }
+        }
+        return false
+    }
+
+    /// Create a private playlist; returns its new playlistId.
+    static func createPlaylist(title: String) async -> String? {
+        guard Auth.shared.isLoggedIn, !title.isEmpty else { return nil }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "title": title,
+            "privacyStatus": "PRIVATE",
+        ]
+        let endpoint = "https://music.youtube.com/youtubei/v1/playlist/create?prettyPrint=false"
+        guard let json = await post(endpoint, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return nil }
+        return json["playlistId"] as? String
+    }
+
+    /// Add a song to a playlist (browse/edit_playlist, ACTION_ADD_VIDEO).
+    @discardableResult
+    static func addToPlaylist(playlistId: String, videoId: String) async -> Bool {
+        guard Auth.shared.isLoggedIn, !playlistId.isEmpty, !videoId.isEmpty else { return false }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let id = playlistId.hasPrefix("VL") ? String(playlistId.dropFirst(2)) : playlistId
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "playlistId": id,
+            "actions": [["action": "ACTION_ADD_VIDEO", "addedVideoId": videoId]],
+        ]
+        let endpoint = "https://music.youtube.com/youtubei/v1/browse/edit_playlist?prettyPrint=false"
+        guard let json = await post(endpoint, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return false }
+        if let status = json["status"] as? String { return status == "STATUS_SUCCEEDED" }
+        return json["error"] == nil
+    }
+
     // MARK: - Library (signed-in)
 
     /// The user's saved/created playlists (FEmusic_liked_playlists grid).
