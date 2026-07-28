@@ -5,7 +5,9 @@ import SwiftUI
 /// the track info, then subscribe / add / favourite. Swipe it sideways to
 /// change track; tap it to open the full player.
 struct MiniPlayerView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject var player: Player
+    @ObservedObject private var look = LookFeel.shared
     /// Overrides what tapping the card does. Screens presented ON TOP of the
     /// full player pass a dismiss, since the player is already behind them.
     var onOpenPlayer: (() -> Void)?
@@ -21,38 +23,51 @@ struct MiniPlayerView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.title)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white).lineLimit(1)
+                        .foregroundStyle(ink).lineLimit(1)
                     Text(track.artist)
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                        .foregroundStyle(ink.opacity(0.7)).lineLimit(1)
                 }
                 .padding(.leading, 16)
 
                 Spacer(minLength: 8)
 
                 HStack(spacing: 6) {
-                    circleButton("person") { openArtist(track) }
-                    circleButton("plus") { showAddToPlaylist = true }
+                    // ROUNDED swaps the shortcuts for transport controls, as
+                    // Android's rounded design does.
+                    if look.miniPlayerDesign == .rounded {
+                        circleButton("backward.end.fill") { player.prev() }
+                        circleButton("forward.end.fill") { player.next() }
+                    } else {
+                        circleButton("person") { openArtist(track) }
+                        circleButton("plus") { showAddToPlaylist = true }
+                    }
                     circleButton(player.isCurrentFavorite ? "heart.fill" : "heart",
-                                 tint: player.isCurrentFavorite ? .red : .white) {
+                                 tint: player.isCurrentFavorite ? .red : ink) {
                         player.toggleFavorite()
                     }
                 }
             }
             .padding(8)
             .frame(height: 64)
-            .background(
-                ZStack {
-                    Blaze.surface
-                    player.artColor.opacity(0.38)
-                },
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+            .background(background)
+            .clipShape(shape)
             .overlay(
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .stroke(.white.opacity(0.18), lineWidth: 1),
+                shape.stroke(ink.opacity(0.18), lineWidth: look.miniPlayerDesign == .flat ? 0 : 1),
             )
-            .padding(.horizontal, 12)
+            .overlay(alignment: .bottom) {
+                // The flat bar keeps the original thin progress line.
+                if look.miniPlayerDesign == .flat {
+                    GeometryReader { g in
+                        Rectangle().fill(palette.accent)
+                            .frame(width: g.size.width * max(player.progress, 0.002), height: 2)
+                    }
+                    .frame(height: 2)
+                }
+            }
+            .shadow(color: look.miniPlayerDesign == .floating ? .black.opacity(0.35) : .clear,
+                    radius: 10, y: 4)
+            .padding(.horizontal, look.miniPlayerDesign == .flat ? 0 : 12)
             .contentShape(Rectangle())
             .onTapGesture { openPlayer() }
             .gesture(
@@ -72,6 +87,48 @@ struct MiniPlayerView: View {
             }
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistSheet(track: track)
+            }
+        }
+    }
+
+    /// Ink that stays readable on whatever the bar is filled with.
+    private var ink: Color {
+        guard look.miniPlayerDesign.usesArtBackground else { return palette.onSurface }
+        switch look.miniPlayerBackground {
+        case .followTheme, .transparent: return palette.onSurface
+        default: return .white
+        }
+    }
+
+    private var shape: AnyShape {
+        switch look.miniPlayerDesign {
+        case .flat: AnyShape(Rectangle())
+        case .modern, .rounded: AnyShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        case .floating: AnyShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    @ViewBuilder private var background: some View {
+        if !look.miniPlayerDesign.usesArtBackground {
+            palette.surface
+        } else {
+            switch look.miniPlayerBackground {
+            case .followTheme: palette.surface
+            case .transparent: Color.clear
+            case .pureBlack: Color.black
+            case .blur:
+                ZStack {
+                    RemoteImage(url: player.current?.artURL(size: 240), size: 120) {
+                        player.artColor
+                    }
+                    .blur(radius: 22)
+                    Color.black.opacity(0.30)
+                }
+            case .gradient:
+                ZStack {
+                    palette.surface
+                    player.artColor.opacity(0.38)
+                }
             }
         }
     }
@@ -103,7 +160,7 @@ struct MiniPlayerView: View {
     /// 48pt play control: a progress ring around the 40pt circular album thumb.
     private func playControl(_ track: Track) -> some View {
         ZStack {
-            Circle().stroke(.white.opacity(0.2), lineWidth: 3)
+            Circle().stroke(ink.opacity(0.2), lineWidth: 3)
             Circle()
                 .trim(from: 0, to: max(player.progress, 0.0001))
                 .stroke(player.artColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
@@ -128,14 +185,15 @@ struct MiniPlayerView: View {
         .onTapGesture { player.toggle() }
     }
 
-    private func circleButton(_ icon: String, tint: Color = .white,
+    private func circleButton(_ icon: String, tint: Color? = nil,
                               action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let colour = tint ?? ink
+        return Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 15))
-                .foregroundStyle(tint)
+                .foregroundStyle(colour)
                 .frame(width: 36, height: 36)
-                .overlay(Circle().stroke(.white.opacity(0.18), lineWidth: 1))
+                .overlay(Circle().stroke(ink.opacity(0.18), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
