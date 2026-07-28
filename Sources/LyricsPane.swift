@@ -54,9 +54,6 @@ struct LyricsPane: View {
 
     private var header: some View {
         HStack {
-            Text(result == nil ? "" : "Lyrics from \(Lyrics.sourceName)")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
             Spacer()
             if !autoScroll {
                 Button { resync() } label: {
@@ -81,6 +78,7 @@ struct LyricsPane: View {
             }
             .disabled(candidates.count < 2)
             .opacity(candidates.count < 2 ? 0.4 : 1)
+            Spacer()
         }
         .padding(.horizontal, 22)
         .padding(.bottom, 6)
@@ -131,6 +129,16 @@ struct LyricsPane: View {
                 let map = positions(active: scrollTo, heights: hs)
 
                 ZStack(alignment: .top) {
+                    // "Lyrics from …" floats just above line 0 and scrolls with it.
+                    if result != nil {
+                        Text("Lyrics from \(Lyrics.sourceName)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .frame(maxWidth: .infinity)
+                            .offset(y: anchorY + (map[0] ?? 0) - 34 + manualOffset)
+                            .animation(lineAnimation(distance: scrollTo), value: map[0])
+                    }
+
                     ForEach(Array(lines.enumerated()), id: \.element.id) { i, line in
                         let target = anchorY + (map[i] ?? 0) + manualOffset
                         let distance = abs(i - scrollTo)
@@ -150,9 +158,12 @@ struct LyricsPane: View {
                             .onTapGesture { seek(to: line) }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
+                // Must fill the stage: offsets don't affect layout, so without an
+                // explicit height the stack collapses to one line and the mask
+                // clips every other line away.
+                .frame(width: geo.size.width - 48, height: geo.size.height, alignment: .top)
             }
-            .padding(.horizontal, 24)
+            .frame(width: geo.size.width, height: geo.size.height)
             .mask(fadeMask(height: geo.size.height))
             .contentShape(Rectangle())
             .gesture(manualScroll)
