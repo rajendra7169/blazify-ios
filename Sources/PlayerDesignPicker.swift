@@ -80,8 +80,11 @@ struct PlayerDesignPicker: View {
             .scrollPosition(id: $current)
             .scrollIndicators(.hidden)
             .contentMargins(.horizontal, 62, for: .scrollContent)
+            // Let the frame's glow spill past the scroll bounds instead of
+            // being sliced off against the title bar and the name/dots below.
+            .scrollClipDisabled()
         }
-        .padding(.vertical, 18)
+        .padding(.vertical, 26)
     }
 
     private var applyButton: some View {
@@ -119,6 +122,8 @@ struct PhoneFrame<Content: View>: View {
 
     var body: some View {
         content()
+            // Previews must never dictate the frame's size — clip, don't grow.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 33, style: .continuous))
             .overlay(alignment: .top) {
                 // Speaker slit — the only hardware detail (no notch/island).
@@ -564,9 +569,13 @@ private struct FullArtPreview: View {
 
     var body: some View {
         ZStack {
-            RemoteImage(url: player.current?.artURL(size: 720)) { ArtPlaceholder() }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+            // Explicit size: RemoteImage fills to its natural size otherwise and
+            // would burst out of the phone frame.
+            GeometryReader { g in
+                RemoteImage(url: player.current?.artURL(size: 720)) { ArtPlaceholder() }
+                    .frame(width: g.size.width, height: g.size.height)
+                    .clipped()
+            }
 
             LinearGradient(stops: [
                 .init(color: .black.opacity(0.30), location: 0.0),
