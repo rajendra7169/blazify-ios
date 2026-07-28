@@ -11,10 +11,16 @@ import Combine
 final class AudioCache: ObservableObject {
     static let shared = AudioCache()
 
-    /// Roughly 600 songs at ~500 KB/min; tune from Settings later.
-    private let limitBytes: Int64 = 512 * 1024 * 1024
+    /// Cap on disk, adjustable from Settings (Android's MaxSongCacheSize).
+    var limitBytes: Int64 {
+        let saved = UserDefaults.standard.integer(forKey: "songCacheLimitMB")
+        return Int64(saved > 0 ? saved : 512) * 1024 * 1024
+    }
 
     @Published private(set) var tracks: [Track] = []
+    /// Published so Settings can show it without walking the directory on every
+    /// render — `sizeBytes` stats every file, which is far too slow for a body.
+    @Published private(set) var sizeBytes: Int64 = 0
 
     private let dir: URL
     private let metaURL: URL
@@ -27,6 +33,7 @@ final class AudioCache: ObservableObject {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         metaURL = dir.appendingPathComponent("cache.json")
         load()
+        refreshSize()
     }
 
     // MARK: Lookup
@@ -80,27 +87,38 @@ final class AudioCache: ObservableObject {
                 self.tracks.insert(track, at: 0)
                 self.save()
                 self.evictIfNeeded()
+                self.refreshSize()
             }
         }
     }
 
     // MARK: Housekeeping
 
-    var sizeBytes: Int64 {
+    /// Walks the directory — call it off the main thread, then publish.
+    private func measure() -> Int64 {
         (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey]))?
             .reduce(Int64(0)) { total, url in
                 total + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
             } ?? 0
     }
 
+    /// Refresh the published size in the background.
+    func refreshSize() {
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            let size = await self.measure()
+            await MainActor.run { self.sizeBytes = size }
+        }
+    }
+
     /// Drop the least-recently-played files until we're back under the cap.
     private func evictIfNeeded() {
-        guard sizeBytes > limitBytes else { return }
+        guard measure() > limitBytes else { return }
         let order = tracks.sorted {
             (lastUsed[$0.videoId] ?? .distantPast) < (lastUsed[$1.videoId] ?? .distantPast)
         }
         for track in order {
-            guard sizeBytes > limitBytes else { break }
+            guard measure() > limitBytes else { break }
             remove(track.videoId)
         }
     }
@@ -117,6 +135,7 @@ final class AudioCache: ObservableObject {
         tracks = []
         lastUsed = [:]
         save()
+        sizeBytes = 0
     }
 
     // MARK: Persistence

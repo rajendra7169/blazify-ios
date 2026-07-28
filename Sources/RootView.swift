@@ -19,8 +19,21 @@ struct RootView: View {
     private var bottomInset: CGFloat { (player.hasTrack ? 72 : 0) + 70 + safeBottom }
 
     @State private var showRecognition = false
+    /// Tabs built so far — we don't pay for a tab until it's opened, but once
+    /// it's open it stays alive so its scroll position and data survive.
+    @State private var visited: Set<BlazeTab> = [.home]
 
     private var palette: Palette { Palette(dark: theme.isDark(scheme)) }
+
+    @ViewBuilder
+    private func tabContent(_ t: BlazeTab) -> some View {
+        switch t {
+        case .home: HomeView(player: player, tab: $tab)
+        case .explore: NavigationStack { SearchView(player: player) }
+        case .yours: YoursView(player: player)
+        case .library: LibraryView(player: player)
+        }
+    }
 
     /// Floating action above the mini-player: shuffle everywhere, but song
     /// recognition on Explore — matching where each belongs on Android.
@@ -59,18 +72,20 @@ struct RootView: View {
         // The scaffold is a *background*, not a sibling: a full-bleed child would
         // make the stack itself full-bleed, and `safeAreaInset` below would then
         // stop reserving room — which is what let content slide under the bar.
-        Group {
-            switch tab {
-            case .home:
-                HomeView(player: player, tab: $tab)
-            case .explore:
-                NavigationStack { SearchView(player: player) }
-            case .yours:
-                YoursView(player: player)
-            case .library:
-                LibraryView(player: player)
+        // Every visited tab stays in the hierarchy, just hidden. A `switch` here
+        // tears the old tab down, so Home threw away its feed and reloaded from
+        // scratch every time you came back from Yours.
+        ZStack {
+            ForEach(BlazeTab.allCases, id: \.self) { t in
+                if visited.contains(t) {
+                    tabContent(t)
+                        .opacity(tab == t ? 1 : 0)
+                        .allowsHitTesting(tab == t)
+                        .zIndex(tab == t ? 1 : 0)
+                }
             }
         }
+        .onChange(of: tab) { visited.insert(tab) }
         .background(palette.scaffold.ignoresSafeArea())
         // `safeAreaInset` — NOT an overlay. An overlay bar has to ignore the
         // safe area to sit under the home indicator, and that pushes its frame
@@ -87,6 +102,9 @@ struct RootView: View {
                 }
                 BlazeTabBar(selection: $tab, palette: palette)
             }
+            // Stay put when the keyboard opens: without this the whole bar
+            // (and the mini-player) rides up and sits on top of the keyboard.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
         .fullScreenCover(isPresented: $showRecognition) {
             RecognitionView(player: player)

@@ -11,8 +11,34 @@ final class Downloads: ObservableObject {
 
     @Published private(set) var states: [String: DownloadState] = [:]
     @Published private(set) var tracks: [Track] = []   // downloaded, newest first
+    /// Bytes on disk, published so Settings never has to stat files in a body.
+    @Published private(set) var sizeBytes: Int64 = 0
 
     private let dir: URL
+
+    /// Recount in the background and publish.
+    func refreshSize() {
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            let size = await self.measure()
+            await MainActor.run { self.sizeBytes = size }
+        }
+    }
+
+    private func measure() -> Int64 {
+        (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey]))?
+            .reduce(Int64(0)) { total, url in
+                total + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            } ?? 0
+    }
+
+    /// Delete every downloaded file and forget them.
+    func clearAll() {
+        for track in tracks { remove(track.videoId) }
+        tracks = []
+        sizeBytes = 0
+        saveMeta()
+    }
     private let metaURL: URL
     private var durations: [String: Double] = [:]
 
@@ -119,6 +145,7 @@ final class Downloads: ObservableObject {
                 self.tracks.insert(stored, at: 0)
                 self.states[id] = .done
                 self.saveMeta()
+                self.refreshSize()
             }
         } catch {
             await MainActor.run { self.states[id] = DownloadState.none }

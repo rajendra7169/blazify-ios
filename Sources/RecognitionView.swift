@@ -146,7 +146,13 @@ final class Recognizer: ObservableObject {
     @Published var match: Match?
 
     private let engine = AVAudioEngine()
-    private let sampleSeconds = 5.0
+    private let sampleSeconds = 6.0
+
+    private static let userAgents = [
+        "Dalvik/2.1.0 (Linux; U; Android 5.0.2; VS980 4G Build/LRX22G)",
+        "Dalvik/2.1.0 (Linux; U; Android 6.0.1; SM-G920F Build/MMB29K)",
+        "Dalvik/2.1.0 (Linux; U; Android 5.0; SM-G900F Build/LRX21T)",
+    ]
 
     func start() async {
         guard !isListening else { return }
@@ -193,15 +199,47 @@ final class Recognizer: ObservableObject {
 
         let generator = SHSignatureGenerator()
         let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
+        let inputFormat = input.outputFormat(forBus: 0)
 
-        input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, time in
-            try? generator.append(buffer, at: time)
+        // Convert to standard 44.1 kHz mono PCM. The mic's native format (often
+        // 48 kHz) makes `append` throw, and swallowing that with `try?` left us
+        // posting an empty signature — which always came back "no match".
+        guard inputFormat.sampleRate > 0,
+              let target = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1),
+              let converter = AVAudioConverter(from: inputFormat, to: target)
+        else { throw RecognitionError.microphoneUnavailable }
+
+        let counter = AppendCounter()
+        input.installTap(onBus: 0, bufferSize: 8192, format: inputFormat) { buffer, _ in
+            let ratio = target.sampleRate / inputFormat.sampleRate
+            let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1024
+            guard let converted = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
+
+            var error: NSError?
+            var handedOver = false
+            converter.convert(to: converted, error: &error) { _, status in
+                if handedOver {
+                    status.pointee = .noDataNow
+                    return nil
+                }
+                handedOver = true
+                status.pointee = .haveData
+                return buffer
+            }
+            guard error == nil, converted.frameLength > 0 else { return }
+            do {
+                try generator.append(converted, at: nil)
+                counter.bump()
+            } catch {
+                counter.fail(error)
+            }
         }
         engine.prepare()
         try engine.start()
 
         try await Task.sleep(nanoseconds: UInt64(sampleSeconds * 1_000_000_000))
+
+        guard counter.count > 0 else { throw counter.error ?? RecognitionError.noAudio }
         return generator.signature()
     }
 
@@ -222,7 +260,7 @@ final class Recognizer: ObservableObject {
         let millis = Int(Date().timeIntervalSince1970 * 1000)
 
         var comps = URLComponents(
-            string: "https://amp.shazam.com/discovery/v5/en/US/iphone/-/tag/\(UUID().uuidString.lowercased())/\(UUID().uuidString.lowercased())")!
+            string: "https://amp.shazam.com/discovery/v5/en/US/android/-/tag/\(UUID().uuidString.lowercased())/\(UUID().uuidString.lowercased())")!
         comps.queryItems = [
             .init(name: "sync", value: "true"), .init(name: "webv3", value: "true"),
             .init(name: "sampling", value: "true"), .init(name: "connected", value: ""),
@@ -248,6 +286,9 @@ final class Recognizer: ObservableObject {
         req.timeoutInterval = 20
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("en_US", forHTTPHeaderField: "Content-Language")
+        // Shazam's tag endpoint expects the Android client's shape; a default
+        // URLSession agent gets much worse results.
+        req.setValue(Self.userAgents.randomElement(), forHTTPHeaderField: "User-Agent")
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         guard let (data, response) = try? await URLSession.shared.data(for: req),
@@ -270,4 +311,31 @@ final class Recognizer: ObservableObject {
         default: return await AVAudioApplication.requestRecordPermission()
         }
     }
+}
+
+/// Why a recognition attempt couldn't even start listening.
+enum RecognitionError: LocalizedError {
+    case microphoneUnavailable
+    case noAudio
+
+    var errorDescription: String? {
+        switch self {
+        case .microphoneUnavailable: return "The microphone isn't available right now."
+        case .noAudio: return "No audio reached the microphone."
+        }
+    }
+}
+
+/// Counts successful appends from the audio thread, so we can tell "heard
+/// nothing" apart from "heard it but Shazam had no match".
+final class AppendCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    private var firstError: Error?
+
+    var count: Int { lock.withLock { value } }
+    var error: Error? { lock.withLock { firstError } }
+
+    func bump() { lock.withLock { value += 1 } }
+    func fail(_ error: Error) { lock.withLock { if firstError == nil { firstError = error } } }
 }

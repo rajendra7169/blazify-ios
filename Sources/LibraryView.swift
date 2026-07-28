@@ -96,7 +96,8 @@ struct LibraryView: View {
     /// Local favourites merged with the account's liked songs.
     private var likedTracks: [Track] { player.favoriteTracks }
 
-    /// Human-readable cache footprint, e.g. "128 MB".
+    /// Human-readable cache footprint, e.g. "128 MB". Reads the *published*
+    /// size — it used to stat every cached file on each render.
     private var cacheSize: String {
         let mb = Double(cache.sizeBytes) / 1_048_576
         return mb < 1 ? "" : String(format: "%.0f MB", mb)

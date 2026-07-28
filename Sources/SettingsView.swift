@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var showLogin = false
     @State private var showAccount = false
     @State private var showDownloads = false
+    @State private var showStorage = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -21,7 +22,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads }
+        enum Action { case none, account, downloads, storage }
     }
 
     private struct Group: Identifiable {
@@ -52,13 +53,13 @@ struct SettingsView: View {
             Group(title: "Connections", rows: [
                 Row(icon: "link", title: "Integrations",
                     subtitle: "Discord Rich Presence, Last.fm scrobbling"),
-                Row(icon: "person.2", title: "Together",
+                Row(icon: "person.2", title: "Blaze Together",
                     subtitle: "Listen Together sync and room settings"),
             ]),
             Group(title: "Privacy & data", rows: [
                 Row(icon: "lock", title: "Privacy", subtitle: "History, pauses, listening data"),
                 Row(icon: "internaldrive", title: "Storage",
-                    subtitle: "Cache, downloads, clear data", action: .downloads),
+                    subtitle: "Cache, downloads, clear data", action: .storage),
                 Row(icon: "arrow.clockwise", title: "Backup and restore",
                     subtitle: "Export or import your library"),
             ]),
@@ -139,6 +140,11 @@ struct SettingsView: View {
         .sheet(isPresented: $showLogin) { LoginView() }
         .sheet(isPresented: $showAccount) { AccountLibraryView(player: player) }
         .sheet(isPresented: $showDownloads) { DownloadsView(player: player) }
+        .sheet(isPresented: $showStorage) {
+            NavigationStack { StorageSettingsView() }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
     }
 
     // MARK: Header
@@ -261,6 +267,7 @@ struct SettingsView: View {
             switch row.action {
             case .account: showAccount = true
             case .downloads: showDownloads = true
+            case .storage: showStorage = true
             case .none: break
             }
         } label: {

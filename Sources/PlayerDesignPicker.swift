@@ -129,9 +129,12 @@ struct PhoneFrame<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        content()
-            // Previews must never dictate the frame's size — clip, don't grow.
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // `Color.clear` is what gets sized, with the preview layered on top — so
+        // the frame's dimensions always come from the phone, never its contents.
+        // Sizing the content directly let a wide design (the cassette) stretch
+        // its own frame wider than the rest.
+        Color.clear
+            .overlay { content() }
             .clipShape(RoundedRectangle(cornerRadius: 33, style: .continuous))
             .overlay(alignment: .top) {
                 // iPhone Dynamic Island (Android's frame draws a speaker slit here).

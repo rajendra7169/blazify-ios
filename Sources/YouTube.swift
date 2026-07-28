@@ -955,6 +955,18 @@ enum YouTube {
         collectCards(json, into: &cards, seen: &cardSeen)
         let artists = cards.filter { $0.browseId?.hasPrefix("UC") == true }
 
+        // Signed out, the charts page returns ~40 artists but only a couple of
+        // songs, which left the Trending rail looking artist-only. Top up from
+        // the home feed's own trending shelves (Today's hits, Fresh tunes…).
+        if songs.count < 6 {
+            let feed = await home()
+            for item in feed.sections.flatMap(\.items) {
+                guard let vid = item.videoId, !vid.isEmpty, songSeen.insert(vid).inserted else { continue }
+                songs.append(item.asTrack)
+                if songs.count >= 12 { break }
+            }
+        }
+
         return (songs, artists)
     }
 

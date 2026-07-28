@@ -13,7 +13,6 @@ struct AccountPopup: View {
 
     @State private var showLogin = false
     @State private var showAccount = false
-    @State private var showToken = false
     @State private var tokenText = ""
     @State private var showTokenSheet = false
     @State private var confirmLogout = false
@@ -139,18 +138,14 @@ struct AccountPopup: View {
     }
 
     private var tokenTitle: String {
-        if !auth.isLoggedIn { return "Log in with token" }
-        return showToken ? "Tap again to copy or edit" : "Tap to show token"
+        auth.isLoggedIn ? "Tap to show token" : "Log in with token"
     }
 
-    /// Two-tap reveal, as on Android: first tap unhides, second opens the editor.
+    /// One tap opens it. The old two-tap reveal changed only this row's label
+    /// on the first tap, which just looked like nothing had happened.
     private func tapToken() {
-        if !auth.isLoggedIn || showToken {
-            tokenText = auth.tokenBlob()
-            showTokenSheet = true
-        } else {
-            showToken = true
-        }
+        tokenText = auth.tokenBlob()
+        showTokenSheet = true
     }
 
     private var tokenSheet: some View {
@@ -182,7 +177,7 @@ struct AccountPopup: View {
     private var bottomBlock: some View {
         VStack(spacing: 4) {
             Button { showTogether = true } label: {
-                row(icon: "person.2", title: "Together", corners: (16, 6))
+                row(icon: "person.2", title: "Blaze Together", corners: (16, 6))
             }
             .buttonStyle(.plain)
 

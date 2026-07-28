@@ -9,6 +9,7 @@ struct SleepTimerView: View {
 
     @State private var minutes: Double = 30
     @State private var songs = 0     // 0 = minutes mode
+    @State private var sheetHeight: CGFloat = 420
 
     private var songsMode: Bool { songs > 0 }
 
@@ -25,12 +26,22 @@ struct SleepTimerView: View {
             }
         }
         .padding(28)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity)
+        // Measure the content and make the sheet exactly that tall. The old
+        // fixed 520/300 detents were taller than the content, which is the
+        // empty band that showed up along the bottom.
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { sheetHeight = geo.size.height }
+                    .onChange(of: geo.size.height) { sheetHeight = geo.size.height }
+            },
+        )
         .background(Blaze.surface)
         // One surface for the whole sheet — the safe-area edges were painting
         // their own colours before, so the top, middle and bottom disagreed.
         .presentationBackground(Blaze.surface)
-        .presentationDetents([.height(player.sleepActive ? 300 : 520)])
+        .presentationDetents([.height(sheetHeight)])
         .preferredColorScheme(.dark)
     }
 
