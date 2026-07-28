@@ -18,7 +18,42 @@ struct RootView: View {
     /// Pages add this as bottom padding themselves — see `playerBottomPadding()`.
     private var bottomInset: CGFloat { (player.hasTrack ? 72 : 0) + 70 + safeBottom }
 
+    @State private var showRecognition = false
+
     private var palette: Palette { Palette(dark: theme.isDark(scheme)) }
+
+    /// Floating action above the mini-player: shuffle everywhere, but song
+    /// recognition on Explore — matching where each belongs on Android.
+    private var actionButton: some View {
+        HStack {
+            Spacer()
+            Button {
+                if tab == .explore { showRecognition = true } else { shuffleAll() }
+            } label: {
+                Image(systemName: tab == .explore ? "waveform" : "shuffle")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(palette.onAccent)
+                    .frame(width: 48, height: 48)
+                    .background(palette.accent)
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 10)
+    }
+
+    /// Start a random song from everything you've liked or played.
+    private func shuffleAll() {
+        var pool = player.favoriteTracks + PlayHistory.recent + Downloads.shared.tracks
+        var seen = Set<String>()
+        pool = pool.filter { !$0.videoId.isEmpty && seen.insert($0.videoId).inserted }
+        guard !pool.isEmpty else { return }
+        player.isShuffled = true
+        player.play(pool.shuffled(), startAt: 0)
+        player.showFullPlayer = true
+    }
 
     var body: some View {
         // The scaffold is a *background*, not a sibling: a full-bleed child would
@@ -27,7 +62,7 @@ struct RootView: View {
         Group {
             switch tab {
             case .home:
-                HomeView(player: player)
+                HomeView(player: player, tab: $tab)
             case .explore:
                 NavigationStack { SearchView(player: player) }
             case .yours:
@@ -45,12 +80,17 @@ struct RootView: View {
         // because the inset doesn't reach inside each tab's NavigationStack.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
+                actionButton
                 if player.hasTrack {
                     MiniPlayerView(player: player)
                         .padding(.bottom, 8)   // don't sit flush on the tab bar
                 }
                 BlazeTabBar(selection: $tab, palette: palette)
             }
+        }
+        .fullScreenCover(isPresented: $showRecognition) {
+            RecognitionView(player: player)
+                .environment(\.palette, palette)
         }
         .onAppear {
             safeBottom = UIApplication.shared.connectedScenes

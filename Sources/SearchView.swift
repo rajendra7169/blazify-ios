@@ -49,6 +49,8 @@ struct SearchView: View {
                 }
                 .playerBottomPadding()
             }
+            // Swipe the results to put the keyboard away.
+            .scrollDismissesKeyboard(.immediately)
         }
         .background(palette.scaffold.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
@@ -80,6 +82,12 @@ struct SearchView: View {
                 .submitLabel(.search)
                 .focused($fieldFocused)
                 .onSubmit { run(trimmed) }
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { fieldFocused = false }
+                    }
+                }
                 .onChange(of: query) {
                     if suppressSuggest { suppressSuggest = false } else { suggest() }
                 }

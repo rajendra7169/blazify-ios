@@ -6,6 +6,9 @@ import SwiftUI
 struct HomeView: View {
     @Environment(\.palette) private var palette
     @ObservedObject var player: Player
+    /// Lets the search pill switch to Explore, so its tab lights up rather than
+    /// pushing a copy of the search page on top of Home.
+    @Binding var tab: BlazeTab
     @ObservedObject private var auth = Auth.shared
 
     @State private var feed = HomeFeed.empty
@@ -18,6 +21,7 @@ struct HomeView: View {
     @State private var showLogin = false
     @State private var showAccount = false
     @State private var showSettings = false
+    @State private var showRecognition = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -102,6 +106,9 @@ struct HomeView: View {
         .fullScreenCover(isPresented: $showAccount) {
             AccountPopup(player: player, isPresented: $showAccount)
                 .presentationBackground(.clear)
+        }
+        .fullScreenCover(isPresented: $showRecognition) {
+            RecognitionView(player: player)
         }
     }
 
@@ -275,24 +282,31 @@ struct HomeView: View {
     // MARK: - Search pill (opens full search)
 
     private var searchPill: some View {
-        Button {
-            path.append(SearchRoute())
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 18))
+                .foregroundStyle(palette.onSurfaceVariant)
+            Text("Search songs, albums, artists…")
+                .font(.system(size: 15))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            // Song recognition, exactly where Android's header puts the mic.
+            Button { showRecognition = true } label: {
+                Image(systemName: "mic.fill")
                     .font(.system(size: 18))
                     .foregroundStyle(palette.onSurfaceVariant)
-                Text("Search songs, albums, artists…")
-                    .font(.system(size: 15))
-                    .foregroundStyle(palette.onSurfaceVariant)
-                Spacer(minLength: 0)
+                    .contentShape(Rectangle())
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 15)
-            .background(palette.onSurface.opacity(0.10))
-            .clipShape(Capsule())
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 15)
+        .background(palette.onSurface.opacity(0.10))
+        .clipShape(Capsule())
+        // Tapping the bar itself opens Explore; only the mic is separate.
+        .contentShape(Capsule())
+        .onTapGesture { tab = .explore }
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 8)
