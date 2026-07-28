@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var showAccount = false
     @State private var showDownloads = false
     @State private var showStorage = false
+    @State private var showAbout = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -22,7 +23,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage }
+        enum Action { case none, account, downloads, storage, about }
     }
 
     private struct Group: Identifiable {
@@ -64,7 +65,7 @@ struct SettingsView: View {
                     subtitle: "Export or import your library"),
             ]),
             Group(title: "About", rows: [
-                Row(icon: "info.circle", title: "About", subtitle: "Version and developer"),
+                Row(icon: "info.circle", title: "About", subtitle: "Version and developer", action: .about),
                 Row(icon: "newspaper", title: "Changelog", subtitle: "What's new in this version"),
             ]),
         ]
@@ -142,6 +143,11 @@ struct SettingsView: View {
         .sheet(isPresented: $showDownloads) { DownloadsView(player: player) }
         .sheet(isPresented: $showStorage) {
             NavigationStack { StorageSettingsView() }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .sheet(isPresented: $showAbout) {
+            NavigationStack { AboutView() }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
@@ -268,6 +274,7 @@ struct SettingsView: View {
             case .account: showAccount = true
             case .downloads: showDownloads = true
             case .storage: showStorage = true
+            case .about: showAbout = true
             case .none: break
             }
         } label: {
