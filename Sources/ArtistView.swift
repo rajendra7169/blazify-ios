@@ -5,7 +5,6 @@ import SwiftUI
 /// albums / singles / similar artists as horizontal card rows.
 struct ArtistView: View {
     @Environment(\.palette) private var palette
-    @ObservedObject private var theme = AppTheme.shared
     let browseId: String
     @ObservedObject var player: Player
     @Environment(\.dismiss) private var dismiss
@@ -40,7 +39,7 @@ struct ArtistView: View {
                     .padding(.top, 80)
                 }
             }
-            .background(theme.scaffold.ignoresSafeArea())
+            .background(palette.scaffold.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -3,7 +3,6 @@ import SwiftUI
 /// Favorites tab: the signed-in user's saved & created playlists, tap to open.
 struct FavoritesView: View {
     @Environment(\.palette) private var palette
-    @ObservedObject private var theme = AppTheme.shared
     @ObservedObject private var auth = Auth.shared
     @ObservedObject var player: Player
 
@@ -80,7 +79,7 @@ struct FavoritesView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(theme.scaffold.ignoresSafeArea())
+            .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Your Library")
             .navigationDestination(for: HomeItem.self) { item in
                 PlaylistView(item: item, player: player)
@@ -136,10 +135,10 @@ struct LikedRoute: Hashable {}
 
 /// A plain list of tracks (Liked songs, and reusable elsewhere).
 struct TrackListView: View {
+    @Environment(\.palette) private var palette
     let title: String
     let tracks: [Track]
     @ObservedObject var player: Player
-    @ObservedObject private var theme = AppTheme.shared
 
     var body: some View {
         List {
@@ -156,7 +155,7 @@ struct TrackListView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(theme.scaffold.ignoresSafeArea())
+        .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -113,7 +113,7 @@ struct SettingsView: View {
                                 }
                             }
                         }
-                        .background(theme.surface)
+                        .background(palette.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
 
@@ -122,7 +122,7 @@ struct SettingsView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             }
-            .background(theme.scaffold.ignoresSafeArea())
+            .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

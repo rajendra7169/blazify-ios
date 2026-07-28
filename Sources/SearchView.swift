@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SearchView: View {
-    @ObservedObject private var theme = AppTheme.shared
+    @Environment(\.palette) private var palette
     @ObservedObject var player: Player
 
     @State private var query = ""
@@ -24,7 +24,7 @@ struct SearchView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(theme.scaffold.ignoresSafeArea())
+        .background(palette.scaffold.ignoresSafeArea())
         .overlay {
             if searching {
                 ScrollView { SkeletonTrackList(rows: 8).padding(.top, 8) }

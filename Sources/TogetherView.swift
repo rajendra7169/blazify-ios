@@ -6,7 +6,6 @@ import UIKit
 struct TogetherView: View {
     @Environment(\.palette) private var palette
     @ObservedObject private var lt = ListenTogether.shared
-    @ObservedObject private var theme = AppTheme.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var joinCode = ""
@@ -24,7 +23,7 @@ struct TogetherView: View {
                 }
                 .padding(20)
             }
-            .background(theme.scaffold.ignoresSafeArea())
+            .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Together")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -209,7 +208,7 @@ struct TogetherView: View {
         content()
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.surface)
+            .background(palette.surface)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }

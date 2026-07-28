@@ -5,7 +5,6 @@ import SwiftUI
 struct AccountLibraryView: View {
     @Environment(\.palette) private var palette
     @ObservedObject var player: Player
-    @ObservedObject private var theme = AppTheme.shared
     @Environment(\.dismiss) private var dismiss
 
     enum Kind: String, CaseIterable, Identifiable {
@@ -69,7 +68,7 @@ struct AccountLibraryView: View {
                     .padding(16)
                 }
             }
-            .background(theme.scaffold.ignoresSafeArea())
+            .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: HomeItem.self) { item in

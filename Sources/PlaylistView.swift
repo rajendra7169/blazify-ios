@@ -4,7 +4,6 @@ import SwiftUI
 /// actions, then the track list. Tapping any row starts playback from there.
 struct PlaylistView: View {
     @Environment(\.palette) private var palette
-    @ObservedObject private var theme = AppTheme.shared
     let item: HomeItem
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
@@ -85,7 +84,7 @@ struct PlaylistView: View {
             }
             .padding(.bottom, 24)
         }
-        .background(theme.scaffold.ignoresSafeArea())
+        .background(palette.scaffold.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }

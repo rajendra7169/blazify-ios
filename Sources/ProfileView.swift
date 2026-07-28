@@ -4,7 +4,6 @@ import SwiftUI
 /// account and a sign-out button.
 struct ProfileView: View {
     @Environment(\.palette) private var palette
-    @ObservedObject private var theme = AppTheme.shared
     @ObservedObject var player: Player
     @ObservedObject private var auth = Auth.shared
     @ObservedObject private var downloads = Downloads.shared
@@ -85,7 +84,7 @@ struct ProfileView: View {
             .padding(.top, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.scaffold.ignoresSafeArea())
+        .background(palette.scaffold.ignoresSafeArea())
         .sheet(isPresented: $showLogin) { LoginView() }
         .sheet(isPresented: $showDownloads) { DownloadsView(player: player) }
     }

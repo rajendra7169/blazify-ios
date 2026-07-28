@@ -3,8 +3,8 @@ import SwiftUI
 /// Library tab, ported from BlazeLibraryHome.kt: gradient auto-playlist cards,
 /// then "Created by you" and "Artists you liked".
 struct LibraryView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject var player: Player
-    @ObservedObject private var theme = AppTheme.shared
     @ObservedObject private var auth = Auth.shared
     @ObservedObject private var downloads = Downloads.shared
     @ObservedObject private var cache = AudioCache.shared
@@ -86,7 +86,7 @@ struct LibraryView: View {
                     Spacer().frame(height: 12)
                 }
             }
-            .background(theme.scaffold.ignoresSafeArea())
+            .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Library")
             .navigationDestination(item: $route) { r in
                 switch r {

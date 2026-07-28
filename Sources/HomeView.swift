@@ -5,7 +5,6 @@ import SwiftUI
 /// of real YouTube Music recommendations.
 struct HomeView: View {
     @Environment(\.palette) private var palette
-    @ObservedObject private var theme = AppTheme.shared
     @ObservedObject var player: Player
     @ObservedObject private var auth = Auth.shared
 
@@ -48,7 +47,7 @@ struct HomeView: View {
                 }
                 .padding(.bottom, 24)
             }
-            .background(theme.scaffold.ignoresSafeArea())
+            .background(palette.scaffold.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: HomeItem.self) { item in
                 PlaylistView(item: item, player: player)

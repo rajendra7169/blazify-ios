@@ -3,7 +3,6 @@ import SwiftUI
 /// A Mood/Genre page: the playlists inside a mood tile, in a 2-column grid.
 struct MoodDetailView: View {
     @Environment(\.palette) private var palette
-    @ObservedObject private var theme = AppTheme.shared
     let mood: MoodItem
     @ObservedObject var player: Player
 
@@ -31,7 +30,7 @@ struct MoodDetailView: View {
                 .padding(16)
             }
         }
-        .background(theme.scaffold.ignoresSafeArea())
+        .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle(mood.title)
         .navigationBarTitleDisplayMode(.inline)
         .task {

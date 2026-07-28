@@ -10,7 +10,6 @@ struct AccountPopup: View {
     @Binding var isPresented: Bool
 
     @ObservedObject private var auth = Auth.shared
-    @ObservedObject private var theme = AppTheme.shared
 
     @State private var showLogin = false
     @State private var showAccount = false
@@ -38,7 +37,7 @@ struct AccountPopup: View {
                     bottomBlock
                 }
                 .padding(16)
-                .background(theme.surface)
+                .background(palette.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                 .padding(.horizontal, 16)
                 .padding(.top, 72)
@@ -165,7 +164,7 @@ struct AccountPopup: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
             }
-            .background(theme.surface.ignoresSafeArea())
+            .background(palette.surface.ignoresSafeArea())
             .navigationTitle("Account token")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

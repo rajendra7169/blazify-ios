@@ -4,8 +4,8 @@ import SwiftUI
 /// Browse Categories, Your Playlists, Trending, Mood Playlists and Favorite
 /// Artists — every rail 16pt inset with 12pt spacing.
 struct YoursView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject var player: Player
-    @ObservedObject private var theme = AppTheme.shared
     @ObservedObject private var auth = Auth.shared
     @ObservedObject private var downloads = Downloads.shared
 
@@ -63,7 +63,7 @@ struct YoursView: View {
                     Spacer().frame(height: 12)
                 }
             }
-            .background(theme.scaffold.ignoresSafeArea())
+            .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Yours")
             .navigationDestination(item: $route) { r in
                 switch r {
@@ -144,7 +144,7 @@ struct YoursView: View {
             LazyHStack(spacing: 12) {
                 ForEach(Array(playlistCards.enumerated()), id: \.offset) { _, card in
                     BlazeGradientCard(title: card.title, subtitle: card.subtitle,
-                                      seed: theme.accent, width: 160, height: 160,
+                                      seed: palette.accent, width: 160, height: 160,
                                       icon: card.item == nil ? "heart.fill" : nil) {
                         if let item = card.item {
                             route = .playlist(item)

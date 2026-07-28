@@ -3,7 +3,6 @@ import SwiftUI
 /// The offline library — every downloaded track, plays with no network.
 struct DownloadsView: View {
     @Environment(\.palette) private var palette
-    @ObservedObject private var theme = AppTheme.shared
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
     @Environment(\.dismiss) private var dismiss
@@ -45,7 +44,7 @@ struct DownloadsView: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .background(theme.scaffold.ignoresSafeArea())
+            .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Downloads")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
