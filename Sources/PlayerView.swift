@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// Full-screen Blazify player — a SwiftUI port of the Android Blaze CLASSIC layout:
-/// album-art gradient background, centered "Now Playing" header, square art (r20),
-/// title + favorite + ⋮, the slim Apple-Music slider, the classic transport row
-/// (shuffle · prev · 72pt play · next · repeat), and a Queue / Sleep / Lyrics row.
+/// The player. Each design is a DISTINCT full-screen layout (mirroring the
+/// separate branches in Android's BottomSheetPlayer), not one layout with a
+/// swapped picture: RING and CASSETTE own their whole chrome, while CLASSIC,
+/// RECORD and FULL_ART share the standard control stack under different stages.
 struct PlayerView: View {
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
@@ -15,17 +15,13 @@ struct PlayerView: View {
     @State private var showQueue = false
     @State private var showSleep = false
     @State private var showDesign = false
-    @State private var lyricsMode = false   // lyrics replace the art (inline, like Android)
-    @State private var immersive = false    // hide transport + bottom row, lyrics + title + slider only
+    @State private var lyricsMode = false
+    @State private var immersive = false
 
     private var design: PlayerDesign { PlayerDesign(rawValue: designRaw) ?? .classic }
 
     var body: some View {
-        // Smaller than before so the controls below get more room.
-        let art = min(UIScreen.main.bounds.width - 96, 320)
-
         ZStack {
-            // Dynamic gradient built from the song's color (amber fallback).
             LinearGradient(
                 colors: [player.artColor, player.artColor.opacity(0.45), .black],
                 startPoint: .top, endPoint: .bottom,
@@ -34,46 +30,16 @@ struct PlayerView: View {
             .ignoresSafeArea()
             .animation(.easeInOut(duration: 0.6), value: player.artColor)
 
-            // Full-art design: the artwork is the whole background.
             if design == .fullArt, !lyricsMode {
-                RemoteImage(url: player.current?.artURL(size: 1280)) { ArtPlaceholder() }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .ignoresSafeArea()
-                LinearGradient(colors: [.clear, .black.opacity(0.9)], startPoint: .center, endPoint: .bottom)
-                    .ignoresSafeArea()
+                fullArtBackground
             }
 
-            VStack(spacing: 0) {
-                header
-                Spacer(minLength: 12)
-                if lyricsMode {
-                    LyricsPane(player: player)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .transition(.opacity)
-                } else if design == .fullArt {
-                    Color.clear   // art fills the background instead
-                } else {
-                    stage(side: art)
-                }
-                Spacer(minLength: 18)
-                titleAndProgress
-                if !immersive {
-                    Spacer(minLength: 28)
-                    transport
-                    Spacer(minLength: 22)
-                    bottomRow
-                } else {
-                    Spacer(minLength: 16)
-                }
-            }
-            .padding(.top, 6)
-            .padding(.bottom, 16)
-            .foregroundStyle(.white)
-            .animation(.easeInOut(duration: 0.25), value: lyricsMode)
-            .animation(.easeInOut(duration: 0.25), value: immersive)
+            content
+                .padding(.bottom, 16)
+                .foregroundStyle(.white)
+                .animation(.easeInOut(duration: 0.25), value: lyricsMode)
+                .animation(.easeInOut(duration: 0.25), value: immersive)
         }
-        // Swipe down anywhere to close/minimize (child gestures like the slider win locally).
         .gesture(
             DragGesture(minimumDistance: 10)
                 .onEnded { g in
@@ -87,17 +53,108 @@ struct PlayerView: View {
         .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }
     }
 
-    // MARK: Header (chevron-down to close + centered "Now Playing")
+    // MARK: Layout dispatch
+
+    @ViewBuilder private var content: some View {
+        if lyricsMode {
+            standardLayout { LyricsPane(player: player).transition(.opacity) }
+        } else {
+            switch design {
+            case .ring:
+                RingPlayerLayout(
+                    player: player,
+                    onCollapse: { dismiss() },
+                    onOpenTheme: { showDesign = true },
+                    onOpenQueue: { showQueue = true },
+                    onOpenSleep: { showSleep = true },
+                    onShowLyrics: { lyricsMode = true },
+                    onMore: { showQueue = true },
+                    scrub: $scrub,
+                )
+            case .cassette:
+                CassettePlayerLayout(
+                    player: player,
+                    onLyrics: { lyricsMode = true },
+                    onQueue: { showQueue = true },
+                    onSleep: { showSleep = true },
+                    onTheme: { showDesign = true },
+                    onMore: { showQueue = true },
+                )
+            case .classic:
+                standardLayout {
+                    SquareArtwork(player: player, side: min(UIScreen.main.bounds.width - 96, 320))
+                }
+            case .record:
+                standardLayout {
+                    VinylTurntableView(
+                        artURL: player.current?.artURL(size: 1080),
+                        isPlaying: player.isPlaying,
+                        progress: player.progress,
+                        fallback: Blaze.gradient,
+                    )
+                    .padding(.horizontal, 32)
+                }
+            case .fullArt:
+                standardLayout { Color.clear }
+            }
+        }
+    }
+
+    /// Header · stage · title+progress · transport · bottom row.
+    @ViewBuilder private func standardLayout<Stage: View>(@ViewBuilder stage: () -> Stage) -> some View {
+        VStack(spacing: 0) {
+            header
+            Spacer(minLength: 12)
+            stage()
+            Spacer(minLength: 18)
+            titleAndProgress
+            if !immersive {
+                Spacer(minLength: 28)
+                transport
+                Spacer(minLength: 22)
+                bottomRow
+            } else {
+                Spacer(minLength: 16)
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    // MARK: Full-art background (5-stop scrim, ported exactly)
+
+    private var fullArtBackground: some View {
+        GeometryReader { geo in
+            RemoteImage(url: player.current?.artURL(size: 1280)) { ArtPlaceholder() }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+                .overlay(
+                    LinearGradient(stops: [
+                        .init(color: .black.opacity(0.40), location: 0.0),
+                        .init(color: .clear, location: 0.35),
+                        .init(color: .black.opacity(0.55), location: 0.60),
+                        .init(color: .black.opacity(0.80), location: 0.80),
+                        .init(color: .black.opacity(0.95), location: 1.0),
+                    ], startPoint: .top, endPoint: .bottom),
+                )
+        }
+        .ignoresSafeArea()
+    }
+
+    // MARK: Header
 
     private var header: some View {
         ZStack {
-            VStack(spacing: 2) {
+            VStack(spacing: 4) {
                 Text("Now Playing")
-                    .font(.system(size: 16, weight: .semibold))
-                Text(player.current?.artist ?? "")
-                    .font(.system(size: 13, weight: .medium))
-                    .opacity(0.8)
-                    .lineLimit(1)
+                    .font(.system(size: 16, weight: design == .fullArt ? .bold : .semibold))
+                    .shadow(color: design == .fullArt ? .black.opacity(0.7) : .clear, radius: 3, y: 2)
+                if let from = player.current?.artist, !from.isEmpty {
+                    Text(from)
+                        .font(.system(size: 13, weight: .medium))
+                        .opacity(0.8)
+                        .lineLimit(1)
+                        .shadow(color: design == .fullArt ? .black.opacity(0.7) : .clear, radius: 3, y: 2)
+                }
             }
             .padding(.horizontal, 48)
 
@@ -114,26 +171,7 @@ struct PlayerView: View {
         }
     }
 
-    // MARK: Artwork stage (per selected design)
-
-    @ViewBuilder private func stage(side: CGFloat) -> some View {
-        Group {
-            switch design {
-            case .classic: SquareArtwork(player: player, side: side)
-            case .ring: RingArtwork(player: player, side: side)
-            case .record: RecordArtwork(player: player, side: side)
-            case .cassette: CassetteArtwork(player: player, side: side)
-            case .fullArt: SquareArtwork(player: player, side: side)
-            }
-        }
-        .overlay {
-            if player.isLoading {
-                ProgressView().tint(.white).scaleEffect(1.3)
-            }
-        }
-    }
-
-    // MARK: Title + progress (tight group under the art)
+    // MARK: Title + progress
 
     private var titleAndProgress: some View {
         VStack(spacing: 0) {
@@ -149,7 +187,6 @@ struct PlayerView: View {
                 }
                 Spacer(minLength: 0)
 
-                // In lyrics mode the heart becomes a full-screen (immersive) toggle.
                 if lyricsMode {
                     Button { immersive.toggle() } label: {
                         Image(systemName: immersive
@@ -167,7 +204,6 @@ struct PlayerView: View {
                     }
                 }
 
-                // Immersive mode shows only the title + slider (+ the toggle above).
                 if !immersive {
                     Button { showDesign = true } label: {
                         Image(systemName: "paintpalette")
@@ -239,6 +275,8 @@ struct PlayerView: View {
         }
     }
 
+    // MARK: Transport — shuffle · prev · PLAY · next · repeat
+
     private var transport: some View {
         HStack(spacing: 0) {
             sideButton("shuffle", active: player.isShuffled) { player.toggleShuffle() }
@@ -251,7 +289,7 @@ struct PlayerView: View {
                     .frame(width: 72, height: 72)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: player.isPlaying ? 24 : 36))
-                    .animation(.easeInOut(duration: 0.15), value: player.isPlaying)
+                    .animation(.linear(duration: 0.09), value: player.isPlaying)
             }
             .padding(.horizontal, 8)
 
@@ -271,7 +309,7 @@ struct PlayerView: View {
         }
     }
 
-    // MARK: Bottom row (Queue · Sleep · Lyrics)
+    // MARK: Bottom row
 
     private var bottomRow: some View {
         HStack(spacing: 0) {
@@ -287,17 +325,15 @@ struct PlayerView: View {
     }
 
     private func bottomButton(_ icon: String, _ label: String,
-                              active: Bool = false, dimmed: Bool = false,
-                              action: @escaping () -> Void) -> some View {
+                              active: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: icon).font(.system(size: 20))
                 Text(label).font(.system(size: 11)).lineLimit(1)
             }
-            .foregroundStyle(active ? Blaze.amber : .white.opacity(dimmed ? 0.35 : 0.85))
+            .foregroundStyle(active ? Blaze.amber : .white.opacity(0.85))
             .frame(maxWidth: .infinity)
         }
-        .disabled(dimmed)
     }
 
     private var sleepLabel: String {

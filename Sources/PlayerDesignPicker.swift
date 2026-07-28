@@ -141,13 +141,39 @@ struct DesignPreview: View {
         .frame(width: 208, height: 430)
     }
 
+    /// Miniature of the real design, so the frame shows what you'll actually get.
     @ViewBuilder private var stage: some View {
         switch design {
-        case .classic: SquareArtwork(player: player, side: 128)
-        case .ring: RingArtwork(player: player, side: 132)
-        case .record: RecordArtwork(player: player, side: 132)
-        case .cassette: CassetteArtwork(player: player, side: 150)
-        case .fullArt: EmptyView()
+        case .classic:
+            SquareArtwork(player: player, side: 128)
+        case .ring:
+            SeekableAlbumRing(
+                artURL: player.current?.artURL(size: 480),
+                progress: player.progress,
+                ringColor: player.artColor,
+                trackColor: .white.opacity(0.16),
+                thumbColor: player.artColor,
+            ) { _ in }
+            .frame(width: 132, height: 132)
+            .allowsHitTesting(false)
+        case .record:
+            VinylTurntableView(
+                artURL: player.current?.artURL(size: 480),
+                isPlaying: player.isPlaying,
+                progress: player.progress,
+                fallback: Blaze.gradient,
+            )
+            .frame(width: 150, height: 150)
+        case .cassette:
+            CassetteTapeView(
+                isPlaying: player.isPlaying,
+                progress: player.progress,
+                accent: player.artColor,
+                artURL: player.current?.artURL(size: 300),
+            )
+            .frame(width: 168)
+        case .fullArt:
+            EmptyView()
         }
     }
 }
