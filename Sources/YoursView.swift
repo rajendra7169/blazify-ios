@@ -104,15 +104,7 @@ struct YoursView: View {
 
             Spacer(minLength: 0)
 
-            Button {
-                if auth.isLoggedIn { showAccount = true } else { showLogin = true }
-            } label: {
-                Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
-                    .font(.system(size: 26))
-                    .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
-            }
-
-            // Logo + wordmark, as Android labels it.
+            // Blaze Together sits left of the profile icon, which anchors the row.
             Button { showTogether = true } label: {
                 HStack(spacing: 6) {
                     Image(bundleImage: "blaze_logo")
@@ -130,6 +122,14 @@ struct YoursView: View {
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+
+            Button {
+                if auth.isLoggedIn { showAccount = true } else { showLogin = true }
+            } label: {
+                Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                    .font(.system(size: 26))
+                    .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)

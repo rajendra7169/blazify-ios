@@ -60,11 +60,14 @@ struct HomeView: View {
 
                         // Reaching this marker means we're near the end: pull the
                         // next page of shelves in, the way Android watches the last
-                        // visible index.
-                        if feed.continuation != nil {
+                        // visible index. The `.id` makes SwiftUI build a *new*
+                        // marker per token — otherwise the old one stays on screen,
+                        // never re-appears, and loading stops after one page.
+                        if let token = feed.continuation {
                             ProgressView()
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 24)
+                                .id(token)
                                 .onAppear { loadMore() }
                         }
                     }
@@ -120,8 +123,11 @@ struct HomeView: View {
         async let dynamicTask = Self.buildDynamicSections(seeds: seeds)
         let (f, m, dynamic) = await (feedTask, moodsTask, dynamicTask)
         await MainActor.run {
-            feed = f
-            moods = m.shuffled()
+            // A refresh fires several requests at once and YouTube sometimes
+            // answers the home browse with nothing. Keep what we already have
+            // rather than blanking the feed down to the local rails.
+            if !f.sections.isEmpty { feed = f }
+            if !m.isEmpty { moods = m.shuffled() }
             // Shuffle the running order too, so it isn't always Quick picks on
             // top — the section that leads changes between refreshes.
             localSections = (Self.buildLocalSections(player: player) + dynamic).shuffled()

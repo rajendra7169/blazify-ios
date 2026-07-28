@@ -10,11 +10,15 @@ struct SlimSlider: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
+            // Never let the fill get narrower than it is tall: below that a
+            // Capsule squashes into a sliver with a flat left edge instead of
+            // sitting rounded inside the track.
+            let filled = min(max(w * value, 8), w)
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.24))
                     .frame(height: 8)
                 Capsule().fill(active)
-                    .frame(width: min(max(0, w * value), w), height: 8)
+                    .frame(width: filled, height: 8)
             }
             .frame(maxHeight: .infinity, alignment: .center)
             .contentShape(Rectangle())

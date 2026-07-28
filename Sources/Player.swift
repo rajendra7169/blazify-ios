@@ -75,14 +75,20 @@ final class Player: ObservableObject {
         loadCurrent()
     }
 
-    func next() {
+    /// Advance if there's somewhere to go. Returns false at the end of the
+    /// queue so the caller can stop rather than sit there looking like it plays.
+    @discardableResult
+    func next() -> Bool {
         if index < queue.count - 1 {
             index += 1
             loadCurrent()
+            return true
         } else if repeatMode == .all {
             index = 0
             loadCurrent()
+            return true
         }
+        return false
     }
 
     // MARK: - Shuffle / repeat / favorite
@@ -330,7 +336,14 @@ final class Player: ObservableObject {
             updateNowPlaying()
             return
         }
-        next()
+        if !next() {
+            // Nothing left to play — settle on paused at the end of the track
+            // instead of leaving the transport showing "playing" forever.
+            avPlayer?.pause()
+            isPlaying = false
+            currentTime = duration
+            updateNowPlaying()
+        }
     }
 
     // MARK: - Load / stream
