@@ -190,8 +190,10 @@ struct SeekableAlbumRing: View {
         let shown = min(max(dragFraction ?? progress, 0), 1)
 
         ZStack {
+            // Inset past the ring's stroke as well as the gap, so the artwork
+            // sits cleanly inside the ring instead of touching it.
             RemoteImage(url: artURL) { ArtPlaceholder() }
-                .padding(artPadding)
+                .padding(artPadding + stroke)
                 .clipShape(Circle())
 
             GeometryReader { geo in
