@@ -87,6 +87,24 @@ struct MoodItem: Identifiable, Hashable {
     let params: String?
 }
 
+/// One shelf on an artist page — either a song list or a row of cards.
+struct ArtistSection: Identifiable {
+    let id = UUID()
+    let title: String
+    let songs: [Track]
+    let cards: [HomeItem]
+}
+
+/// An artist channel page.
+struct ArtistPage {
+    let name: String
+    let thumbnail: String
+    let subscribers: String
+    let sections: [ArtistSection]
+
+    var thumbnailURL: URL? { URL(string: thumbnail) }
+}
+
 /// The whole home payload: filter chips + content sections.
 struct HomeFeed {
     let chips: [HomeChip]

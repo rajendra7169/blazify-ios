@@ -178,6 +178,76 @@ enum YouTube {
         return out
     }
 
+    // MARK: - Artist
+
+    /// An artist channel page: header + the shelves below it.
+    static func artist(browseId: String) async -> ArtistPage? {
+        guard browseId.hasPrefix("UC") else { return nil }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "browseId": browseId]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return nil }
+
+        let header = json["header"] as? [String: Any]
+        let immersive = header?["musicImmersiveHeaderRenderer"] as? [String: Any]
+        let visual = header?["musicVisualHeaderRenderer"] as? [String: Any]
+        let plain = header?["musicHeaderRenderer"] as? [String: Any]
+
+        let name = [immersive, visual, plain].compactMap { $0 }
+            .map { runsFirst($0["title"]) }.first(where: { !$0.isEmpty }) ?? ""
+        guard !name.isEmpty else { return nil }
+
+        var thumb = musicThumb(immersive?["thumbnail"])
+        if thumb.isEmpty { thumb = musicThumb(visual?["foregroundThumbnail"]) }
+
+        // Subscriber count lives in one of three renderers depending on the variant.
+        var subscribers = ""
+        if let btn = (immersive?["subscriptionButton2"] as? [String: Any])?["subscribeButtonRenderer"] as? [String: Any] {
+            subscribers = runsFirst(btn["subscriberCountWithSubscribeText"])
+        }
+        if subscribers.isEmpty,
+           let btn = (immersive?["subscriptionButton"] as? [String: Any])?["subscribeButtonRenderer"] as? [String: Any] {
+            subscribers = runsFirst(btn["longSubscriberCountText"])
+            if subscribers.isEmpty { subscribers = runsFirst(btn["shortSubscriberCountText"]) }
+        }
+
+        // Shelves: musicShelfRenderer = song list, musicCarouselShelfRenderer = cards.
+        var sections: [ArtistSection] = []
+        if let contents = json["contents"] as? [String: Any],
+           let browse = contents["singleColumnBrowseResultsRenderer"] as? [String: Any],
+           let tabs = browse["tabs"] as? [[String: Any]],
+           let tab = tabs.first?["tabRenderer"] as? [String: Any],
+           let tabContent = tab["content"] as? [String: Any],
+           let list = tabContent["sectionListRenderer"] as? [String: Any],
+           let items = list["contents"] as? [[String: Any]] {
+            for section in items {
+                if let shelf = section["musicShelfRenderer"] as? [String: Any] {
+                    var tracks: [Track] = []
+                    var seen = Set<String>()
+                    collectTracks(shelf, into: &tracks, seen: &seen)
+                    if !tracks.isEmpty {
+                        sections.append(ArtistSection(title: runsFirst(shelf["title"]),
+                                                      songs: tracks, cards: []))
+                    }
+                } else if let shelf = section["musicCarouselShelfRenderer"] as? [String: Any] {
+                    let head = (shelf["header"] as? [String: Any])?["musicCarouselShelfBasicHeaderRenderer"] as? [String: Any]
+                    let cards = (shelf["contents"] as? [[String: Any]] ?? []).compactMap(parseHomeItem)
+                    if !cards.isEmpty {
+                        sections.append(ArtistSection(title: runsFirst(head?["title"]),
+                                                      songs: [], cards: cards))
+                    }
+                }
+            }
+        }
+
+        return ArtistPage(name: name, thumbnail: thumb, subscribers: subscribers, sections: sections)
+    }
+
     // MARK: - Moods & genres
 
     /// The "Moods & moments" / "Genres" tiles from FEmusic_moods_and_genres.

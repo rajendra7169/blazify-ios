@@ -7,6 +7,7 @@ import SwiftUI
 struct MiniPlayerView: View {
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
+    @State private var showArtist = false
 
     var body: some View {
         if let track = player.current {
@@ -25,7 +26,9 @@ struct MiniPlayerView: View {
 
                 Spacer(minLength: 8)
 
-                circleButton("person") { player.showFullPlayer = true }
+                circleButton("person", tint: track.artistId == nil ? .white.opacity(0.35) : .white) {
+                    if track.artistId != nil { showArtist = true }
+                }
                 circleButton(downloadIcon,
                              tint: downloads.isDownloaded(track.videoId) ? Blaze.amber : .white) {
                     downloads.toggle(track)
@@ -61,6 +64,11 @@ struct MiniPlayerView: View {
                         }
                     },
             )
+            .sheet(isPresented: $showArtist) {
+                if let id = track.artistId {
+                    ArtistView(browseId: id, player: player)
+                }
+            }
         }
     }
 
