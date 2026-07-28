@@ -111,7 +111,7 @@ struct AccountPopup: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(palette.onSurface)
                             .padding(.horizontal, 14).padding(.vertical, 8)
-                            .overlay(Capsule().stroke(.white.opacity(0.25), lineWidth: 1))
+                            .overlay(Capsule().stroke(palette.onSurface.opacity(0.25), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -221,7 +221,7 @@ struct AccountPopup: View {
             iconChip(icon)
             Text(title)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(auth.isLoggedIn ? .white : .white.opacity(0.4))
+                .foregroundStyle(auth.isLoggedIn ? palette.onSurface : palette.onSurface.opacity(0.35))
             Spacer(minLength: 0)
             Toggle("", isOn: isOn)
                 .labelsHidden()

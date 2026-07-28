@@ -232,7 +232,7 @@ struct SettingsView: View {
                 Text(label).font(.system(size: 11, weight: active ? .semibold : .regular))
                     .lineLimit(1)
             }
-            .foregroundStyle(active ? palette.accent : .white.opacity(0.8))
+            .foregroundStyle(active ? palette.accent : palette.onSurfaceVariant)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12).padding(.horizontal, 8)
             .background(active ? palette.accent.opacity(0.18) : palette.onSurface.opacity(0.06))
@@ -274,7 +274,7 @@ struct SettingsView: View {
                         .foregroundStyle(palette.onSurface).lineLimit(1)
                     Text(live ? row.subtitle : row.subtitle + " · coming soon")
                         .font(.system(size: 12.5))
-                        .foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                        .foregroundStyle(palette.onSurfaceVariant).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")

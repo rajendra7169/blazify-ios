@@ -186,7 +186,7 @@ struct TogetherView: View {
                         HStack(spacing: 10) {
                             Image(systemName: member.isHost ? "crown.fill" : "person.fill")
                                 .font(.system(size: 13))
-                                .foregroundStyle(member.isHost ? palette.accent : .white.opacity(0.6))
+                                .foregroundStyle(member.isHost ? palette.accent : palette.onSurfaceVariant)
                             Text(member.name).foregroundStyle(palette.onSurface).lineLimit(1)
                             Spacer()
                         }

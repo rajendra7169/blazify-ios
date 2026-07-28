@@ -7,11 +7,12 @@ struct SkeletonBox: View {
     var height: CGFloat = 14
     var corner: CGFloat = 6
 
+    @Environment(\.palette) private var palette
     @State private var bright = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: corner)
-            .fill(.white.opacity(bright ? 0.16 : 0.07))
+            .fill(palette.onSurface.opacity(bright ? 0.16 : 0.07))
             .frame(width: width, height: height)
             .onAppear {
                 withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
