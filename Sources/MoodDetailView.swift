@@ -2,6 +2,7 @@ import SwiftUI
 
 /// A Mood/Genre page: the playlists inside a mood tile, in a 2-column grid.
 struct MoodDetailView: View {
+    @ObservedObject private var theme = AppTheme.shared
     let mood: MoodItem
     @ObservedObject var player: Player
 
@@ -29,7 +30,7 @@ struct MoodDetailView: View {
                 .padding(16)
             }
         }
-        .background(Blaze.scaffold.ignoresSafeArea())
+        .background(theme.scaffold.ignoresSafeArea())
         .navigationTitle(mood.title)
         .navigationBarTitleDisplayMode(.inline)
         .task {

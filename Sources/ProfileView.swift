@@ -3,6 +3,7 @@ import SwiftUI
 /// Profile tab: signed-out shows a sign-in call to action; signed-in shows the
 /// account and a sign-out button.
 struct ProfileView: View {
+    @ObservedObject private var theme = AppTheme.shared
     @ObservedObject var player: Player
     @ObservedObject private var auth = Auth.shared
     @ObservedObject private var downloads = Downloads.shared
@@ -83,7 +84,7 @@ struct ProfileView: View {
             .padding(.top, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Blaze.scaffold.ignoresSafeArea())
+        .background(theme.scaffold.ignoresSafeArea())
         .sheet(isPresented: $showLogin) { LoginView() }
         .sheet(isPresented: $showDownloads) { DownloadsView(player: player) }
     }

@@ -3,6 +3,7 @@ import SwiftUI
 /// A playlist or album opened from a home card: big art header, Play / Shuffle
 /// actions, then the track list. Tapping any row starts playback from there.
 struct PlaylistView: View {
+    @ObservedObject private var theme = AppTheme.shared
     let item: HomeItem
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
@@ -83,7 +84,7 @@ struct PlaylistView: View {
             }
             .padding(.bottom, 24)
         }
-        .background(Blaze.scaffold.ignoresSafeArea())
+        .background(theme.scaffold.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }

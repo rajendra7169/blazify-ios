@@ -4,12 +4,13 @@ import SwiftUI
 /// (search), Favorites, Profile — with a custom amber bottom nav, the mini-player
 /// pinned above it, and the full player as a sheet.
 struct RootView: View {
+    @ObservedObject private var theme = AppTheme.shared
     @StateObject private var player = Player()
     @State private var tab: BlazeTab = .home
 
     var body: some View {
         ZStack {
-            Blaze.scaffold.ignoresSafeArea()
+            theme.scaffold.ignoresSafeArea()
 
             switch tab {
             case .home:
@@ -84,7 +85,7 @@ struct BlazeTabBar: View {
             }
         }
         .frame(height: 70)
-        .background(Blaze.surface)
+        .background(AppTheme.shared.surface)
         .overlay(alignment: .top) {
             Rectangle().fill(Color.white.opacity(0.06)).frame(height: 0.5)
         }

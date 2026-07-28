@@ -4,6 +4,7 @@ import SwiftUI
 /// home: custom header, amber greeting card, search pill, and horizontal rails
 /// of real YouTube Music recommendations.
 struct HomeView: View {
+    @ObservedObject private var theme = AppTheme.shared
     @ObservedObject var player: Player
     @ObservedObject private var auth = Auth.shared
 
@@ -44,7 +45,7 @@ struct HomeView: View {
                 }
                 .padding(.bottom, 24)
             }
-            .background(Blaze.scaffold.ignoresSafeArea())
+            .background(theme.scaffold.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: HomeItem.self) { item in
                 PlaylistView(item: item, player: player)

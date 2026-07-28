@@ -4,6 +4,7 @@ import SwiftUI
 /// over it, a shuffle CTA, then the artist's shelves — song lists inline, and
 /// albums / singles / similar artists as horizontal card rows.
 struct ArtistView: View {
+    @ObservedObject private var theme = AppTheme.shared
     let browseId: String
     @ObservedObject var player: Player
     @Environment(\.dismiss) private var dismiss
@@ -38,7 +39,7 @@ struct ArtistView: View {
                     .padding(.top, 80)
                 }
             }
-            .background(Blaze.scaffold.ignoresSafeArea())
+            .background(theme.scaffold.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

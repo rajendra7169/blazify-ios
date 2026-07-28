@@ -2,6 +2,7 @@ import SwiftUI
 
 /// The play queue: every track with the now-playing row highlighted; tap to jump.
 struct QueueView: View {
+    @ObservedObject private var theme = AppTheme.shared
     @ObservedObject var player: Player
     @Environment(\.dismiss) private var dismiss
 
@@ -47,7 +48,7 @@ struct QueueView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .background(Blaze.scaffold.ignoresSafeArea())
+            .background(theme.scaffold.ignoresSafeArea())
             .navigationTitle("Queue")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
