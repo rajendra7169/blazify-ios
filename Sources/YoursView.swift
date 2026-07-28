@@ -112,7 +112,7 @@ struct YoursView: View {
         return VStack(spacing: 16) {
             ForEach(Array(stride(from: 0, to: items.count, by: 3)), id: \.self) { start in
                 HStack(spacing: 16) {
-                    ForEach(start..<min(start + 3, items.count), id: \.self) { i in
+                    ForEach(Array(start..<min(start + 3, items.count)), id: \.self) { i in
                         let item = items[i]
                         BlazeCategoryTile(label: item.0, icon: item.1, color: item.2) {
                             switch item.0 {
@@ -164,7 +164,7 @@ struct YoursView: View {
             LazyHStack(spacing: 12) {
                 let songs = Array(PlayHistory.top.prefix(12))
                 let people = Array(artists.prefix(12))
-                ForEach(0..<max(songs.count, people.count), id: \.self) { i in
+                ForEach(Array(0..<max(songs.count, people.count)), id: \.self) { i in
                     if i < songs.count {
                         BlazeMusicCard(title: songs[i].title, subtitle: songs[i].artist,
                                        thumbnail: songs[i].thumbnail) {
