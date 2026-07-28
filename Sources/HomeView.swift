@@ -56,7 +56,7 @@ struct HomeView: View {
                 MoodDetailView(mood: mood, player: player)
             }
             .navigationDestination(for: SearchRoute.self) { _ in
-                SearchView(player: player)
+                SearchView(player: player, pushed: true)
             }
         }
         .task {
@@ -131,7 +131,12 @@ struct HomeView: View {
                     .frame(width: 30, height: 30)
                 Text("Blazify")
                     .font(.system(size: 24, weight: .bold))
+                    // Letter-spaced wordmark, so it reads B l a z i f y. The
+                    // trailing space keeps the last letter's tracking from
+                    // pushing the text off-centre.
+                    .tracking(4)
                     .foregroundStyle(palette.onSurface)
+                    .padding(.leading, 4)
             }
             Spacer()
             Button { showSettings = true } label: {

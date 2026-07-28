@@ -14,6 +14,7 @@ enum YouTube {
     private static let musicPlayer = "https://music.youtube.com/youtubei/v1/player?prettyPrint=false"
     private static let musicSearch = "https://music.youtube.com/youtubei/v1/search?prettyPrint=false"
     private static let musicBrowse = "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false"
+    private static let musicSuggest = "https://music.youtube.com/youtubei/v1/music/get_search_suggestions?prettyPrint=false"
     private static let musicAccount = "https://music.youtube.com/youtubei/v1/account/account_menu?prettyPrint=false"
     /// YouTube Music "Songs" search filter.
     private static let songsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
@@ -83,6 +84,45 @@ enum YouTube {
                                     userAgent: webUA, visitor: visitor, body: body)
         else { return [] }
         return parseMusicSearch(json)
+    }
+
+    /// Live search suggestions, as Android's `searchSuggestions()` does.
+    /// Section 0 is the completed query strings, section 1 is real songs — so
+    /// we can put playable results above text suggestions while you type.
+    static func searchSuggestions(_ query: String) async -> (queries: [String], songs: [Track]) {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return ([], []) }
+
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "input": q]
+
+        guard let json = await post(musicSuggest, name: "67",
+                                    version: remixVersion, userAgent: webUA,
+                                    visitor: visitor, body: body),
+              let sections = json["contents"] as? [[String: Any]]
+        else { return ([], []) }
+
+        var queries: [String] = []
+        var songs: [Track] = []
+        var seen = Set<String>()
+
+        for section in sections {
+            guard let contents = (section["searchSuggestionsSectionRenderer"] as? [String: Any])?["contents"]
+                    as? [[String: Any]] else { continue }
+            for item in contents {
+                if let renderer = item["searchSuggestionRenderer"] as? [String: Any] {
+                    let text = runsJoined(renderer["suggestion"])
+                    if !text.isEmpty { queries.append(text) }
+                } else if item["musicResponsiveListItemRenderer"] != nil {
+                    collectTracks(item, into: &songs, seen: &seen)
+                }
+            }
+        }
+        return (queries, songs)
     }
 
     private static func parseMusicSearch(_ json: [String: Any]) -> [Track] {
