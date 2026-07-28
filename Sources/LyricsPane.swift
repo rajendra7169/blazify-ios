@@ -314,15 +314,18 @@ struct LyricsPane: View {
             result = saved.result
             loading = false
             ready = true
-            // Still fetch the alternatives so the picker stays usable.
-            let found = await Lyrics.search(title: track.title, artist: track.artist,
-                                            videoId: track.videoId, duration: knownDuration)
+            // Still offer the alternatives; the player has usually warmed these
+            // already, so the picker fills in without another five-provider search.
+            let found = await LyricsCache.shared.warm(videoId: track.videoId, title: track.title,
+                                                      artist: track.artist, duration: knownDuration)
             await MainActor.run { candidates = found }
             return
         }
 
-        let found = await Lyrics.search(title: track.title, artist: track.artist,
-                                        videoId: track.videoId, duration: knownDuration)
+        // Warmed in the background when the song started, so this is usually a
+        // cache hit and the pane opens already populated.
+        let found = await LyricsCache.shared.warm(videoId: track.videoId, title: track.title,
+                                                  artist: track.artist, duration: knownDuration)
         await MainActor.run {
             candidates = found
             result = Lyrics.best(found)

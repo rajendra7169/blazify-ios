@@ -371,6 +371,7 @@ final class Player: ObservableObject {
             duration = dur
             isLoading = false
             playStream(local, realDuration: dur)
+            warmLyrics(for: track, duration: dur)
             prefetchNext()
             return
         }
@@ -378,6 +379,7 @@ final class Player: ObservableObject {
             duration = track.duration
             isLoading = false
             playStream(cached, realDuration: track.duration)
+            warmLyrics(for: track, duration: track.duration)
             prefetchNext()
             return
         }
@@ -398,6 +400,7 @@ final class Player: ObservableObject {
                                       artist: track.artist, thumbnail: track.thumbnail,
                                       duration: stream.duration, artistId: track.artistId)
                 AudioCache.shared.cache(cacheable, from: stream.url)
+                self.warmLyrics(for: track, duration: stream.duration)
                 self.prefetchNext()
             }
         }
@@ -406,8 +409,25 @@ final class Player: ObservableObject {
     private func prefetchNext() {
         let n = index + 1
         guard queue.indices.contains(n) else { return }
-        let vid = queue[n].videoId
+        let next = queue[n]
+        let vid = next.videoId
         Task.detached { _ = await YouTube.streamURL(for: vid) }
+        // Warm the next song's lyrics too, so they're ready the moment it starts.
+        Task.detached {
+            await LyricsCache.shared.warm(videoId: vid, title: next.title,
+                                          artist: next.artist, duration: next.duration)
+        }
+    }
+
+    /// Fetch the current song's lyrics in the background, so the lyrics pane
+    /// opens already populated instead of starting a five-provider search.
+    private func warmLyrics(for track: Track, duration: Double) {
+        let vid = track.videoId
+        guard !vid.isEmpty else { return }
+        Task.detached {
+            await LyricsCache.shared.warm(videoId: vid, title: track.title,
+                                          artist: track.artist, duration: duration)
+        }
     }
 
     private func playStream(_ url: URL, realDuration: Double) {

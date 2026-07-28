@@ -318,8 +318,8 @@ struct RingLyricsCard: View {
         loading = true
         lines = []
         guard let track = player.current else { loading = false; return }
-        let found = await Lyrics.search(title: track.title, artist: track.artist,
-                                        videoId: track.videoId, duration: knownDuration)
+        let found = await LyricsCache.shared.warm(videoId: track.videoId, title: track.title,
+                                                  artist: track.artist, duration: knownDuration)
         await MainActor.run {
             lines = Lyrics.best(found)?.lines ?? []
             loading = false
