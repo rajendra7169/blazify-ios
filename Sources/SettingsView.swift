@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var showDownloads = false
     @State private var showStorage = false
     @State private var showAbout = false
+    @State private var showLookFeel = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -23,7 +24,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about }
+        enum Action { case none, account, downloads, storage, about, lookFeel }
     }
 
     private struct Group: Identifiable {
@@ -38,7 +39,8 @@ struct SettingsView: View {
                 Row(icon: "paintbrush", title: "Appearance",
                     subtitle: "Theme, colors, dark mode, layout"),
                 Row(icon: "rectangle.on.rectangle", title: "Look & Feel",
-                    subtitle: "Preview and style theme and mini-player"),
+                    subtitle: "Preview and style theme, player, mini-player and home",
+                    action: .lookFeel),
             ]),
             Group(title: "Playback", rows: [
                 Row(icon: "play.circle", title: "Player and audio",
@@ -150,6 +152,17 @@ struct SettingsView: View {
             NavigationStack { AboutView() }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .fullScreenCover(isPresented: $showLookFeel) {
+            NavigationStack {
+                LookAndFeelView(player: player)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showLookFeel = false }
+                        }
+                    }
+            }
+            .preferredColorScheme(theme.preferredColorScheme)
         }
     }
 
@@ -281,6 +294,7 @@ struct SettingsView: View {
             case .downloads: showDownloads = true
             case .storage: showStorage = true
             case .about: showAbout = true
+            case .lookFeel: showLookFeel = true
             case .none: break
             }
         } label: {

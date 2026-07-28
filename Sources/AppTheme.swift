@@ -31,7 +31,9 @@ final class AppTheme: ObservableObject {
 
     /// Set by the player as artwork changes.
     private var artSeed: Color?
-    private var chosenSeed: Color
+    /// The fixed colour behind the palette swatches — exposed so Look & Feel
+    /// can show which one is selected.
+    private(set) var chosenSeed: Color
 
     private init() {
         pureBlack = UserDefaults.standard.object(forKey: "pureBlack") as? Bool ?? false
