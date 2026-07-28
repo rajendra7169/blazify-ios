@@ -613,13 +613,18 @@ enum YouTube {
 
     /// The user's saved/created playlists (FEmusic_liked_playlists grid).
     static func libraryPlaylists() async -> [HomeItem] {
+        await library("FEmusic_liked_playlists")
+    }
+
+    /// Any library shelf: liked playlists / albums / subscribed artists.
+    static func library(_ browseId: String) async -> [HomeItem] {
         guard Auth.shared.isLoggedIn else { return [] }
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": "en", "gl": "US"]
         if let visitor { client["visitorData"] = visitor }
-        let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_liked_playlists"]
+        let body: [String: Any] = ["context": ["client": client], "browseId": browseId]
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
                                     userAgent: webUA, visitor: visitor, body: body, login: true)
         else { return [] }

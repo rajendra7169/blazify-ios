@@ -91,6 +91,18 @@ final class Auth: ObservableObject {
         return true
     }
 
+    /// The credential blob Android shows behind "tap to show token" — your own
+    /// session, on your own device.
+    func tokenBlob() -> String {
+        """
+        ***INNERTUBE COOKIE*** =\(cookie ?? "")
+        ***VISITOR DATA*** =\(visitorData ?? "")
+        ***DATASYNC ID*** =\(dataSyncId ?? "")
+        ***ACCOUNT NAME*** =\(accountName ?? "")
+        ***ACCOUNT EMAIL*** =\(accountEmail ?? "")
+        """
+    }
+
     func signOut() {
         cookie = nil
         dataSyncId = nil

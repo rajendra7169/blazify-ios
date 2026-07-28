@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var loading = true
     @State private var path = NavigationPath()
     @State private var showLogin = false
+    @State private var showAccount = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -64,6 +65,10 @@ struct HomeView: View {
             Task { await load() }   // swap to (or from) the personalized feed
         }
         .sheet(isPresented: $showLogin) { LoginView() }
+        .fullScreenCover(isPresented: $showAccount) {
+            AccountPopup(player: player, isPresented: $showAccount)
+                .presentationBackground(.clear)
+        }
     }
 
     private func tap(_ item: HomeItem) {
@@ -106,7 +111,7 @@ struct HomeView: View {
     private var header: some View {
         HStack {
             Button {
-                if !auth.isLoggedIn { showLogin = true }
+                if auth.isLoggedIn { showAccount = true } else { showLogin = true }
             } label: {
                 Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
                     .font(.system(size: 26))
