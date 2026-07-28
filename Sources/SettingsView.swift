@@ -131,6 +131,11 @@ struct SettingsView: View {
                 }
             }
         }
+        // A sheet is its own presentation: the root's colour scheme and palette
+        // don't reliably follow it in. Without these, changing Light/Dark from
+        // inside Settings looks like it did nothing at all.
+        .preferredColorScheme(theme.preferredColorScheme)
+        .environment(\.palette, Palette(dark: theme.resolvedDark))
         .sheet(isPresented: $showLogin) { LoginView() }
         .sheet(isPresented: $showAccount) { AccountLibraryView(player: player) }
         .sheet(isPresented: $showDownloads) { DownloadsView(player: player) }
