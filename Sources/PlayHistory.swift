@@ -109,6 +109,25 @@ enum PlayHistory {
     private static let tracksKey = "playedTracks"
     private static let limit = 3000
 
+    // MARK: Cache
+    //
+    // These are read from view bodies — sort comparators, per-row labels, rail
+    // builders — so decoding the JSON on every access would mean thousands of
+    // decodes per frame and a visibly stalled UI. Decode once, reuse until a
+    // play is recorded.
+
+    private static var cachedEvents: [PlayEvent]?
+    private static var cachedTracks: [Track]?
+    private static var cachedById: [String: Track]?
+    private static var cachedCounts: [String: [String: Int]] = [:]
+
+    private static func invalidate() {
+        cachedEvents = nil
+        cachedTracks = nil
+        cachedById = nil
+        cachedCounts = [:]
+    }
+
     // MARK: Recording
 
     static func record(_ track: Track) {
@@ -127,25 +146,55 @@ enum PlayHistory {
         if let data = try? JSONEncoder().encode(known) {
             UserDefaults.standard.set(data, forKey: tracksKey)
         }
+        invalidate()
     }
 
     // MARK: Reading
 
     static var events: [PlayEvent] {
+        if let cachedEvents { return cachedEvents }
         guard let data = UserDefaults.standard.data(forKey: eventsKey),
-              let list = try? JSONDecoder().decode([PlayEvent].self, from: data) else { return [] }
+              let list = try? JSONDecoder().decode([PlayEvent].self, from: data) else {
+            cachedEvents = []
+            return []
+        }
+        cachedEvents = list
         return list
     }
 
     /// Every track we've ever played, newest first.
     static var tracks: [Track] {
+        if let cachedTracks { return cachedTracks }
         guard let data = UserDefaults.standard.data(forKey: tracksKey),
-              let list = try? JSONDecoder().decode([Track].self, from: data) else { return [] }
+              let list = try? JSONDecoder().decode([Track].self, from: data) else {
+            cachedTracks = []
+            return []
+        }
+        cachedTracks = list
         return list
     }
 
     private static var byId: [String: Track] {
-        Dictionary(tracks.map { ($0.videoId, $0) }, uniquingKeysWith: { a, _ in a })
+        if let cachedById { return cachedById }
+        let map = Dictionary(tracks.map { ($0.videoId, $0) }, uniquingKeysWith: { a, _ in a })
+        cachedById = map
+        return map
+    }
+
+    /// Play counts within a period, computed once per period.
+    private static func counts(_ period: StatPeriod) -> [String: Int] {
+        if let hit = cachedCounts[period.rawValue] { return hit }
+        let since = period.since
+        var out: [String: Int] = [:]
+        for event in events where event.at >= since {
+            out[event.videoId, default: 0] += 1
+        }
+        // Fall back to the legacy counter so existing installs aren't empty.
+        if out.isEmpty, period == .all {
+            out = UserDefaults.standard.dictionary(forKey: "playCounts") as? [String: Int] ?? [:]
+        }
+        cachedCounts[period.rawValue] = out
+        return out
     }
 
     /// Distinct songs, most recently played first.
@@ -168,25 +217,15 @@ enum PlayHistory {
     /// Most-played songs within a period — what Android's Trending rail and the
     /// Stats screen both show.
     static func mostPlayed(_ period: StatPeriod = .all, limit: Int = 50) -> [Track] {
-        let since = period.since
-        var counts: [String: Int] = [:]
-        for event in events where event.at >= since {
-            counts[event.videoId, default: 0] += 1
-        }
-        // Fall back to legacy counters so existing installs aren't suddenly empty.
-        if counts.isEmpty, period == .all {
-            counts = UserDefaults.standard.dictionary(forKey: "playCounts") as? [String: Int] ?? [:]
-        }
         let lookup = byId
-        return counts.sorted { $0.value > $1.value }
+        return counts(period).sorted { $0.value > $1.value }
             .prefix(limit)
             .compactMap { lookup[$0.key] }
     }
 
     /// Play count for one song within a period, for the Stats list.
     static func playCount(_ videoId: String, in period: StatPeriod = .all) -> Int {
-        let since = period.since
-        return events.filter { $0.videoId == videoId && $0.at >= since }.count
+        counts(period)[videoId] ?? 0
     }
 
     /// The most-played artists in a period, derived from the songs' credits.
@@ -239,5 +278,6 @@ enum PlayHistory {
         UserDefaults.standard.removeObject(forKey: eventsKey)
         UserDefaults.standard.removeObject(forKey: tracksKey)
         UserDefaults.standard.removeObject(forKey: "playCounts")
+        invalidate()
     }
 }

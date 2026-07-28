@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// How a song list is ordered. Mirrors Android's `AutoPlaylistSongSortType`.
 enum SongSort: String, CaseIterable, Identifiable {

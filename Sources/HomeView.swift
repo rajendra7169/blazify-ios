@@ -114,9 +114,10 @@ struct HomeView: View {
 
     private func load(reshuffle: Bool = false) async {
         if !reshuffle { loading = true }   // pull-to-refresh has its own spinner
+        let seeds = Self.seedPool(player: player)
         async let feedTask = YouTube.home(params: selectedChip?.params)
         async let moodsTask = YouTube.moods()
-        async let dynamicTask = Self.buildDynamicSections(player: player)
+        async let dynamicTask = Self.buildDynamicSections(seeds: seeds)
         let (f, m, dynamic) = await (feedTask, moodsTask, dynamicTask)
         await MainActor.run {
             feed = f
@@ -148,13 +149,18 @@ struct HomeView: View {
     /// seed's Related page gives fresh songs, and the section is titled after the
     /// seed — so both the content and the headings change on every refresh, which
     /// is what Android's Daily Discover and "Similar to X" do.
-    private static func buildDynamicSections(player: Player) async -> [HomeSection] {
+    /// Pick the seeds on the main actor — `favoriteTracks` and the PlayHistory
+    /// cache are both main-thread state, so the async fan-out must not touch them.
+    @MainActor
+    private static func seedPool(player: Player) -> [Track] {
         var pool = player.favoriteTracks + PlayHistory.recent
         var seenIds = Set<String>()
         pool = pool.filter { !$0.videoId.isEmpty && seenIds.insert($0.videoId).inserted }
-        guard !pool.isEmpty else { return [] }
+        return Array(pool.shuffled().prefix(3))
+    }
 
-        let seeds = Array(pool.shuffled().prefix(3))
+    private static func buildDynamicSections(seeds: [Track]) async -> [HomeSection] {
+        guard !seeds.isEmpty else { return [] }
         var sections: [HomeSection] = []
         var discover: [HomeItem] = []
 
@@ -238,7 +244,7 @@ struct HomeView: View {
                 Image(bundleImage: "blaze_logo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 30, height: 30)
+                    .frame(width: 38, height: 38)
                 Text("Blazify")
                     .font(.system(size: 24, weight: .bold))
                     // Letter-spaced wordmark, so it reads B l a z i f y. The

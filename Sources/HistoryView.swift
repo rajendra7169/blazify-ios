@@ -40,12 +40,7 @@ struct HistoryView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if auth.isLoggedIn {
-                    sourcePicker
-                } else {
-                    // Signed out there's no account history, so don't offer it.
-                    Color.clear.frame(height: 0).onAppear { source = .local }
-                }
+                if auth.isLoggedIn { sourcePicker }
 
                 if loading && source == .remote {
                     ForEach(0..<6, id: \.self) { _ in
@@ -119,6 +114,12 @@ struct HistoryView: View {
                 .padding(.bottom, 8)
                 .background(palette.scaffold)
             }
+        }
+        .task(id: auth.isLoggedIn) {
+            // Signed out there's no account history — show the device log and
+            // hide the switch. Done here rather than from a zero-height view's
+            // onAppear, which a lazy stack may never run.
+            if !auth.isLoggedIn { source = .local }
         }
         .task(id: source) {
             guard source == .remote, remote.isEmpty else { return }

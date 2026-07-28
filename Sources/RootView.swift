@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// App shell: the four-tab home experience from BlazePlayer — Home feed, Explore
 /// (search), Favorites, Profile — with a custom amber bottom nav, the mini-player
