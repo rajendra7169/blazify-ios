@@ -12,21 +12,32 @@ struct FavoritesView: View {
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
+    /// Locally favourited tracks merged with the account's Liked songs.
+    private var likedAll: [Track] {
+        var seen = Set(player.favoriteTracks.map(\.videoId))
+        var out = player.favoriteTracks
+        for t in liked where !seen.contains(t.videoId) {
+            seen.insert(t.videoId)
+            out.append(t)
+        }
+        return out
+    }
+
     var body: some View {
         NavigationStack {
             Group {
-                if !auth.isLoggedIn {
+                if !auth.isLoggedIn, player.favoriteTracks.isEmpty {
                     signedOut
                 } else if loading {
                     ProgressView().tint(Blaze.amber)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if playlists.isEmpty, liked.isEmpty {
-                    Text("No playlists yet")
+                } else if playlists.isEmpty, likedAll.isEmpty {
+                    Text("No favourites yet")
                         .foregroundStyle(.white.opacity(0.6))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
-                        if !liked.isEmpty {
+                        if !likedAll.isEmpty {
                             NavigationLink(value: LikedRoute()) {
                                 HStack(spacing: 14) {
                                     ZStack {
@@ -41,7 +52,7 @@ struct FavoritesView: View {
                                         Text("Liked songs")
                                             .font(.system(size: 16, weight: .semibold))
                                             .foregroundStyle(.white)
-                                        Text("\(liked.count) songs")
+                                        Text("\(likedAll.count) songs")
                                             .font(.system(size: 13))
                                             .foregroundStyle(.white.opacity(0.6))
                                     }
@@ -74,7 +85,7 @@ struct FavoritesView: View {
                 PlaylistView(item: item, player: player)
             }
             .navigationDestination(for: LikedRoute.self) { _ in
-                TrackListView(title: "Liked songs", tracks: liked, player: player)
+                TrackListView(title: "Liked songs", tracks: likedAll, player: player)
             }
         }
         .sheet(isPresented: $showLogin) { LoginView() }

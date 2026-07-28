@@ -1,7 +1,7 @@
 import Foundation
 
 /// A playable song, as returned by the backend's /search and used throughout the app.
-struct Track: Identifiable, Equatable {
+struct Track: Identifiable, Equatable, Codable {
     let videoId: String
     let title: String
     let artist: String

@@ -27,6 +27,8 @@ final class Player: ObservableObject {
     @Published var isShuffled = false
     @Published var repeatMode: RepeatMode = .off
     @Published var favorites: Set<String> = []
+    /// Full tracks for the Favorites tab (works offline and signed out).
+    @Published var favoriteTracks: [Track] = []
     /// Seed color for the player's dynamic gradient (from album art; amber fallback).
     @Published var artColor: Color = Blaze.amber
 
@@ -110,25 +112,36 @@ final class Player: ObservableObject {
     }
 
     func toggleFavorite() {
-        guard let id = current?.videoId else { return }
-        setFavorite(id, liked: !favorites.contains(id))
+        guard let track = current else { return }
+        setFavorite(track, liked: !favorites.contains(track.videoId))
     }
 
     /// Optimistic local toggle, mirrored to the YouTube library when signed in
-    /// (and reverted if the call fails).
-    func setFavorite(_ id: String, liked: Bool) {
-        if liked { favorites.insert(id) } else { favorites.remove(id) }
-        saveFavorites()
+    /// (and reverted if the call fails). The whole track is kept so the
+    /// Favorites tab works offline and signed out.
+    func setFavorite(_ track: Track, liked: Bool) {
+        let id = track.videoId
+        apply(track, liked: liked)
         guard Auth.shared.isLoggedIn else { return }
         Task {
             let ok = await YouTube.rateSong(videoId: id, like: liked)
             if !ok {
-                await MainActor.run {
-                    if liked { self.favorites.remove(id) } else { self.favorites.insert(id) }
-                    self.saveFavorites()
-                }
+                await MainActor.run { self.apply(track, liked: !liked) }
             }
         }
+    }
+
+    private func apply(_ track: Track, liked: Bool) {
+        if liked {
+            favorites.insert(track.videoId)
+            if !favoriteTracks.contains(where: { $0.videoId == track.videoId }) {
+                favoriteTracks.insert(track, at: 0)
+            }
+        } else {
+            favorites.remove(track.videoId)
+            favoriteTracks.removeAll { $0.videoId == track.videoId }
+        }
+        saveFavorites()
     }
 
     var isCurrentFavorite: Bool {
@@ -142,18 +155,24 @@ final class Player: ObservableObject {
         let liked = await YouTube.likedSongs()
         guard !liked.isEmpty else { return }
         await MainActor.run {
-            self.favorites.formUnion(liked.map(\.videoId))
+            for track in liked where !self.favorites.contains(track.videoId) {
+                self.favorites.insert(track.videoId)
+                self.favoriteTracks.append(track)
+            }
             self.saveFavorites()
         }
     }
 
     private func saveFavorites() {
-        UserDefaults.standard.set(Array(favorites), forKey: "favoriteVideoIds")
+        guard let data = try? JSONEncoder().encode(favoriteTracks) else { return }
+        UserDefaults.standard.set(data, forKey: "favoriteTracks")
     }
 
     private func loadFavorites() {
-        let saved = UserDefaults.standard.stringArray(forKey: "favoriteVideoIds") ?? []
-        favorites = Set(saved)
+        guard let data = UserDefaults.standard.data(forKey: "favoriteTracks"),
+              let saved = try? JSONDecoder().decode([Track].self, from: data) else { return }
+        favoriteTracks = saved
+        favorites = Set(saved.map(\.videoId))
     }
 
     /// Jump to a specific queue position (from the Queue screen).
