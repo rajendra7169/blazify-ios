@@ -293,17 +293,73 @@ enum YouTube {
     }
 
     private static func findLyricsBrowseId(_ node: Any) -> String? {
+        findBrowseId(node, prefix: "MPLY")
+    }
+
+    /// First `browseId` under this node with the given prefix — the tabs hanging
+    /// off `next` are identified that way (MPLY = lyrics, MPTR = related).
+    private static func findBrowseId(_ node: Any, prefix: String) -> String? {
         if let dict = node as? [String: Any] {
-            if let id = dict["browseId"] as? String, id.hasPrefix("MPLY") { return id }
+            if let id = dict["browseId"] as? String, id.hasPrefix(prefix) { return id }
             for (_, v) in dict {
-                if let found = findLyricsBrowseId(v) { return found }
+                if let found = findBrowseId(v, prefix: prefix) { return found }
             }
         } else if let arr = node as? [Any] {
             for v in arr {
-                if let found = findLyricsBrowseId(v) { return found }
+                if let found = findBrowseId(v, prefix: prefix) { return found }
             }
         }
         return nil
+    }
+
+    // MARK: - Related (what powers the ever-changing home rails)
+
+    /// The "Related" tab for a song: "You might also like", other performances,
+    /// similar artists and so on. Android seeds Daily Discover and "Similar to X"
+    /// from this, which is why its home feed differs on every refresh.
+    static func related(videoId: String) async -> [HomeSection] {
+        guard !videoId.isEmpty else { return [] }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+
+        let nextURL = "https://music.youtube.com/youtubei/v1/next?prettyPrint=false"
+        guard let nextJSON = await post(nextURL, name: "67", version: remixVersion,
+                                        userAgent: webUA, visitor: visitor,
+                                        body: ["context": ["client": client], "videoId": videoId]),
+              let browseId = findBrowseId(nextJSON, prefix: "MPTR")
+        else { return [] }
+
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor,
+                                    body: ["context": ["client": client], "browseId": browseId])
+        else { return [] }
+
+        var out: [HomeSection] = []
+        collectShelves(json, into: &out)
+        return out
+    }
+
+    /// Every carousel shelf anywhere under this node, in order.
+    private static func collectShelves(_ node: Any, into out: inout [HomeSection]) {
+        if let dict = node as? [String: Any] {
+            if let shelf = dict["musicCarouselShelfRenderer"] as? [String: Any] {
+                let header = (shelf["header"] as? [String: Any])?["musicCarouselShelfBasicHeaderRenderer"] as? [String: Any]
+                let contentsArr = shelf["contents"] as? [[String: Any]] ?? []
+                let isSongs = contentsArr.first?["musicResponsiveListItemRenderer"] != nil
+                let items = contentsArr.compactMap(parseHomeItem)
+                if !items.isEmpty {
+                    out.append(HomeSection(title: runsFirst(header?["title"]),
+                                           items: items, isSongs: isSongs))
+                }
+                return
+            }
+            for (_, v) in dict { collectShelves(v, into: &out) }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectShelves(v, into: &out) }
+        }
     }
 
     // MARK: - Artist

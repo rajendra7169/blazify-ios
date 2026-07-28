@@ -116,11 +116,14 @@ struct HomeView: View {
         if !reshuffle { loading = true }   // pull-to-refresh has its own spinner
         async let feedTask = YouTube.home(params: selectedChip?.params)
         async let moodsTask = YouTube.moods()
-        let (f, m) = await (feedTask, moodsTask)
+        async let dynamicTask = Self.buildDynamicSections(player: player)
+        let (f, m, dynamic) = await (feedTask, moodsTask, dynamicTask)
         await MainActor.run {
             feed = f
             moods = m.shuffled()
-            localSections = Self.buildLocalSections(player: player)
+            // Shuffle the running order too, so it isn't always Quick picks on
+            // top — the section that leads changes between refreshes.
+            localSections = (Self.buildLocalSections(player: player) + dynamic).shuffled()
             loading = false
         }
     }
@@ -139,6 +142,42 @@ struct HomeView: View {
                 loadingMore = false
             }
         }
+    }
+
+    /// Rails generated from a handful of *randomly chosen* songs you like. Each
+    /// seed's Related page gives fresh songs, and the section is titled after the
+    /// seed — so both the content and the headings change on every refresh, which
+    /// is what Android's Daily Discover and "Similar to X" do.
+    private static func buildDynamicSections(player: Player) async -> [HomeSection] {
+        var pool = player.favoriteTracks + PlayHistory.recent
+        var seenIds = Set<String>()
+        pool = pool.filter { !$0.videoId.isEmpty && seenIds.insert($0.videoId).inserted }
+        guard !pool.isEmpty else { return [] }
+
+        let seeds = Array(pool.shuffled().prefix(3))
+        var sections: [HomeSection] = []
+        var discover: [HomeItem] = []
+
+        await withTaskGroup(of: (Track, [HomeSection]).self) { group in
+            for seed in seeds {
+                group.addTask { (seed, await YouTube.related(videoId: seed.videoId)) }
+            }
+            for await (seed, related) in group {
+                guard let songs = related.first(where: { $0.isSongs }), songs.items.count >= 4 else { continue }
+                let picked = songs.items.shuffled()
+                discover += picked.prefix(5)
+                sections.append(HomeSection(title: "Similar to \(seed.title)",
+                                            items: Array(picked.prefix(12)), isSongs: false))
+            }
+        }
+
+        if discover.count >= 4 {
+            var unique = Set<String>()
+            let mixed = discover.shuffled().filter { unique.insert($0.videoId ?? $0.title).inserted }
+            sections.insert(HomeSection(title: "Daily discover",
+                                        items: Array(mixed.prefix(16)), isSongs: true), at: 0)
+        }
+        return sections
     }
 
     /// Rails built from what you've actually listened to, shuffled so the home
