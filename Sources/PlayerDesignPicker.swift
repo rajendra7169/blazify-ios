@@ -39,7 +39,7 @@ struct PlayerDesignPicker: View {
 
             // The mini player follows you everywhere, including here.
             if player.hasTrack {
-                MiniPlayerView(player: player)
+                MiniPlayerView(player: player) { dismiss() }
                     .padding(.bottom, 8)
             }
         }
@@ -353,6 +353,7 @@ private struct ClassicPreview: View {
             PreviewQueuePeek()
         }
         .padding(16)
+        .padding(.top, 20)   // clear the Dynamic Island pill
     }
 }
 
@@ -435,7 +436,7 @@ private struct RingPreview: View {
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 16, topTrailingRadius: 16))
         }
         .padding(.horizontal, 14)
-        .padding(.top, 14)
+        .padding(.top, 34)   // clear the Dynamic Island pill
     }
 }
 
@@ -467,6 +468,7 @@ private struct RecordPreview: View {
             PreviewQueuePeek()
         }
         .padding(16)
+        .padding(.top, 20)   // clear the Dynamic Island pill
     }
 }
 
@@ -553,6 +555,7 @@ private struct CassettePreview: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .padding(16)
+        .padding(.top, 20)
     }
 
     private func key<C: View>(width: CGFloat, height: CGFloat = 34, bg: Color,
@@ -597,7 +600,7 @@ private struct FullArtPreview: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.75), radius: 3, y: 2)
-                    .padding(.top, 12)
+                    .padding(.top, 30)   // clear the Dynamic Island pill
                 Spacer()
             }
 

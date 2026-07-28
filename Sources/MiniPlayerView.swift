@@ -6,6 +6,9 @@ import SwiftUI
 /// change track; tap it to open the full player.
 struct MiniPlayerView: View {
     @ObservedObject var player: Player
+    /// Overrides what tapping the card does. Screens presented ON TOP of the
+    /// full player pass a dismiss, since the player is already behind them.
+    var onOpenPlayer: (() -> Void)?
     @State private var showArtist = false
     @State private var showAddToPlaylist = false
     @State private var resolvedArtistId: String?
@@ -51,7 +54,7 @@ struct MiniPlayerView: View {
             )
             .padding(.horizontal, 12)
             .contentShape(Rectangle())
-            .onTapGesture { player.showFullPlayer = true }
+            .onTapGesture { openPlayer() }
             .gesture(
                 DragGesture(minimumDistance: 30)
                     .onEnded { g in
@@ -70,6 +73,14 @@ struct MiniPlayerView: View {
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistSheet(track: track)
             }
+        }
+    }
+
+    private func openPlayer() {
+        if let onOpenPlayer {
+            onOpenPlayer()
+        } else {
+            player.showFullPlayer = true
         }
     }
 
