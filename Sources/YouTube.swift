@@ -398,13 +398,16 @@ enum YouTube {
     /// All songs inside a playlist or album (`browseId` from a home card).
     static func playlist(browseId: String) async -> [Track] {
         guard !browseId.isEmpty else { return [] }
-        let visitor = await visitorData()
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": "en", "gl": "US"]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": browseId]
+        // Signed in: the user's own playlists are private, so an unauthenticated
+        // browse comes back as an empty shell ("Nothing to play here").
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
-                                    userAgent: webUA, visitor: visitor, body: body)
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
         else { return [] }
 
         var out: [Track] = []
