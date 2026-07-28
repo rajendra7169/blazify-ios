@@ -7,7 +7,6 @@ import UIKit
 /// RECORD and FULL_ART share the standard control stack under different stages.
 struct PlayerView: View {
     @ObservedObject var player: Player
-    @ObservedObject private var downloads = Downloads.shared
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("playerDesign") private var designRaw = PlayerDesign.classic.rawValue
@@ -15,6 +14,7 @@ struct PlayerView: View {
     @State private var showQueue = false
     @State private var showSleep = false
     @State private var showDesign = false
+    @State private var showMenu = false
     @State private var lyricsMode = false
     @State private var immersive = false
 
@@ -51,6 +51,14 @@ struct PlayerView: View {
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
         .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }
+        .sheet(isPresented: $showMenu) {
+            PlayerMenuSheet(
+                player: player,
+                onQueue: { showQueue = true },
+                onSleep: { showSleep = true },
+                onLyrics: { lyricsMode = true },
+            )
+        }
     }
 
     // MARK: Layout dispatch
@@ -68,7 +76,7 @@ struct PlayerView: View {
                     onOpenQueue: { showQueue = true },
                     onOpenSleep: { showSleep = true },
                     onShowLyrics: { lyricsMode = true },
-                    onMore: { showQueue = true },
+                    onMore: { showMenu = true },
                     scrub: $scrub,
                 )
             case .cassette:
@@ -78,7 +86,7 @@ struct PlayerView: View {
                     onQueue: { showQueue = true },
                     onSleep: { showSleep = true },
                     onTheme: { showDesign = true },
-                    onMore: { showQueue = true },
+                    onMore: { showMenu = true },
                 )
             case .classic:
                 standardLayout {
@@ -214,31 +222,12 @@ struct PlayerView: View {
                             .clipShape(Circle())
                     }
 
-                    Menu {
-                        let dState = downloads.state(player.current?.videoId ?? "")
-                        Button {
-                            if let t = player.current { downloads.toggle(t) }
-                        } label: {
-                            Label(dState == .done ? "Remove download"
-                                    : dState == .downloading ? "Downloading…" : "Download for offline",
-                                  systemImage: dState == .done ? "arrow.down.circle.fill"
-                                    : dState == .downloading ? "hourglass" : "arrow.down.circle")
-                        }
-                        .disabled(dState == .downloading)
-
-                        if let url = shareURL {
-                            ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
-                        }
-                        Button { player.toggleFavorite() } label: {
-                            Label(player.isCurrentFavorite ? "Remove from Favorites" : "Add to Favorites",
-                                  systemImage: "heart")
-                        }
-                    } label: {
+                    Button { showMenu = true } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.black)
                             .frame(width: 40, height: 40)
-                            .background(Color.white.opacity(0.15))
+                            .background(Color.white)
                             .clipShape(Circle())
                     }
                 }
@@ -342,8 +331,4 @@ struct PlayerView: View {
         return "Sleep timer"
     }
 
-    private var shareURL: URL? {
-        guard let id = player.current?.videoId else { return nil }
-        return URL(string: "https://music.youtube.com/watch?v=\(id)")
-    }
 }
