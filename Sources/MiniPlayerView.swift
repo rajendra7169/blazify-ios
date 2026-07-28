@@ -27,11 +27,13 @@ struct MiniPlayerView: View {
 
                 Spacer(minLength: 8)
 
-                circleButton("person") { openArtist(track) }
-                circleButton("plus") { showAddToPlaylist = true }
-                circleButton(player.isCurrentFavorite ? "heart.fill" : "heart",
-                             tint: player.isCurrentFavorite ? .red : .white) {
-                    player.toggleFavorite()
+                HStack(spacing: 6) {
+                    circleButton("person") { openArtist(track) }
+                    circleButton("plus") { showAddToPlaylist = true }
+                    circleButton(player.isCurrentFavorite ? "heart.fill" : "heart",
+                                 tint: player.isCurrentFavorite ? .red : .white) {
+                        player.toggleFavorite()
+                    }
                 }
             }
             .padding(8)
@@ -119,9 +121,9 @@ struct MiniPlayerView: View {
                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 17))
+                .font(.system(size: 15))
                 .foregroundStyle(tint)
-                .frame(width: 40, height: 40)
+                .frame(width: 36, height: 36)
                 .overlay(Circle().stroke(.white.opacity(0.18), lineWidth: 1))
         }
         .buttonStyle(.plain)
