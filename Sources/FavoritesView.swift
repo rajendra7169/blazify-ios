@@ -138,6 +138,7 @@ struct TrackListView: View {
     let title: String
     let tracks: [Track]
     @ObservedObject var player: Player
+    @ObservedObject private var theme = AppTheme.shared
 
     var body: some View {
         List {
