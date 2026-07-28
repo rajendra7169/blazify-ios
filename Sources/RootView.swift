@@ -17,8 +17,8 @@ struct RootView: View {
                 HomeView(player: player)
             case .explore:
                 NavigationStack { SearchView(player: player) }
-            case .favorites:
-                FavoritesView(player: player)
+            case .yours:
+                YoursView(player: player)
             case .library:
                 LibraryView(player: player)
             }
@@ -41,13 +41,13 @@ struct RootView: View {
 }
 
 enum BlazeTab: CaseIterable {
-    case home, explore, favorites, library
+    case home, explore, yours, library
 
     var icon: String {
         switch self {
         case .home: "house.fill"
         case .explore: "safari.fill"
-        case .favorites: "heart.fill"
+        case .yours: "sparkles"
         case .library: "books.vertical.fill"
         }
     }
@@ -55,7 +55,7 @@ enum BlazeTab: CaseIterable {
         switch self {
         case .home: "Home"
         case .explore: "Explore"
-        case .favorites: "Favorites"
+        case .yours: "Yours"
         case .library: "Library"
         }
     }
