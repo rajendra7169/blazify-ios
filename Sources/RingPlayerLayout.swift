@@ -192,9 +192,11 @@ struct SeekableAlbumRing: View {
         ZStack {
             // Inset past the ring's stroke as well as the gap, so the artwork
             // sits cleanly inside the ring instead of touching it.
+            // Clip BEFORE padding: padding first would make the circle the outer
+            // bounds, leaving the (smaller) artwork square and untouched.
             RemoteImage(url: artURL) { ArtPlaceholder() }
-                .padding(artPadding + stroke)
                 .clipShape(Circle())
+                .padding(artPadding + stroke)
 
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
