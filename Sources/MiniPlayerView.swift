@@ -8,6 +8,7 @@ struct MiniPlayerView: View {
     @ObservedObject var player: Player
     @State private var showArtist = false
     @State private var showAddToPlaylist = false
+    @State private var resolvedArtistId: String?
 
     var body: some View {
         if let track = player.current {
@@ -26,9 +27,7 @@ struct MiniPlayerView: View {
 
                 Spacer(minLength: 8)
 
-                circleButton("person", tint: track.artistId == nil ? .white.opacity(0.35) : .white) {
-                    if track.artistId != nil { showArtist = true }
-                }
+                circleButton("person") { openArtist(track) }
                 circleButton("plus") { showAddToPlaylist = true }
                 circleButton(player.isCurrentFavorite ? "heart.fill" : "heart",
                              tint: player.isCurrentFavorite ? .red : .white) {
@@ -62,12 +61,28 @@ struct MiniPlayerView: View {
                     },
             )
             .sheet(isPresented: $showArtist) {
-                if let id = track.artistId {
+                if let id = track.artistId ?? resolvedArtistId {
                     ArtistView(browseId: id, player: player)
                 }
             }
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistSheet(track: track)
+            }
+        }
+    }
+
+    /// Open the artist, resolving the channel id by name when the row didn't
+    /// carry one (search rows do; downloads and some carousels don't).
+    private func openArtist(_ track: Track) {
+        if track.artistId != nil {
+            showArtist = true
+            return
+        }
+        Task {
+            let id = await YouTube.resolveArtistId(name: track.artist)
+            await MainActor.run {
+                resolvedArtistId = id
+                if id != nil { showArtist = true }
             }
         }
     }

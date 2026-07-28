@@ -180,6 +180,61 @@ enum YouTube {
 
     // MARK: - Artist
 
+    /// Artists-only search filter.
+    private static let artistsFilter = "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
+    private static var artistIdCache: [String: String] = [:]
+
+    /// Resolve an artist's channel id from their name — the fallback for rows
+    /// that carry no browseId (mirrors Android's resolveArtistIdMap).
+    static func resolveArtistId(name: String) async -> String? {
+        let key = name.trimmingCharacters(in: .whitespaces)
+        guard !key.isEmpty else { return nil }
+        if let hit = artistIdCache[key] { return hit }
+
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "query": key,
+            "params": artistsFilter,
+        ]
+        guard let json = await post(musicSearch, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body)
+        else { return nil }
+
+        var found: String?
+        collectFirstArtist(json, name: key, into: &found)
+        if let found { artistIdCache[key] = found }
+        return found
+    }
+
+    private static func collectFirstArtist(_ node: Any, name: String, into found: inout String?) {
+        guard found == nil else { return }
+        if let dict = node as? [String: Any] {
+            if let r = dict["musicResponsiveListItemRenderer"] as? [String: Any] {
+                let nav = r["navigationEndpoint"] as? [String: Any]
+                if let id = (nav?["browseEndpoint"] as? [String: Any])?["browseId"] as? String,
+                   id.hasPrefix("UC") {
+                    let cols = r["flexColumns"] as? [[String: Any]] ?? []
+                    let title = flexText(cols, 0)
+                    // Prefer an exact name match, as Android does.
+                    if title.compare(name, options: .caseInsensitive) == .orderedSame {
+                        found = id
+                    } else if found == nil {
+                        found = id
+                    }
+                }
+                return
+            }
+            for (_, v) in dict { collectFirstArtist(v, name: name, into: &found) }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectFirstArtist(v, name: name, into: &found) }
+        }
+    }
+
     /// An artist channel page: header + the shelves below it.
     static func artist(browseId: String) async -> ArtistPage? {
         guard browseId.hasPrefix("UC") else { return nil }
