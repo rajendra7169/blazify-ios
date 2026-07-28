@@ -39,19 +39,20 @@ struct RootView: View {
             }
         }
         .background(palette.scaffold.ignoresSafeArea())
-        // An overlay, not a safeAreaInset: the inset never reduced the layout
-        // region here, so content kept scrolling under the bar. Pages now clear
-        // it explicitly with `playerBottomPadding()`, which is one mechanism
-        // instead of two disagreeing ones.
-        .overlay(alignment: .bottom) {
+        // `safeAreaInset` — NOT an overlay. An overlay bar has to ignore the
+        // safe area to sit under the home indicator, and that pushes its frame
+        // off-screen: the buttons stop receiving taps and the mini-player gets
+        // shoved out of view. This places the bar correctly and handles the home
+        // indicator itself; pages still clear it via `playerBottomPadding()`,
+        // because the inset doesn't reach inside each tab's NavigationStack.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 if player.hasTrack {
                     MiniPlayerView(player: player)
                         .padding(.bottom, 8)   // don't sit flush on the tab bar
                 }
-                BlazeTabBar(selection: $tab, palette: palette, safeBottom: safeBottom)
+                BlazeTabBar(selection: $tab, palette: palette)
             }
-            .ignoresSafeArea(edges: .bottom)
         }
         .environment(\.palette, palette)
         .environment(\.playerBottomInset, bottomInset)
@@ -90,8 +91,6 @@ enum BlazeTab: CaseIterable {
 struct BlazeTabBar: View {
     @Binding var selection: BlazeTab
     let palette: Palette
-    /// Home-indicator height, absorbed into the bar so its fill runs to the edge.
-    var safeBottom: CGFloat = 0
 
     var body: some View {
         HStack {
@@ -112,8 +111,9 @@ struct BlazeTabBar: View {
                 .buttonStyle(.plain)
             }
         }
+        // 70pt exactly — `safeAreaInset` already leaves room for the home
+        // indicator, so padding for it again is what made the bar too tall.
         .frame(height: 70)
-        .padding(.bottom, safeBottom)
         .background(palette.surface)
         .overlay(alignment: .top) {
             Rectangle().fill(palette.separator).frame(height: 0.5)
