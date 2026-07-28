@@ -32,7 +32,7 @@ struct RootView: View {
                 BlazeTabBar(selection: $tab)
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(theme.preferredColorScheme)
         .tint(Blaze.amber)
         .fullScreenCover(isPresented: $player.showFullPlayer) {
             PlayerView(player: player)

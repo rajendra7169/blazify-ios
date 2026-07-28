@@ -465,6 +465,7 @@ final class Player: ObservableObject {
             guard let data = try? Data(contentsOf: url), let img = UIImage(data: data) else { return }
             artwork = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
             artColor = img.gradientSeed
+            AppTheme.shared.setArtworkSeed(img.gradientSeed)
             updateNowPlaying()
             return
         }
@@ -475,6 +476,7 @@ final class Player: ObservableObject {
             DispatchQueue.main.async {
                 self.artwork = art
                 self.artColor = seed
+                AppTheme.shared.setArtworkSeed(seed)
                 self.updateNowPlaying()
             }
         }.resume()

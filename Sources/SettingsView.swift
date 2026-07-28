@@ -195,13 +195,31 @@ struct SettingsView: View {
 
     private var quickToggles: some View {
         HStack(spacing: 8) {
-            quickChip(icon: "moon.stars", label: "Dark", active: true) {}
+            quickChip(icon: themeModeIcon, label: theme.darkMode.title,
+                      active: theme.darkMode != .auto) { cycleDarkMode() }
             quickChip(icon: "paintpalette", label: "Dynamic", active: theme.dynamicTheme) {
                 theme.setDynamicTheme(!theme.dynamicTheme)
             }
             quickChip(icon: "circle.fill", label: "Pure black", active: theme.pureBlack) {
                 theme.setPureBlack(!theme.pureBlack)
             }
+        }
+    }
+
+    private var themeModeIcon: String {
+        switch theme.darkMode {
+        case .auto: "circle.lefthalf.filled"
+        case .on: "moon.stars"
+        case .off: "sun.max"
+        }
+    }
+
+    /// Auto -> Dark -> Light, as the Android quick toggle does.
+    private func cycleDarkMode() {
+        switch theme.darkMode {
+        case .auto: theme.setDarkMode(.on)
+        case .on: theme.setDarkMode(.off)
+        case .off: theme.setDarkMode(.auto)
         }
     }
 
