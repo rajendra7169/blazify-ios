@@ -41,10 +41,11 @@ struct LyricsCandidate: Identifiable, Equatable {
     var script: String? { Lyrics.detectScript(result.raw ?? result.plain ?? "") }
 }
 
-/// Multi-source lyrics. LrcLib and KuGou both work without any auth, so both are
-/// queried concurrently and every candidate is offered in the picker.
+/// Multi-source lyrics. Apple Music, LrcLib and KuGou all work without any
+/// account, so all three are queried concurrently and every candidate is
+/// offered in the picker.
 enum Lyrics {
-    static let sourceName = "LrcLib"   // the default/most common source
+    static let sourceName = "LrcLib"   // shown until a provider is resolved
 
     // MARK: Fan-out
 
@@ -52,7 +53,8 @@ enum Lyrics {
     static func search(title: String, artist: String) async -> [LyricsCandidate] {
         async let lrc = lrcLib(title: title, artist: artist)
         async let kugou = kuGou(title: title, artist: artist)
-        let all = await lrc + kugou
+        async let apple = appleMusic(title: title, artist: artist)
+        let all = await apple + lrc + kugou
         // Synced first, then by provider rank, preserving arrival order within a rank.
         return all.enumerated().sorted { a, b in
             if a.element.synced != b.element.synced { return a.element.synced }
@@ -64,9 +66,10 @@ enum Lyrics {
 
     private static func rank(_ provider: String) -> Int {
         switch provider.lowercased() {
-        case "lrclib": return 0
-        case "kugou": return 1
-        default: return 2
+        case "apple music": return 0
+        case "lrclib": return 1
+        case "kugou": return 2
+        default: return 3
         }
     }
 
@@ -117,6 +120,84 @@ enum Lyrics {
                                                                 synced: true, raw: lrc)))
             } else if let plain = item["plainLyrics"] as? String, !plain.isEmpty {
                 out.append(LyricsCandidate(provider: "LrcLib", trackName: name, artistName: by,
+                                           result: LyricsResult(lines: [], plain: plain,
+                                                                synced: false, raw: nil)))
+            }
+        }
+        return out
+    }
+
+    // MARK: Apple Music (anonymous web token → catalog search → lyrics relay)
+
+    /// Apple's public web player hands out a developer token to anyone; no
+    /// account is involved. Cached until a request is rejected.
+    private static var appleToken: String?
+
+    private static func fetchAppleToken() async -> String? {
+        if let appleToken { return appleToken }
+        guard let home = URL(string: "https://beta.music.apple.com"),
+              let (html, _) = try? await URLSession.shared.data(from: home),
+              let page = String(data: html, encoding: .utf8),
+              let bundleRange = page.range(of: #"/assets/index~[^"']+?\.js"#, options: .regularExpression)
+        else { return nil }
+
+        guard let js = URL(string: "https://beta.music.apple.com" + page[bundleRange]),
+              let (data, _) = try? await URLSession.shared.data(from: js),
+              let script = String(data: data, encoding: .utf8),
+              let tokenRange = script.range(
+                  of: #"eyJ[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+"#,
+                  options: .regularExpression)
+        else { return nil }
+
+        appleToken = String(script[tokenRange])
+        return appleToken
+    }
+
+    private static func appleMusic(title: String, artist: String) async -> [LyricsCandidate] {
+        guard let token = await fetchAppleToken() else { return [] }
+        let term = "\(cleanTitle(title)) \(cleanArtist(artist))"
+        guard let encoded = term.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://amp-api.music.apple.com/v1/catalog/us/search?term=\(encoded)&types=songs&limit=5&l=en-US&platform=web")
+        else { return [] }
+
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("https://music.apple.com", forHTTPHeaderField: "Origin")
+        req.setValue("https://music.apple.com/", forHTTPHeaderField: "Referer")
+        req.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:95.0) Gecko/20100101 Firefox/95.0",
+                     forHTTPHeaderField: "User-Agent")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        guard let (data, response) = try? await URLSession.shared.data(for: req) else { return [] }
+        if (response as? HTTPURLResponse)?.statusCode == 401 {
+            appleToken = nil   // scraped token expired; next call re-scrapes
+            return []
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let results = json["results"] as? [String: Any],
+              let songs = (results["songs"] as? [String: Any])?["data"] as? [[String: Any]]
+        else { return [] }
+
+        var out: [LyricsCandidate] = []
+        for song in songs.prefix(2) {
+            guard let id = song["id"] as? String else { continue }
+            let attrs = song["attributes"] as? [String: Any] ?? [:]
+            guard let lyricsURL = URL(string: "https://lyrics.paxsenix.org/apple-music/lyrics?id=\(id)")
+            else { continue }
+            var lyricsReq = URLRequest(url: lyricsURL)
+            lyricsReq.setValue("Blazify iOS", forHTTPHeaderField: "User-Agent")
+            guard let (body, _) = try? await URLSession.shared.data(for: lyricsReq),
+                  let payload = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+            else { continue }
+
+            let name = attrs["name"] as? String ?? ""
+            let by = attrs["artistName"] as? String ?? ""
+            if let lrc = payload["lrc"] as? String, !lrc.isEmpty {
+                out.append(LyricsCandidate(provider: "Apple Music", trackName: name, artistName: by,
+                                           result: LyricsResult(lines: parseLRC(lrc), plain: nil,
+                                                                synced: true, raw: lrc)))
+            } else if let plain = payload["plain"] as? String, !plain.isEmpty {
+                out.append(LyricsCandidate(provider: "Apple Music", trackName: name, artistName: by,
                                            result: LyricsResult(lines: [], plain: plain,
                                                                 synced: false, raw: nil)))
             }
