@@ -9,6 +9,7 @@ import UIKit
 /// highlight glides instead of stepping with the 4 Hz position updates.
 struct LyricsPane: View {
     @ObservedObject var player: Player
+    @ObservedObject private var look = LookFeel.shared
 
     @State private var candidates: [LyricsCandidate] = []
     @State private var result: LyricsResult?
@@ -114,8 +115,8 @@ struct LyricsPane: View {
                     .tracking(-0.5)
                     .foregroundStyle(.white)
                     .lineSpacing(6)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(look.lyricsPosition.textAlignment)
+                    .frame(maxWidth: .infinity, alignment: look.lyricsPosition.frameAlignment)
                     .padding(.horizontal, 24).padding(.vertical, 24)
             }
         } else {
@@ -163,9 +164,9 @@ struct LyricsPane: View {
                             .font(.system(size: 30, weight: .bold))
                             .tracking(-0.5)
                             .lineSpacing(4)
-                            .multilineTextAlignment(.center)
+                            .multilineTextAlignment(look.lyricsPosition.textAlignment)
                             .foregroundStyle(.white.opacity(alpha(distance: distance, isActive: i == highlight)))
-                            .frame(maxWidth: .infinity)
+                            .frame(maxWidth: .infinity, alignment: look.lyricsPosition.frameAlignment)
                             .padding(.vertical, 12)
                             .offset(y: target)
                             .animation(lineAnimation(distance: distance), value: target)
