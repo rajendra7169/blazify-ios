@@ -69,7 +69,6 @@ struct AddToPlaylistSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .presentationDetents([.medium, .large])
         .task { await load() }
         .alert("New playlist", isPresented: $creating) {
@@ -99,7 +98,7 @@ struct AddToPlaylistSheet: View {
             Spacer(minLength: 0)
 
             if busyID == playlist.id {
-                ProgressView().tint(.white)
+                ProgressView().tint(palette.onSurface)
             } else if addedID == playlist.id {
                 Image(systemName: "checkmark").foregroundStyle(palette.accent)
             }

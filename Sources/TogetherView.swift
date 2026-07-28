@@ -32,7 +32,6 @@ struct TogetherView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: Lobby

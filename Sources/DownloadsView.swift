@@ -53,6 +53,5 @@ struct DownloadsView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }

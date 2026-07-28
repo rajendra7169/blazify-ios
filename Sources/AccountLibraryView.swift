@@ -37,7 +37,7 @@ struct AccountLibraryView: View {
                             let on = k == kind
                             Text(k.rawValue)
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(on ? .black : .white)
+                                .foregroundStyle(on ? palette.onAccent : palette.onSurface)
                                 .padding(.horizontal, 16).padding(.vertical, 8)
                                 .background(on ? AnyShapeStyle(palette.accent)
                                                : AnyShapeStyle(palette.onSurface.opacity(0.06)))
@@ -80,7 +80,6 @@ struct AccountLibraryView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .task { await load() }
     }
 

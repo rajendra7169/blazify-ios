@@ -17,7 +17,7 @@ struct QueueView: View {
                     } label: {
                         HStack(spacing: 12) {
                             RemoteImage(url: pair.element.thumbnailURL) {
-                                Color.white.opacity(0.1)
+                                palette.onSurface.opacity(0.10)
                             }
                             .frame(width: 48, height: 48)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -25,24 +25,24 @@ struct QueueView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(pair.element.title)
                                     .font(.subheadline)
-                                    .foregroundStyle(active ? Blaze.amber : .white)
+                                    .foregroundStyle(active ? palette.accent : palette.onSurface)
                                     .lineLimit(1)
                                 Text(pair.element.artist)
                                     .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.6))
+                                    .foregroundStyle(palette.onSurfaceVariant)
                                     .lineLimit(1)
                             }
                             Spacer(minLength: 0)
                             if active {
                                 Image(systemName: "speaker.wave.2.fill")
                                     .font(.caption)
-                                    .foregroundStyle(Blaze.amber)
+                                    .foregroundStyle(palette.accent)
                             }
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .listRowBackground(active ? Color.white.opacity(0.08) : Color.clear)
+                    .listRowBackground(active ? palette.onSurface.opacity(0.08) : Color.clear)
                     .listRowSeparator(.hidden)
                 }
             }
@@ -53,10 +53,9 @@ struct QueueView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.tint(Blaze.amber)
+                    Button("Done") { dismiss() }.tint(palette.accent)
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }

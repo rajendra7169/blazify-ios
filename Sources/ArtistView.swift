@@ -47,7 +47,6 @@ struct ArtistView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .task { await load() }
     }
 
