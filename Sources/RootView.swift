@@ -26,6 +26,7 @@ struct RootView: View {
             VStack(spacing: 0) {
                 if player.hasTrack {
                     MiniPlayerView(player: player)
+                        .padding(.bottom, 8)   // don't sit flush on the tab bar
                 }
                 BlazeTabBar(selection: $tab)
             }
