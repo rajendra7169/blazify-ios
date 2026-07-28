@@ -7,16 +7,20 @@ struct Track: Identifiable, Equatable, Codable {
     let artist: String
     let thumbnail: String
     let duration: Double
+    /// The artist's channel browseId (UC…), when the row carried one.
+    let artistId: String?
 
     var id: String { videoId }
     var thumbnailURL: URL? { URL(string: thumbnail) }
 
-    init(videoId: String, title: String, artist: String, thumbnail: String, duration: Double) {
+    init(videoId: String, title: String, artist: String, thumbnail: String,
+         duration: Double, artistId: String? = nil) {
         self.videoId = videoId
         self.title = title
         self.artist = artist
         self.thumbnail = thumbnail
         self.duration = duration
+        self.artistId = artistId
     }
 
     /// Thumbnail upscaled to a requested square size (googleusercontent resize).
@@ -36,6 +40,7 @@ struct Track: Identifiable, Equatable, Codable {
         artist = json["artist"] as? String ?? ""
         thumbnail = json["thumbnail"] as? String ?? ""
         duration = (json["duration"] as? Double) ?? (json["duration"] as? NSNumber)?.doubleValue ?? 0
+        artistId = json["artistId"] as? String
     }
 }
 

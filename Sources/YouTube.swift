@@ -113,7 +113,8 @@ enum YouTube {
                     title: flexText(cols, 0),
                     artist: flexArtist(cols),
                     thumbnail: musicThumb(r["thumbnail"]),
-                    duration: 0   // filled from AVPlayer once the stream loads
+                    duration: 0,   // filled from AVPlayer once the stream loads
+                    artistId: flexArtistId(cols)
                 ))
                 if out.count >= 25 { return out }
             }
@@ -297,7 +298,8 @@ enum YouTube {
                 if let v = vid, !v.isEmpty, seen.insert(v).inserted {
                     let cols = r["flexColumns"] as? [[String: Any]] ?? []
                     out.append(Track(videoId: v, title: flexText(cols, 0), artist: flexArtist(cols),
-                                     thumbnail: musicThumb(r["thumbnail"]), duration: 0))
+                                     thumbnail: musicThumb(r["thumbnail"]), duration: 0,
+                                     artistId: flexArtistId(cols)))
                 }
                 return
             }
@@ -454,6 +456,22 @@ enum YouTube {
             if !t.isEmpty && t != "•" { return t }
         }
         return ""
+    }
+
+    /// The artist's channel id from the secondary line's runs (UC…).
+    private static func flexArtistId(_ cols: [[String: Any]]) -> String? {
+        guard cols.indices.contains(1),
+              let r = cols[1]["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any],
+              let text = r["text"] as? [String: Any],
+              let runs = text["runs"] as? [[String: Any]] else { return nil }
+        for run in runs {
+            if let nav = run["navigationEndpoint"] as? [String: Any],
+               let browse = nav["browseEndpoint"] as? [String: Any],
+               let id = browse["browseId"] as? String, id.hasPrefix("UC") {
+                return id
+            }
+        }
+        return nil
     }
 
     private static func overlayVideoId(_ overlay: Any?) -> String? {
