@@ -166,17 +166,63 @@ enum YouTube {
 
     /// The YouTube Music home: filter chips + carousels (personalized when signed in).
     /// `params` re-browses filtered to a chip's mood.
-    static func home(params: String? = nil) async -> HomeFeed {
+    /// The home feed. Pass `continuation` to fetch the next page of shelves —
+    /// that token is session-bound, so the cached `visitorData` must be sent
+    /// with it or YouTube answers with an empty page.
+    static func home(params: String? = nil, continuation: String? = nil) async -> HomeFeed {
         let visitor = await visitorData()
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": "en", "gl": "US"]
         if let visitor { client["visitorData"] = visitor }
-        var body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_home"]
-        if let params { body["params"] = params }
+
+        var body: [String: Any] = ["context": ["client": client]]
+        if let continuation {
+            body["continuation"] = continuation
+        } else {
+            body["browseId"] = "FEmusic_home"
+            if let params { body["params"] = params }
+        }
+
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
                                     userAgent: webUA, visitor: visitor, body: body, login: true)
         else { return .empty }
-        return parseHome(json)
+        return continuation == nil ? parseHome(json) : parseHomeContinuation(json)
+    }
+
+    /// Continuation pages arrive under `continuationContents.sectionListContinuation`
+    /// rather than the tabbed browse shape.
+    private static func parseHomeContinuation(_ json: [String: Any]) -> HomeFeed {
+        guard let cc = json["continuationContents"] as? [String: Any],
+              let list = cc["sectionListContinuation"] as? [String: Any]
+        else { return .empty }
+        let sections = parseShelves(list["contents"] as? [[String: Any]] ?? [])
+        return HomeFeed(chips: [], sections: sections,
+                        continuation: nextContinuation(list))
+    }
+
+    /// The `continuations[].nextContinuationData.continuation` token, if present.
+    private static func nextContinuation(_ node: [String: Any]) -> String? {
+        guard let list = node["continuations"] as? [[String: Any]] else { return nil }
+        for entry in list {
+            if let next = (entry["nextContinuationData"] as? [String: Any])?["continuation"] as? String {
+                return next
+            }
+        }
+        return nil
+    }
+
+    private static func parseShelves(_ sections: [[String: Any]]) -> [HomeSection] {
+        var out: [HomeSection] = []
+        for section in sections {
+            guard let shelf = section["musicCarouselShelfRenderer"] as? [String: Any] else { continue }
+            let header = (shelf["header"] as? [String: Any])?["musicCarouselShelfBasicHeaderRenderer"] as? [String: Any]
+            let title = runsFirst(header?["title"])
+            let contentsArr = shelf["contents"] as? [[String: Any]] ?? []
+            let isSongs = contentsArr.first?["musicResponsiveListItemRenderer"] != nil
+            let items = contentsArr.compactMap(parseHomeItem)
+            if !items.isEmpty { out.append(HomeSection(title: title, items: items, isSongs: isSongs)) }
+        }
+        return out
     }
 
     private static func parseHome(_ json: [String: Any]) -> HomeFeed {
@@ -190,18 +236,9 @@ enum YouTube {
             let sections = sectionList["contents"] as? [[String: Any]]
         else { return .empty }
 
-        let chips = parseChips(sectionList)
-        var out: [HomeSection] = []
-        for section in sections {
-            guard let shelf = section["musicCarouselShelfRenderer"] as? [String: Any] else { continue }
-            let header = (shelf["header"] as? [String: Any])?["musicCarouselShelfBasicHeaderRenderer"] as? [String: Any]
-            let title = runsFirst(header?["title"])
-            let contentsArr = shelf["contents"] as? [[String: Any]] ?? []
-            let isSongs = contentsArr.first?["musicResponsiveListItemRenderer"] != nil
-            let items = contentsArr.compactMap(parseHomeItem)
-            if !items.isEmpty { out.append(HomeSection(title: title, items: items, isSongs: isSongs)) }
-        }
-        return HomeFeed(chips: chips, sections: out)
+        return HomeFeed(chips: parseChips(sectionList),
+                        sections: parseShelves(sections),
+                        continuation: nextContinuation(sectionList))
     }
 
     private static func parseChips(_ sectionList: [String: Any]) -> [HomeChip] {

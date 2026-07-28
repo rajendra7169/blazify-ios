@@ -44,6 +44,14 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
     }
 }
 
+extension Track {
+    /// Show a played/liked song as a home-rail card.
+    var asHomeItem: HomeItem {
+        HomeItem(title: title, subtitle: artist, thumbnail: thumbnail,
+                 videoId: videoId, browseId: nil, isCircular: false)
+    }
+}
+
 /// One card in a home rail — either a song (plays directly) or a
 /// playlist/album/artist (opens a detail list via `browseId`).
 struct HomeItem: Identifiable, Hashable {
@@ -117,7 +125,9 @@ struct ArtistPage {
 /// The whole home payload: filter chips + content sections.
 struct HomeFeed {
     let chips: [HomeChip]
-    let sections: [HomeSection]
+    var sections: [HomeSection]
+    /// Token for the next page of shelves; nil once the feed is exhausted.
+    var continuation: String?
 
-    static let empty = HomeFeed(chips: [], sections: [])
+    static let empty = HomeFeed(chips: [], sections: [], continuation: nil)
 }

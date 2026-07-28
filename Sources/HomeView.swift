@@ -12,6 +12,8 @@ struct HomeView: View {
     @State private var moods: [MoodItem] = []
     @State private var selectedChip: HomeChip?
     @State private var loading = true
+    @State private var loadingMore = false
+    @State private var localSections: [HomeSection] = []
     @State private var path = NavigationPath()
     @State private var showLogin = false
     @State private var showAccount = false
@@ -33,6 +35,17 @@ struct HomeView: View {
                         SkeletonRail()
                         SkeletonRail()
                     } else {
+                        // Locally-derived rails first, reshuffled on every load —
+                        // this is what makes the feed differ each time, as Android's
+                        // `.shuffled()` sections do.
+                        ForEach(localSections) { section in
+                            if section.isSongs {
+                                QuickPicksGrid(section: section, player: player)
+                            } else {
+                                HomeRail(section: section) { tap($0) }
+                            }
+                        }
+
                         ForEach(feed.sections) { section in
                             if section.isSongs {
                                 QuickPicksGrid(section: section, player: player)
@@ -40,13 +53,25 @@ struct HomeView: View {
                                 HomeRail(section: section) { tap($0) }
                             }
                         }
+
                         if !moods.isEmpty {
                             MoodTiles(moods: moods) { path.append($0) }
+                        }
+
+                        // Reaching this marker means we're near the end: pull the
+                        // next page of shelves in, the way Android watches the last
+                        // visible index.
+                        if feed.continuation != nil {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 24)
+                                .onAppear { loadMore() }
                         }
                     }
                 }
                 .playerBottomPadding()
             }
+            .refreshable { await load(reshuffle: true) }
             .background(palette.scaffold.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: HomeItem.self) { item in
@@ -87,16 +112,62 @@ struct HomeView: View {
         }
     }
 
-    private func load() async {
-        loading = true
+    private func load(reshuffle: Bool = false) async {
+        if !reshuffle { loading = true }   // pull-to-refresh has its own spinner
         async let feedTask = YouTube.home(params: selectedChip?.params)
         async let moodsTask = YouTube.moods()
         let (f, m) = await (feedTask, moodsTask)
         await MainActor.run {
             feed = f
-            moods = m
+            moods = m.shuffled()
+            localSections = Self.buildLocalSections(player: player)
             loading = false
         }
+    }
+
+    /// Append the next page of YouTube shelves.
+    private func loadMore() {
+        guard let token = feed.continuation, !loadingMore else { return }
+        loadingMore = true
+        Task {
+            let next = await YouTube.home(continuation: token)
+            await MainActor.run {
+                // Don't repeat a shelf we already have on screen.
+                let existing = Set(feed.sections.map(\.title))
+                feed.sections += next.sections.filter { !existing.contains($0.title) }
+                feed.continuation = next.continuation
+                loadingMore = false
+            }
+        }
+    }
+
+    /// Rails built from what you've actually listened to, shuffled so the home
+    /// feed looks different every time — Android's Quick picks / Keep listening
+    /// / Forgotten favourites, which are all `.shuffled().take(n)` locally.
+    private static func buildLocalSections(player: Player) -> [HomeSection] {
+        var out: [HomeSection] = []
+
+        let quick = PlayHistory.mostPlayed(.month1, limit: 40).shuffled().prefix(20)
+        if quick.count >= 4 {
+            out.append(HomeSection(title: "Quick picks",
+                                   items: quick.map(\.asHomeItem), isSongs: true))
+        }
+
+        let keep = PlayHistory.recent.prefix(40).shuffled().prefix(15)
+        if keep.count >= 4 {
+            out.append(HomeSection(title: "Keep listening",
+                                   items: keep.map(\.asHomeItem), isSongs: false))
+        }
+
+        // Liked a while ago but not played recently — Android's forgotten favourites.
+        let recentIds = Set(PlayHistory.recent.prefix(20).map(\.videoId))
+        let forgotten = player.favoriteTracks.filter { !recentIds.contains($0.videoId) }
+            .shuffled().prefix(15)
+        if forgotten.count >= 4 {
+            out.append(HomeSection(title: "Forgotten favourites",
+                                   items: forgotten.map(\.asHomeItem), isSongs: false))
+        }
+        return out
     }
 
     private func selectChip(_ chip: HomeChip) {
