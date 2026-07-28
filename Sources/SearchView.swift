@@ -26,7 +26,7 @@ struct SearchView: View {
         .background(Color.black.ignoresSafeArea())
         .overlay {
             if searching {
-                ProgressView().tint(Blaze.amber)
+                ScrollView { SkeletonTrackList(rows: 8).padding(.top, 8) }
             } else if results.isEmpty {
                 Text(didSearch ? "No results" : "Search for a song")
                     .foregroundStyle(.secondary)

@@ -22,8 +22,7 @@ struct AddToPlaylistSheet: View {
                 if !auth.isLoggedIn {
                     message("Sign in to use playlists", icon: "person.crop.circle.badge.xmark")
                 } else if loading {
-                    ProgressView().tint(Blaze.amber)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ScrollView { SkeletonTrackList(rows: 5).padding(.top, 12) }
                 } else {
                     List {
                         Button { creating = true } label: {

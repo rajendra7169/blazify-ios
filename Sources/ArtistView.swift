@@ -15,7 +15,11 @@ struct ArtistView: View {
         NavigationStack {
             ScrollView {
                 if loading {
-                    ProgressView().tint(Blaze.amber).padding(.top, 80)
+                    VStack(alignment: .leading, spacing: 0) {
+                        SkeletonBox(height: 320, corner: 0)
+                        SkeletonTrackList(rows: 4).padding(.top, 20)
+                        SkeletonRail()
+                    }
                 } else if let page {
                     VStack(alignment: .leading, spacing: 0) {
                         header(page)

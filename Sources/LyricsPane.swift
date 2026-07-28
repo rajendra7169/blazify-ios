@@ -88,7 +88,13 @@ struct LyricsPane: View {
 
     @ViewBuilder private var content: some View {
         if loading {
-            Spacer(); ProgressView().tint(.white); Spacer()
+            VStack(spacing: 22) {
+                SkeletonBox(width: 220, height: 26)
+                SkeletonBox(width: 280, height: 26)
+                SkeletonBox(width: 190, height: 26)
+                SkeletonBox(width: 250, height: 26)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let r = result, r.synced, !r.lines.isEmpty {
             syncedStage(r.lines)
         } else if let plain = result?.plain, !plain.isEmpty {

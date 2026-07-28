@@ -29,8 +29,7 @@ struct FavoritesView: View {
                 if !auth.isLoggedIn, player.favoriteTracks.isEmpty {
                     signedOut
                 } else if loading {
-                    ProgressView().tint(Blaze.amber)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ScrollView { SkeletonGrid() }
                 } else if playlists.isEmpty, likedAll.isEmpty {
                     Text("No favourites yet")
                         .foregroundStyle(.white.opacity(0.6))

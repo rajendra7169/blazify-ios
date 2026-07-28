@@ -13,7 +13,7 @@ struct MoodDetailView: View {
     var body: some View {
         ScrollView {
             if loading {
-                ProgressView().tint(Blaze.amber).padding(.top, 60)
+                SkeletonGrid()
             } else if playlists.isEmpty {
                 Text("Nothing here")
                     .foregroundStyle(.white.opacity(0.6))

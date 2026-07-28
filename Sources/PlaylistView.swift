@@ -60,7 +60,7 @@ struct PlaylistView: View {
                 }
 
                 if loading {
-                    ProgressView().tint(Blaze.amber).padding(.top, 40)
+                    SkeletonTrackList(rows: 7).padding(.top, 8)
                 } else if tracks.isEmpty {
                     Text("Nothing to play here")
                         .foregroundStyle(.white.opacity(0.6))

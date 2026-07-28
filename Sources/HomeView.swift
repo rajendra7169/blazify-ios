@@ -27,10 +27,8 @@ struct HomeView: View {
                     }
 
                     if loading {
-                        ProgressView()
-                            .tint(Blaze.amber)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 60)
+                        SkeletonRail()
+                        SkeletonRail()
                     } else {
                         ForEach(feed.sections) { section in
                             if section.isSongs {
