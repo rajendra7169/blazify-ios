@@ -133,31 +133,15 @@ struct FavoritesView: View {
 /// Navigation marker for the Liked songs list.
 struct LikedRoute: Hashable {}
 
-/// A plain list of tracks (Liked songs, and reusable elsewhere).
+/// A list of tracks. Kept as a thin name over `SongListScreen` so every list in
+/// the app — liked, downloaded, cached, top — shares one design.
 struct TrackListView: View {
-    @Environment(\.palette) private var palette
     let title: String
     let tracks: [Track]
     @ObservedObject var player: Player
 
     var body: some View {
-        List {
-            ForEach(Array(tracks.enumerated()), id: \.element.id) { pair in
-                Button {
-                    player.play(tracks, startAt: pair.offset)
-                    player.showFullPlayer = true
-                } label: {
-                    TrackRow(track: pair.element)
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(Color.clear)
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(palette.scaffold.ignoresSafeArea())
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        SongListScreen(title: title, tracks: tracks, player: player)
     }
 }
 

@@ -192,6 +192,20 @@ final class Player: ObservableObject {
         loadCurrent()
     }
 
+    /// Append songs to the end of the queue, starting playback if idle.
+    func addToQueue(_ tracks: [Track]) {
+        let fresh = tracks.filter { track in
+            !queue.contains { $0.videoId == track.videoId }
+        }
+        guard !fresh.isEmpty else { return }
+        if queue.isEmpty {
+            play(fresh, startAt: 0)
+        } else {
+            queue.append(contentsOf: fresh)
+            originalQueue.append(contentsOf: fresh)
+        }
+    }
+
     /// Apply an action the room host performed.
     private func applyRemote(_ action: ListenTogether.RemoteAction) {
         switch action {
