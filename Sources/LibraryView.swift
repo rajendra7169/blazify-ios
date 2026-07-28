@@ -7,6 +7,7 @@ struct LibraryView: View {
     @ObservedObject private var theme = AppTheme.shared
     @ObservedObject private var auth = Auth.shared
     @ObservedObject private var downloads = Downloads.shared
+    @ObservedObject private var cache = AudioCache.shared
 
     @State private var playlists: [HomeItem] = []
     @State private var artists: [HomeItem] = []
@@ -36,9 +37,11 @@ struct LibraryView: View {
 
                     HStack(spacing: 12) {
                         BlazePlaylistCard(
-                            title: "Recently played", thumbnails: PlayHistory.recent.prefix(4).map(\.thumbnail),
-                            seed: Color(hex: 0x00838F), aspectRatio: boxRatio, icon: "clock.arrow.circlepath",
-                        ) { route = .tracks("Recently played", PlayHistory.recent) }
+                            title: "Cached", subtitle: cacheSize,
+                            thumbnails: cache.tracks.prefix(4).map(\.thumbnail),
+                            seed: Color(hex: 0x00838F), aspectRatio: boxRatio,
+                            icon: "arrow.triangle.2.circlepath",
+                        ) { route = .tracks("Cached", cache.tracks) }
 
                         BlazePlaylistCard(
                             title: "Downloaded", thumbnails: downloads.tracks.prefix(4).map(\.thumbnail),
@@ -101,6 +104,12 @@ struct LibraryView: View {
 
     /// Local favourites merged with the account's liked songs.
     private var likedTracks: [Track] { player.favoriteTracks }
+
+    /// Human-readable cache footprint, e.g. "128 MB".
+    private var cacheSize: String {
+        let mb = Double(cache.sizeBytes) / 1_048_576
+        return mb < 1 ? "" : String(format: "%.0f MB", mb)
+    }
 
     private func banner(title: String, subtitle: String, thumbs: [String],
                         seed: Color, icon: String, route destination: LibraryRoute) -> some View {

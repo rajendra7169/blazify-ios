@@ -348,12 +348,20 @@ final class Player: ObservableObject {
         countPlay(track)
         Task { @MainActor in ListenTogether.shared.broadcastTrack(track, position: 0) }
 
-        // Offline first: play the downloaded file with no network if we have it.
+        // Disk before network: a deliberate download first, then the automatic
+        // cache of things you've already played.
         if let local = Downloads.shared.localAudioURL(for: videoId) {
             let dur = Downloads.shared.duration(for: videoId) ?? track.duration
             duration = dur
             isLoading = false
             playStream(local, realDuration: dur)
+            prefetchNext()
+            return
+        }
+        if let cached = AudioCache.shared.cachedURL(for: videoId), track.duration > 0 {
+            duration = track.duration
+            isLoading = false
+            playStream(cached, realDuration: track.duration)
             prefetchNext()
             return
         }
@@ -369,6 +377,11 @@ final class Player: ObservableObject {
                 }
                 self.duration = stream.duration
                 self.playStream(stream.url, realDuration: stream.duration)
+                // Keep a copy so the next play needs no network.
+                let cacheable = Track(videoId: track.videoId, title: track.title,
+                                      artist: track.artist, thumbnail: track.thumbnail,
+                                      duration: stream.duration, artistId: track.artistId)
+                AudioCache.shared.cache(cacheable, from: stream.url)
                 self.prefetchNext()
             }
         }
