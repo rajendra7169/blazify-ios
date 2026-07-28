@@ -51,6 +51,11 @@ final class Player: ObservableObject {
         setupRemoteCommands()
         loadFavorites()
         Task { await syncFavorites() }
+        Task { @MainActor in
+            ListenTogether.shared.onRemote = { [weak self] action in
+                self?.applyRemote(action)
+            }
+        }
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: nil,
@@ -182,6 +187,41 @@ final class Player: ObservableObject {
         loadCurrent()
     }
 
+    /// Apply an action the room host performed.
+    private func applyRemote(_ action: ListenTogether.RemoteAction) {
+        switch action {
+        case .play(let position):
+            if duration > 0 { seekSilently(to: position) }
+            avPlayer?.play()
+            isPlaying = true
+            updateNowPlaying()
+        case .pause(let position):
+            if duration > 0 { seekSilently(to: position) }
+            avPlayer?.pause()
+            isPlaying = false
+            updateNowPlaying()
+        case .seek(let position):
+            seekSilently(to: position)
+        case .changeTrack(let track, let position):
+            guard track.videoId != current?.videoId else {
+                seekSilently(to: position)
+                return
+            }
+            queue = [track]
+            index = 0
+            loadCurrent()
+        }
+    }
+
+    /// Seek without broadcasting it back to the room.
+    private func seekSilently(to seconds: Double) {
+        guard let avPlayer, seconds.isFinite, seconds >= 0 else { return }
+        currentTime = seconds
+        avPlayer.seek(to: CMTime(seconds: seconds, preferredTimescale: 600),
+                      toleranceBefore: .zero, toleranceAfter: .zero)
+        updateNowPlaying()
+    }
+
     // MARK: - Sleep timer
 
     @Published var sleepEndDate: Date?         // countdown target; nil = off
@@ -289,6 +329,7 @@ final class Player: ObservableObject {
         updateNowPlaying()
 
         let videoId = track.videoId
+        Task { @MainActor in ListenTogether.shared.broadcastTrack(track, position: 0) }
 
         // Offline first: play the downloaded file with no network if we have it.
         if let local = Downloads.shared.localAudioURL(for: videoId) {
@@ -364,6 +405,12 @@ final class Player: ObservableObject {
         if isPlaying { avPlayer.pause() } else { avPlayer.play() }
         isPlaying.toggle()
         updateNowPlaying()
+        let position = currentTime
+        let playing = isPlaying
+        Task { @MainActor in
+            if playing { ListenTogether.shared.broadcastPlay(position: position) }
+            else { ListenTogether.shared.broadcastPause(position: position) }
+        }
     }
 
     func seek(to fraction: Double) {
@@ -379,6 +426,7 @@ final class Player: ObservableObject {
         ) { [weak self] _ in
             self?.isSeeking = false
         }
+        Task { @MainActor in ListenTogether.shared.broadcastSeek(position: target) }
     }
 
     // MARK: - Session / remote / now-playing

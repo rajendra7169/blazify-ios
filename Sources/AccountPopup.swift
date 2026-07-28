@@ -17,6 +17,7 @@ struct AccountPopup: View {
     @State private var tokenText = ""
     @State private var showTokenSheet = false
     @State private var confirmLogout = false
+    @State private var showTogether = false
     @State private var moreContent = UserDefaults.standard.object(forKey: "useLoginForBrowse") as? Bool ?? true
     @State private var autoSync = UserDefaults.standard.object(forKey: "ytmSync") as? Bool ?? true
 
@@ -47,6 +48,7 @@ struct AccountPopup: View {
         .sheet(isPresented: $showLogin) { LoginView() }
         .sheet(isPresented: $showAccount) { AccountLibraryView(player: player) }
         .sheet(isPresented: $showTokenSheet) { tokenSheet }
+        .sheet(isPresented: $showTogether) { TogetherView() }
         .confirmationDialog("Keep library data?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) {
                 auth.signOut()
@@ -181,19 +183,10 @@ struct AccountPopup: View {
 
     private var bottomBlock: some View {
         VStack(spacing: 4) {
-            // Listen Together needs a sync server; Android points at a third-party
-            // one that isn't part of this project, so it's flagged rather than faked.
-            HStack(spacing: 12) {
-                iconChip("person.2")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Together").font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
-                    Text("Needs a sync server — not available yet")
-                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
-                }
-                Spacer(minLength: 0)
+            Button { showTogether = true } label: {
+                row(icon: "person.2", title: "Together", corners: (16, 6))
             }
-            .padding(.horizontal, 20).padding(.vertical, 16)
+            .buttonStyle(.plain)
 
             Button {
                 isPresented = false
