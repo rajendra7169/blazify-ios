@@ -17,8 +17,29 @@ struct PlayerView: View {
     @State private var showMenu = false
     @State private var lyricsMode = false
     @State private var immersive = false
+    @State private var dragOffset: CGFloat = 0
 
     private var design: PlayerDesign { PlayerDesign(rawValue: designRaw) ?? .classic }
+
+    // MARK: Sheet physics (ported from BottomSheet.kt)
+    //
+    // The sheet's "value" is its visible height: expandedBound at rest, shrinking
+    // 1:1 with the finger (no rubber-banding, hard-clamped at the top).
+
+    private var expandedBound: CGFloat { UIScreen.main.bounds.height }
+    /// mini-player (64) + its spacing (8) + nav bar (80)
+    private var collapsedBound: CGFloat { 152 }
+
+    private var sheetProgress: Double {
+        let span = expandedBound - collapsedBound
+        guard span > 0 else { return 1 }
+        return min(max(1 - Double(dragOffset / span), 0), 1)
+    }
+
+    /// Finger-release settle: critically damped, stiffness 1500 (SpringSpec()).
+    private var settleSpring: Animation {
+        .interpolatingSpring(mass: 1, stiffness: 1500, damping: 77.46)
+    }
 
     var body: some View {
         ZStack {
@@ -37,17 +58,15 @@ struct PlayerView: View {
             content
                 .padding(.bottom, 16)
                 .foregroundStyle(.white)
+                // Full-player content fades over progress 0.15…0.40, as in BottomSheet.kt.
+                .opacity(min(max((sheetProgress - 0.15) * 4, 0), 1))
                 .animation(.easeInOut(duration: 0.25), value: lyricsMode)
                 .animation(.easeInOut(duration: 0.25), value: immersive)
         }
-        .gesture(
-            DragGesture(minimumDistance: 10)
-                .onEnded { g in
-                    if g.translation.height > 90, g.translation.height > abs(g.translation.width) {
-                        dismiss()
-                    }
-                },
-        )
+        // 16pt top corners while dragging, square once fully expanded (binary, not lerped).
+        .clipShape(RoundedRectangle(cornerRadius: dragOffset > 0 ? 16 : 0, style: .continuous))
+        .offset(y: dragOffset)
+        .gesture(sheetDrag)
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
         .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }
@@ -59,6 +78,35 @@ struct PlayerView: View {
                 onLyrics: { lyricsMode = true },
             )
         }
+    }
+
+    /// The sheet drag: 1:1 with the finger, then a velocity/position classifier —
+    /// never a decay fling (performFling in BottomSheet.kt uses velocity only to
+    /// choose a target, and the spring gets no initial velocity).
+    private var sheetDrag: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { g in
+                dragOffset = max(0, g.translation.height)   // hard-clamped at the top
+            }
+            .onEnded { g in
+                let vy = g.velocity.height                  // px/s, positive = downward
+                let value = expandedBound - dragOffset      // the sheet's visible height
+                let midpoint = (expandedBound - collapsedBound) / 2
+
+                if vy < -250 {                              // flicked up → expand
+                    springBack()
+                } else if vy > 250 {                        // flicked down → collapse
+                    dismiss()
+                } else if value > midpoint {
+                    springBack()
+                } else {
+                    dismiss()
+                }
+            }
+    }
+
+    private func springBack() {
+        withAnimation(settleSpring) { dragOffset = 0 }
     }
 
     // MARK: Layout dispatch
