@@ -53,6 +53,13 @@ struct LyricsPane: View {
         }
     }
 
+    /// The genuine track length. `Track.duration` is 0 for songs parsed out of
+    /// YouTube, so prefer what the player measured off the stream — the lyric
+    /// providers use it to tell versions of a song apart.
+    private var knownDuration: Double {
+        player.duration > 0 ? player.duration : (player.current?.duration ?? 0)
+    }
+
     // MARK: Header
 
     private var header: some View {
@@ -309,13 +316,13 @@ struct LyricsPane: View {
             ready = true
             // Still fetch the alternatives so the picker stays usable.
             let found = await Lyrics.search(title: track.title, artist: track.artist,
-                                            videoId: track.videoId, duration: track.duration)
+                                            videoId: track.videoId, duration: knownDuration)
             await MainActor.run { candidates = found }
             return
         }
 
         let found = await Lyrics.search(title: track.title, artist: track.artist,
-                                        videoId: track.videoId, duration: track.duration)
+                                        videoId: track.videoId, duration: knownDuration)
         await MainActor.run {
             candidates = found
             result = Lyrics.best(found)

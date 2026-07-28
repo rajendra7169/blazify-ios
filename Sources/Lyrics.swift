@@ -22,6 +22,10 @@ struct LyricsCandidate: Identifiable, Equatable {
     let trackName: String
     let artistName: String
     let result: LyricsResult
+    /// How well this matched the song we asked for — see `Lyrics.matchScore`.
+    /// Higher wins, and it outranks provider preference: a well-matched LrcLib
+    /// result beats a badly-matched Apple one.
+    var score: Double = 0
 
     var synced: Bool { result.synced }
 
@@ -54,21 +58,79 @@ enum Lyrics {
     /// `videoId` unlocks YouTube's own lyrics when known.
     static func search(title: String, artist: String, videoId: String = "",
                        duration: Double = 0) async -> [LyricsCandidate] {
-        async let lrc = lrcLib(title: title, artist: artist)
-        async let kugou = kuGou(title: title, artist: artist)
-        async let apple = appleMusic(title: title, artist: artist)
+        async let lrc = lrcLib(title: title, artist: artist, duration: duration)
+        async let kugou = kuGou(title: title, artist: artist, duration: duration)
+        async let apple = appleMusic(title: title, artist: artist, duration: duration)
         async let yt = youTube(videoId: videoId, title: title, artist: artist)
         async let better = betterLyrics(title: title, artist: artist,
                                         videoId: videoId, duration: duration)
         let all = await apple + better + lrc + kugou + yt
-        // Synced first, then by provider rank, preserving arrival order within a rank.
+        // Match quality first — that's what stops a confident-but-wrong result
+        // from a preferred provider winning. Then synced, then provider rank.
         return all.enumerated().sorted { a, b in
+            if a.element.score != b.element.score { return a.element.score > b.element.score }
             if a.element.synced != b.element.synced { return a.element.synced }
             let ra = rank(a.element.provider), rb = rank(b.element.provider)
             if ra != rb { return ra < rb }
             return a.offset < b.offset
         }.map(\.element)
     }
+
+    /// How well a search result matches the song we actually want. Ported from
+    /// Paxsenix's `scoreAndFilterResults`: duration dominates, then the title,
+    /// then the artist, with penalties for remix/mixed versions we didn't ask
+    /// for. `duration` and `resultDuration` are seconds; 0 means unknown.
+    static func matchScore(resultTitle: String, resultArtist: String, resultDuration: Double,
+                           title: String, artist: String, duration: Double) -> Double {
+        var score = 0.0
+
+        func strip(_ s: String) -> String {
+            s.replacingOccurrences(of: #"\s*\(.*?\)|\s*\[.*?\]"#, with: "",
+                                   options: .regularExpression)
+                .lowercased()
+                .trimmingCharacters(in: .whitespaces)
+        }
+        let wantTitle = strip(title)
+        let gotTitle = strip(resultTitle)
+        let wantArtist = cleanArtist(artist).lowercased()
+        let gotArtist = resultArtist.lowercased()
+
+        if duration > 0, resultDuration > 0 {
+            let diff = abs(resultDuration - duration)
+            if diff <= 2 { score += 100 }
+            else if diff <= 5 { score += 50 }
+            else if diff <= 10 { score += 10 }
+            else { score -= 50 }        // almost certainly a different cut
+        }
+
+        if !wantTitle.isEmpty, !gotTitle.isEmpty {
+            if gotTitle == wantTitle {
+                score += 80
+            } else if gotTitle.contains(wantTitle) || wantTitle.contains(gotTitle) {
+                score += 40
+            }
+        }
+
+        if resultTitle.localizedCaseInsensitiveContains("mixed"),
+           !title.localizedCaseInsensitiveContains("mixed") { score -= 60 }
+        if resultTitle.localizedCaseInsensitiveContains("remix"),
+           !title.localizedCaseInsensitiveContains("remix") { score -= 40 }
+
+        if !wantArtist.isEmpty {
+            if gotArtist.contains(wantArtist) {
+                score += 50
+            } else {
+                let words = wantArtist.split(separator: " ").filter { $0.count > 2 }
+                if words.contains(where: { gotArtist.contains($0) }) { score += 25 }
+            }
+        }
+        return score
+    }
+
+    /// Providers that match server-side and hand back a single answer, so we
+    /// can't score their result — treat them as a reasonable-but-not-verified
+    /// match, below a duration-confirmed hit and above a contradicted one.
+    private static let unverifiedScore: Double = 45
 
     private static func rank(_ provider: String) -> Int {
         switch provider.lowercased() {
@@ -115,13 +177,17 @@ enum Lyrics {
 
         let lines = parseLRC(lrc)
         guard !lines.isEmpty else { return [] }
+        // Matched server-side on the exact title/artist/duration we sent, and
+        // its 401-on-miss means a 200 is already a confirmation.
         return [LyricsCandidate(provider: "BetterLyrics", trackName: title, artistName: artist,
-                                result: LyricsResult(lines: lines, plain: nil, synced: true, raw: lrc))]
+                                result: LyricsResult(lines: lines, plain: nil, synced: true, raw: lrc),
+                                score: duration > 0 ? 90 : unverifiedScore)]
     }
 
     // MARK: LrcLib
 
-    private static func lrcLib(title: String, artist: String) async -> [LyricsCandidate] {
+    private static func lrcLib(title: String, artist: String,
+                               duration: Double) async -> [LyricsCandidate] {
         let t = cleanTitle(title)
         let a = cleanArtist(artist)
 
@@ -134,13 +200,15 @@ enum Lyrics {
         if !t.isEmpty { attempts.append([.init(name: "q", value: t)]) }
 
         for items in attempts {
-            let candidates = await lrcLibRequest(items)
+            let candidates = await lrcLibRequest(items, title: title, artist: artist,
+                                                 duration: duration)
             if !candidates.isEmpty { return candidates }
         }
         return []
     }
 
-    private static func lrcLibRequest(_ items: [URLQueryItem]) async -> [LyricsCandidate] {
+    private static func lrcLibRequest(_ items: [URLQueryItem], title: String, artist: String,
+                                      duration: Double) async -> [LyricsCandidate] {
         var comps = URLComponents(string: "https://lrclib.net/api/search")!
         comps.queryItems = items
         guard let url = comps.url else { return [] }
@@ -155,18 +223,29 @@ enum Lyrics {
         for item in arr {
             let name = item["trackName"] as? String ?? ""
             let by = item["artistName"] as? String ?? ""
+            // LrcLib returns its own duration, so score each hit rather than
+            // trusting search order — several same-name cuts come back at once.
+            let itemDuration = (item["duration"] as? Double)
+                ?? (item["duration"] as? NSNumber)?.doubleValue ?? 0
+            let score = matchScore(resultTitle: name, resultArtist: by,
+                                   resultDuration: itemDuration,
+                                   title: title, artist: artist, duration: duration)
+            guard score > 0 else { continue }
+
             if let lrc = item["syncedLyrics"] as? String, !lrc.isEmpty {
                 out.append(LyricsCandidate(provider: "LrcLib", trackName: name, artistName: by,
                                            result: LyricsResult(lines: parseLRC(lrc),
                                                                 plain: item["plainLyrics"] as? String,
-                                                                synced: true, raw: lrc)))
+                                                                synced: true, raw: lrc),
+                                           score: score))
             } else if let plain = item["plainLyrics"] as? String, !plain.isEmpty {
                 out.append(LyricsCandidate(provider: "LrcLib", trackName: name, artistName: by,
                                            result: LyricsResult(lines: [], plain: plain,
-                                                                synced: false, raw: nil)))
+                                                                synced: false, raw: nil),
+                                           score: score))
             }
         }
-        return out
+        return out.sorted { $0.score > $1.score }
     }
 
     // MARK: Apple Music (anonymous web token → catalog search → lyrics relay)
@@ -195,7 +274,8 @@ enum Lyrics {
         return appleToken
     }
 
-    private static func appleMusic(title: String, artist: String) async -> [LyricsCandidate] {
+    private static func appleMusic(title: String, artist: String,
+                                   duration: Double) async -> [LyricsCandidate] {
         guard let token = await fetchAppleToken() else { return [] }
         let term = "\(cleanTitle(title)) \(cleanArtist(artist))"
         guard let encoded = term.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
@@ -220,10 +300,24 @@ enum Lyrics {
               let songs = (results["songs"] as? [String: Any])?["data"] as? [[String: Any]]
         else { return [] }
 
-        var out: [LyricsCandidate] = []
-        for song in songs.prefix(2) {
-            guard let id = song["id"] as? String else { continue }
+        // Score every hit before trusting any of them: Apple's search happily
+        // returns remixes, unplugged cuts and same-name songs by other artists.
+        let scored: [(id: String, attrs: [String: Any], score: Double)] = songs.compactMap { song in
+            guard let id = song["id"] as? String else { return nil }
             let attrs = song["attributes"] as? [String: Any] ?? [:]
+            let seconds = ((attrs["durationInMillis"] as? Double)
+                           ?? (attrs["durationInMillis"] as? NSNumber)?.doubleValue ?? 0) / 1000
+            let score = matchScore(resultTitle: attrs["name"] as? String ?? "",
+                                   resultArtist: attrs["artistName"] as? String ?? "",
+                                   resultDuration: seconds,
+                                   title: title, artist: artist, duration: duration)
+            return score > 0 ? (id, attrs, score) : nil
+        }.sorted { $0.score > $1.score }
+
+        var out: [LyricsCandidate] = []
+        for song in scored.prefix(2) {
+            let id = song.id
+            let attrs = song.attrs
             guard let lyricsURL = URL(string: "https://lyrics.paxsenix.org/apple-music/lyrics?id=\(id)")
             else { continue }
             var lyricsReq = URLRequest(url: lyricsURL)
@@ -237,11 +331,13 @@ enum Lyrics {
             if let lrc = payload["lrc"] as? String, !lrc.isEmpty {
                 out.append(LyricsCandidate(provider: "Apple Music", trackName: name, artistName: by,
                                            result: LyricsResult(lines: parseLRC(lrc), plain: nil,
-                                                                synced: true, raw: lrc)))
+                                                                synced: true, raw: lrc),
+                                           score: song.score))
             } else if let plain = payload["plain"] as? String, !plain.isEmpty {
                 out.append(LyricsCandidate(provider: "Apple Music", trackName: name, artistName: by,
                                            result: LyricsResult(lines: [], plain: plain,
-                                                                synced: false, raw: nil)))
+                                                                synced: false, raw: nil),
+                                           score: song.score))
             }
         }
         return out
@@ -251,14 +347,17 @@ enum Lyrics {
 
     private static func youTube(videoId: String, title: String, artist: String) async -> [LyricsCandidate] {
         guard !videoId.isEmpty, let found = await YouTube.lyrics(videoId: videoId) else { return [] }
+        // Keyed on the videoId itself, so this is always the right song.
         return [LyricsCandidate(provider: found.source, trackName: title, artistName: artist,
                                 result: LyricsResult(lines: [], plain: found.text,
-                                                     synced: false, raw: nil))]
+                                                     synced: false, raw: nil),
+                                score: 95)]
     }
 
     // MARK: KuGou (search → candidates by hash → base64 LRC)
 
-    private static func kuGou(title: String, artist: String) async -> [LyricsCandidate] {
+    private static func kuGou(title: String, artist: String,
+                              duration: Double) async -> [LyricsCandidate] {
         let keyword = "\(cleanTitle(title)) - \(cleanArtist(artist))"
         guard let encoded = keyword.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return [] }
 
@@ -286,12 +385,17 @@ enum Lyrics {
 
             let normalized = normalizeKuGou(lrc)
             guard !normalized.isEmpty else { continue }
+            let kugouName = song["songname"] as? String ?? ""
+            let kugouArtist = song["singername"] as? String ?? ""
             out.append(LyricsCandidate(
                 provider: "KuGou",
-                trackName: song["songname"] as? String ?? "",
-                artistName: song["singername"] as? String ?? "",
+                trackName: kugouName,
+                artistName: kugouArtist,
                 result: LyricsResult(lines: parseLRC(normalized), plain: nil,
-                                     synced: true, raw: normalized)))
+                                     synced: true, raw: normalized),
+                score: max(matchScore(resultTitle: kugouName, resultArtist: kugouArtist,
+                                      resultDuration: 0, title: title, artist: artist,
+                                      duration: duration), 1)))
             if out.count >= 2 { break }
         }
         return out

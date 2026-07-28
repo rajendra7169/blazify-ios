@@ -297,6 +297,13 @@ struct RingLyricsCard: View {
         .task(id: player.current?.videoId) { await load() }
     }
 
+    /// The genuine track length. `Track.duration` is 0 for songs parsed out of
+    /// YouTube, so prefer what the player measured off the stream — the lyric
+    /// providers use it to tell versions of a song apart.
+    private var knownDuration: Double {
+        player.duration > 0 ? player.duration : (player.current?.duration ?? 0)
+    }
+
     private var activeIndex: Int? {
         guard !lines.isEmpty else { return nil }
         let t = player.currentTime + 0.2
@@ -312,7 +319,7 @@ struct RingLyricsCard: View {
         lines = []
         guard let track = player.current else { loading = false; return }
         let found = await Lyrics.search(title: track.title, artist: track.artist,
-                                        videoId: track.videoId, duration: track.duration)
+                                        videoId: track.videoId, duration: knownDuration)
         await MainActor.run {
             lines = Lyrics.best(found)?.lines ?? []
             loading = false
