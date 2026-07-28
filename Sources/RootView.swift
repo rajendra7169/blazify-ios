@@ -9,12 +9,9 @@ struct RootView: View {
     @State private var tab: BlazeTab = .home
     @Environment(\.colorScheme) private var scheme
 
-    /// Home-indicator height, so the bar clears it and content clears the bar.
-    private var safeBottom: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first?.safeAreaInsets.bottom ?? 0
-    }
+    /// Home-indicator height. Measured once on appear — reading UIKit's window
+    /// on every body pass is the kind of thing that upsets SwiftUI's layout.
+    @State private var safeBottom: CGFloat = 34
 
     /// Mini-player (64 + 8 gap) plus the 70pt bar plus the home indicator.
     /// Pages add this as bottom padding themselves — see `playerBottomPadding()`.
@@ -53,6 +50,11 @@ struct RootView: View {
                 }
                 BlazeTabBar(selection: $tab, palette: palette)
             }
+        }
+        .onAppear {
+            safeBottom = UIApplication.shared.connectedScenes
+                .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+                .first?.safeAreaInsets.bottom ?? 34
         }
         .environment(\.palette, palette)
         .environment(\.playerBottomInset, bottomInset)
@@ -107,6 +109,9 @@ struct BlazeTabBar: View {
                     }
                     .foregroundStyle(active ? palette.accent : palette.onSurfaceVariant)
                     .frame(maxWidth: .infinity)
+                    // Without this the button only accepts taps that land on a
+                    // glyph, not anywhere in its column.
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
