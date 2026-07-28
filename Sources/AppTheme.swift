@@ -164,16 +164,70 @@ extension Color {
     }
 }
 
-/// Reads the resolved palette in a view: `@Environment(\.colorScheme)` decides
-/// light/dark, AppTheme decides everything else.
-struct Palette {
+/// The resolved palette for the current appearance.
+///
+/// Colours are *stored*, not computed on demand, so the value genuinely changes
+/// when the seed changes — that's what makes SwiftUI repaint every view when
+/// new album art recolours the app. A version that read `AppTheme.shared`
+/// lazily would compare equal and nothing downstream would redraw.
+struct Palette: Equatable {
     let dark: Bool
-    private let theme = AppTheme.shared
+    let scaffold: Color
+    let surface: Color
+    let surfaceHigh: Color
+    let accent: Color
+    let onSurface: Color
+    let onSurfaceVariant: Color
+    /// Text/icons drawn on top of `accent`.
+    let onAccent: Color
 
-    var scaffold: Color { theme.scaffold(dark) }
-    var surface: Color { theme.surface(dark) }
-    var surfaceHigh: Color { theme.surfaceHigh(dark) }
-    var accent: Color { theme.accent(dark) }
-    var onSurface: Color { theme.onSurface(dark) }
-    var onSurfaceVariant: Color { theme.onSurfaceVariant(dark) }
+    init(dark: Bool, theme: AppTheme = .shared) {
+        self.dark = dark
+        scaffold = theme.scaffold(dark)
+        surface = theme.surface(dark)
+        surfaceHigh = theme.surfaceHigh(dark)
+        accent = theme.accent(dark)
+        onSurface = theme.onSurface(dark)
+        onSurfaceVariant = theme.onSurfaceVariant(dark)
+        onAccent = dark ? theme.seed.tone(20, chroma: 0.5) : .white
+    }
+
+    /// The greeting-card / hero gradient, seeded by the current accent so it
+    /// tracks album art the way Android's `colorScheme.primary` does.
+    var heroGradient: LinearGradient {
+        LinearGradient(colors: [accent, accent.tone(dark ? 55 : 48, chroma: 0.95)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    /// Divider / hairline colour.
+    var separator: Color { onSurface.opacity(0.08) }
+}
+
+private struct PaletteKey: EnvironmentKey {
+    static let defaultValue = Palette(dark: true)
+}
+
+/// Height taken by the mini-player + tab bar, so scrolling content can clear
+/// them — the equivalent of Android's `LocalPlayerAwareWindowInsets`.
+private struct PlayerInsetKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    var palette: Palette {
+        get { self[PaletteKey.self] }
+        set { self[PaletteKey.self] = newValue }
+    }
+
+    var playerBottomInset: CGFloat {
+        get { self[PlayerInsetKey.self] }
+        set { self[PlayerInsetKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Clears the mini-player and tab bar at the end of a scrolling page.
+    func playerAwareBottomPadding(_ inset: CGFloat, extra: CGFloat = 12) -> some View {
+        padding(.bottom, inset + extra)
+    }
 }
