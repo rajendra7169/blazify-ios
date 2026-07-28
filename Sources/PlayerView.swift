@@ -13,8 +13,9 @@ struct PlayerView: View {
     @State private var scrub: Double?
     @State private var showQueue = false
     @State private var showSleep = false
-    @State private var showLyrics = false
     @State private var showDesign = false
+    @State private var lyricsMode = false   // lyrics replace the art (inline, like Android)
+    @State private var immersive = false    // hide transport + bottom row, lyrics + title + slider only
 
     var body: some View {
         // Smaller than before so the controls below get more room.
@@ -32,18 +33,30 @@ struct PlayerView: View {
 
             VStack(spacing: 0) {
                 header
-                Spacer(minLength: 16)
-                albumArt(side: art)
-                Spacer(minLength: 22)      // art → title/progress group
+                Spacer(minLength: 12)
+                if lyricsMode {
+                    LyricsPane(player: player)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(.opacity)
+                } else {
+                    albumArt(side: art)
+                }
+                Spacer(minLength: 18)
                 titleAndProgress
-                Spacer(minLength: 30)      // group → transport (generous)
-                transport
-                Spacer(minLength: 24)      // transport → bottom row
-                bottomRow
+                if !immersive {
+                    Spacer(minLength: 28)
+                    transport
+                    Spacer(minLength: 22)
+                    bottomRow
+                } else {
+                    Spacer(minLength: 16)
+                }
             }
             .padding(.top, 6)
             .padding(.bottom, 16)
             .foregroundStyle(.white)
+            .animation(.easeInOut(duration: 0.25), value: lyricsMode)
+            .animation(.easeInOut(duration: 0.25), value: immersive)
         }
         // Swipe down anywhere to close/minimize (child gestures like the slider win locally).
         .gesture(
@@ -54,7 +67,6 @@ struct PlayerView: View {
                     }
                 },
         )
-        .fullScreenCover(isPresented: $showLyrics) { LyricsView(player: player) }
         .sheet(isPresented: $showDesign) { PlayerDesignSheet() }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
         .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }
@@ -133,47 +145,62 @@ struct PlayerView: View {
                 }
                 Spacer(minLength: 0)
 
-                Button { player.toggleFavorite() } label: {
-                    Image(systemName: player.isCurrentFavorite ? "heart.fill" : "heart")
-                        .font(.system(size: 26))
-                        .foregroundStyle(player.isCurrentFavorite ? .red : .white)
-                }
-
-                Button { showDesign = true } label: {
-                    Image(systemName: "paintpalette")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .frame(width: 40, height: 40)
-                        .background(Color.white)
-                        .clipShape(Circle())
-                }
-
-                Menu {
-                    let dState = downloads.state(player.current?.videoId ?? "")
-                    Button {
-                        if let t = player.current { downloads.toggle(t) }
-                    } label: {
-                        Label(dState == .done ? "Remove download"
-                                : dState == .downloading ? "Downloading…" : "Download for offline",
-                              systemImage: dState == .done ? "arrow.down.circle.fill"
-                                : dState == .downloading ? "hourglass" : "arrow.down.circle")
+                // In lyrics mode the heart becomes a full-screen (immersive) toggle.
+                if lyricsMode {
+                    Button { immersive.toggle() } label: {
+                        Image(systemName: immersive
+                              ? "arrow.down.right.and.arrow.up.left"
+                              : "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
                     }
-                    .disabled(dState == .downloading)
-
-                    if let url = shareURL {
-                        ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
-                    }
+                } else {
                     Button { player.toggleFavorite() } label: {
-                        Label(player.isCurrentFavorite ? "Remove from Favorites" : "Add to Favorites",
-                              systemImage: "heart")
+                        Image(systemName: player.isCurrentFavorite ? "heart.fill" : "heart")
+                            .font(.system(size: 26))
+                            .foregroundStyle(player.isCurrentFavorite ? .red : .white)
                     }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(Color.white.opacity(0.15))
-                        .clipShape(Circle())
+                }
+
+                // Immersive mode shows only the title + slider (+ the toggle above).
+                if !immersive {
+                    Button { showDesign = true } label: {
+                        Image(systemName: "paintpalette")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.black)
+                            .frame(width: 40, height: 40)
+                            .background(Color.white)
+                            .clipShape(Circle())
+                    }
+
+                    Menu {
+                        let dState = downloads.state(player.current?.videoId ?? "")
+                        Button {
+                            if let t = player.current { downloads.toggle(t) }
+                        } label: {
+                            Label(dState == .done ? "Remove download"
+                                    : dState == .downloading ? "Downloading…" : "Download for offline",
+                                  systemImage: dState == .done ? "arrow.down.circle.fill"
+                                    : dState == .downloading ? "hourglass" : "arrow.down.circle")
+                        }
+                        .disabled(dState == .downloading)
+
+                        if let url = shareURL {
+                            ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+                        }
+                        Button { player.toggleFavorite() } label: {
+                            Label(player.isCurrentFavorite ? "Remove from Favorites" : "Add to Favorites",
+                                  systemImage: "heart")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(Color.white.opacity(0.15))
+                            .clipShape(Circle())
+                    }
                 }
             }
             .padding(.horizontal, 32)
@@ -247,7 +274,10 @@ struct PlayerView: View {
             bottomButton("list.bullet", "Queue") { showQueue = true }
             bottomButton(player.sleepActive ? "moon.zzz.fill" : "moon.zzz",
                          sleepLabel, active: player.sleepActive) { showSleep = true }
-            bottomButton("quote.bubble", "Lyrics") { showLyrics = true }
+            bottomButton("quote.bubble", "Lyrics", active: lyricsMode) {
+                lyricsMode.toggle()
+                if !lyricsMode { immersive = false }
+            }
         }
         .padding(.horizontal, 20)
     }

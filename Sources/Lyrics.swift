@@ -13,8 +13,7 @@ struct LyricsResult: Equatable {
     let synced: Bool
 }
 
-/// One alternate lyrics version for the language/source picker (Blaze's language
-/// button switches between these).
+/// One alternate lyrics version for the language/source picker.
 struct LyricsCandidate: Identifiable {
     let id: Int
     let trackName: String
@@ -23,18 +22,38 @@ struct LyricsCandidate: Identifiable {
     var synced: Bool { result.synced }
 }
 
-/// Lyrics from LrcLib (open synced-lyrics API, no auth) — the source Blazify uses
-/// alongside KuGou/BetterLyrics; LrcLib alone covers the vast majority.
+/// Lyrics from LrcLib (open synced-lyrics API, no auth). Tries several search
+/// strategies — YT Music titles carry "(Official Video)", "feat.", "- Topic"
+/// etc. that make a naive LrcLib lookup miss most songs.
 enum Lyrics {
-    /// All matching versions for a track (used for both the best pick and the picker).
+    static let sourceName = "LrcLib"
+
     static func search(title: String, artist: String) async -> [LyricsCandidate] {
-        let cleanTitle = title.replacingOccurrences(of: #"\s*\((feat|with|from)[^)]*\)"#,
-                                                     with: "", options: .regularExpression)
+        let t = cleanTitle(title)
+        let a = cleanArtist(artist)
+
+        var attempts: [[URLQueryItem]] = []
+        if !t.isEmpty, !a.isEmpty {
+            attempts.append([.init(name: "track_name", value: t), .init(name: "artist_name", value: a)])
+        }
+        if !t.isEmpty { attempts.append([.init(name: "track_name", value: t)]) }
+        if !t.isEmpty, !a.isEmpty { attempts.append([.init(name: "q", value: "\(a) \(t)")]) }
+        if !t.isEmpty { attempts.append([.init(name: "q", value: t)]) }
+
+        for items in attempts {
+            let candidates = await request(items)
+            if !candidates.isEmpty { return candidates }
+        }
+        return []
+    }
+
+    static func best(_ candidates: [LyricsCandidate]) -> LyricsResult? {
+        candidates.first(where: { $0.synced })?.result ?? candidates.first?.result
+    }
+
+    private static func request(_ items: [URLQueryItem]) async -> [LyricsCandidate] {
         var comps = URLComponents(string: "https://lrclib.net/api/search")!
-        comps.queryItems = [
-            URLQueryItem(name: "track_name", value: cleanTitle),
-            URLQueryItem(name: "artist_name", value: artist),
-        ]
+        comps.queryItems = items
         guard let url = comps.url else { return [] }
         var req = URLRequest(url: url)
         req.setValue("Blazify iOS (github.com/rajendra7169/blazify-ios)", forHTTPHeaderField: "User-Agent")
@@ -45,7 +64,7 @@ enum Lyrics {
 
         var out: [LyricsCandidate] = []
         for item in arr {
-            let id = (item["id"] as? Int) ?? 0
+            let id = (item["id"] as? Int) ?? out.count
             let name = item["trackName"] as? String ?? ""
             let by = item["artistName"] as? String ?? ""
             if let lrc = item["syncedLyrics"] as? String, !lrc.isEmpty {
@@ -61,9 +80,20 @@ enum Lyrics {
         return out
     }
 
-    /// Prefer a synced version, else the first plain one.
-    static func best(_ candidates: [LyricsCandidate]) -> LyricsResult? {
-        candidates.first(where: { $0.synced })?.result ?? candidates.first?.result
+    private static func cleanTitle(_ s: String) -> String {
+        var x = s
+        x = x.replacingOccurrences(of: #"\([^)]*\)"#, with: "", options: .regularExpression)
+        x = x.replacingOccurrences(of: #"\[[^\]]*\]"#, with: "", options: .regularExpression)
+        x = x.replacingOccurrences(of: #"(?i)\s*[-–|]\s*(official.*|lyric.*|audio|video|visualizer|mix|remaster.*)\s*$"#,
+                                   with: "", options: .regularExpression)
+        x = x.replacingOccurrences(of: #"(?i)\s*\b(feat\.?|ft\.?|featuring)\b.*$"#, with: "", options: .regularExpression)
+        return x.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func cleanArtist(_ s: String) -> String {
+        let noTopic = s.replacingOccurrences(of: #"(?i)\s*-\s*topic\s*$"#, with: "", options: .regularExpression)
+        let first = noTopic.split(whereSeparator: { $0 == "," || $0 == "&" }).first.map(String.init) ?? noTopic
+        return first.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Parse `[mm:ss.xx] text` LRC into sorted timestamped lines.

@@ -1,12 +1,11 @@
 import SwiftUI
 import UIKit
 
-/// Full-screen synced lyrics, Blaze-style: album-art gradient background, the
-/// current line at full white with a distance-based fade on the rest, auto-scrolled
-/// to center; tap a line to seek. The "Language" button switches lyric versions.
-struct LyricsView: View {
+/// Inline lyrics (shown in the player where the art is) — Blaze-style: source
+/// label + language picker on top, synced lines with a distance-based fade,
+/// auto-scroll to the active line, tap a line to seek.
+struct LyricsPane: View {
     @ObservedObject var player: Player
-    @Environment(\.dismiss) private var dismiss
 
     @State private var candidates: [LyricsCandidate] = []
     @State private var result: LyricsResult?
@@ -14,20 +13,31 @@ struct LyricsView: View {
     @State private var showVersions = false
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [player.artColor, player.artColor.opacity(0.4), .black],
-                startPoint: .top, endPoint: .bottom,
-            )
-            .overlay(Color.black.opacity(0.25))
-            .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.6), value: player.artColor)
-
-            VStack(spacing: 0) {
-                topBar
-                content
+        VStack(spacing: 0) {
+            // Source + language, on top of the lyrics.
+            HStack {
+                Text(result == nil ? "" : "Lyrics from \(Lyrics.sourceName)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                Spacer()
+                Button { showVersions = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "character.bubble")
+                        Text("Language")
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Color.white.opacity(0.15))
+                    .clipShape(Capsule())
+                }
+                .disabled(candidates.count < 2)
+                .opacity(candidates.count < 2 ? 0.4 : 1)
             }
-            .foregroundStyle(.white)
+            .padding(.horizontal, 22)
+            .padding(.bottom, 6)
+
+            content
         }
         .task(id: player.current?.videoId) { await load() }
         .sheet(isPresented: $showVersions) {
@@ -38,61 +48,26 @@ struct LyricsView: View {
         }
     }
 
-    // MARK: Top bar (close + centered Language button)
-
-    private var topBar: some View {
-        ZStack {
-            Button { showVersions = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "character.bubble")
-                    Text("Language")
-                }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16).padding(.vertical, 9)
-                .background(Color.white.opacity(0.15))
-                .clipShape(Capsule())
-            }
-            .disabled(candidates.count < 2)
-            .opacity(candidates.count < 2 ? 0.5 : 1)
-
-            HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                }
-                Spacer()
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-    }
-
-    // MARK: Content
-
     @ViewBuilder private var content: some View {
         if loading {
-            Spacer(); ProgressView().tint(.white).scaleEffect(1.3); Spacer()
+            Spacer(); ProgressView().tint(.white); Spacer()
         } else if let result, result.synced, !result.lines.isEmpty {
             syncedLyrics(result.lines)
         } else if let plain = result?.plain, !plain.isEmpty {
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 Text(plain)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 21, weight: .bold))
                     .tracking(-0.5)
                     .foregroundStyle(.white.opacity(0.85))
                     .lineSpacing(8)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 24).padding(.vertical, 40)
+                    .padding(.horizontal, 24).padding(.vertical, 24)
             }
         } else {
             Spacer()
-            VStack(spacing: 10) {
-                Image(systemName: "music.note.list").font(.system(size: 40)).opacity(0.5)
+            VStack(spacing: 8) {
+                Image(systemName: "music.note.list").font(.system(size: 34)).opacity(0.5)
                 Text("Lyrics not found").foregroundStyle(.white.opacity(0.6))
             }
             Spacer()
@@ -102,11 +77,11 @@ struct LyricsView: View {
     private func syncedLyrics(_ lines: [LyricLine]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .center, spacing: 22) {
+                LazyVStack(alignment: .center, spacing: 20) {
                     ForEach(Array(lines.enumerated()), id: \.element.id) { pair in
                         let distance = abs(pair.offset - (activeIndex ?? -100))
                         Text(pair.element.text.isEmpty ? "♪" : pair.element.text)
-                            .font(.system(size: 27, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                             .tracking(-0.5)
                             .foregroundStyle(.white.opacity(alpha(distance)))
                             .multilineTextAlignment(.center)
@@ -119,9 +94,8 @@ struct LyricsView: View {
                             }
                     }
                 }
-                .padding(.horizontal, 26)
-                // Big top/bottom insets so the active line can sit centered.
-                .padding(.vertical, UIScreen.main.bounds.height * 0.4)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 90)
             }
             .onChange(of: activeIndex) {
                 guard let i = activeIndex else { return }
@@ -130,7 +104,6 @@ struct LyricsView: View {
         }
     }
 
-    /// Blaze's fade ladder: active line solid, neighbours progressively dimmer.
     private func alpha(_ distance: Int) -> Double {
         switch distance {
         case 0: return 1.0
@@ -142,7 +115,6 @@ struct LyricsView: View {
         }
     }
 
-    /// Index of the last line whose timestamp has passed.
     private var activeIndex: Int? {
         guard let lines = result?.lines, !lines.isEmpty else { return nil }
         let t = player.currentTime + 0.2
@@ -168,7 +140,7 @@ struct LyricsView: View {
 }
 
 /// Version/source picker opened by the Language button.
-private struct LyricsVersionPicker: View {
+struct LyricsVersionPicker: View {
     let candidates: [LyricsCandidate]
     let current: LyricsResult?
     let onPick: (LyricsCandidate) -> Void
