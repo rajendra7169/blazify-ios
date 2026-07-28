@@ -170,8 +170,11 @@ struct YoursView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 12) {
                 ForEach(Array(playlistCards.enumerated()), id: \.offset) { _, card in
+                    // Seeded from the accent, so these recolour with the artwork
+                    // of whatever is playing — as Android's colorScheme.primary does.
                     BlazeGradientCard(title: card.title, subtitle: card.subtitle,
-                                      seed: palette.accent, width: 160, height: 160,
+                                      thumbnail: card.thumb, seed: palette.accent,
+                                      width: 160, height: 160,
                                       icon: card.item == nil ? "heart.fill" : nil) {
                         if let item = card.item {
                             route = .playlist(item)

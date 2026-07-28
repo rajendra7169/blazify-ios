@@ -221,10 +221,13 @@ struct BlazeCategoryTile: View {
     }
 }
 
-/// Tall gradient card with no artwork — the mood tiles.
+/// A gradient card — playlists (artwork fading top-down into the seed colour)
+/// and the mood tiles (seed-only). Ported from BlazeGradientCard in
+/// BlazeYoursComponents.kt, gradient stops included.
 struct BlazeGradientCard: View {
     let title: String
     var subtitle: String = ""
+    var thumbnail: String?
     let seed: Color
     var width: CGFloat = 160
     var height: CGFloat = 160
@@ -237,8 +240,22 @@ struct BlazeGradientCard: View {
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
-                LinearGradient(colors: [seed.mixed(with: .white, 0.24), seed],
-                               startPoint: .top, endPoint: .bottom)
+                if let thumbnail, let url = URL(string: thumbnail) {
+                    // Art fills the card; the seed colour washes up from the
+                    // bottom so the title always stays readable over it.
+                    RemoteImage(url: url) { seed }
+                        .frame(width: width, height: height)
+                        .clipped()
+                    LinearGradient(stops: [
+                        .init(color: .clear, location: 0.0),
+                        .init(color: .clear, location: 0.3),
+                        .init(color: seed.opacity(0.75), location: 0.6),
+                        .init(color: seed.opacity(0.95), location: 1.0),
+                    ], startPoint: .top, endPoint: .bottom)
+                } else {
+                    LinearGradient(colors: [seed.mixed(with: .white, 0.24), seed],
+                                   startPoint: .top, endPoint: .bottom)
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
