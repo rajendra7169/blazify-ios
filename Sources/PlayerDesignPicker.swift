@@ -36,6 +36,12 @@ struct PlayerDesignPicker: View {
             .padding(.top, 10)
 
             applyButton
+
+            // The mini player follows you everywhere, including here.
+            if player.hasTrack {
+                MiniPlayerView(player: player)
+                    .padding(.bottom, 8)
+            }
         }
         .background(Blaze.scaffold.ignoresSafeArea())
         .preferredColorScheme(.dark)
@@ -69,7 +75,9 @@ struct PlayerDesignPicker: View {
                         PhoneFrame {
                             DesignLivePreview(design: design, player: player)
                         }
-                        .frame(height: geo.size.height * (focused ? 0.94 : 0.82))
+                        // Slightly smaller than Android's 0.94/0.82 so the mini
+                        // player fits underneath.
+                        .frame(height: geo.size.height * (focused ? 0.90 : 0.78))
                         .frame(width: pageWidth, height: geo.size.height)
                         .id(design)
                     }
