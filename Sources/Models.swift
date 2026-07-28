@@ -19,6 +19,15 @@ struct Track: Identifiable, Equatable {
         self.duration = duration
     }
 
+    /// Thumbnail upscaled to a requested square size (googleusercontent resize).
+    func artURL(size: Int) -> URL? {
+        guard !thumbnail.isEmpty else { return nil }
+        if let r = thumbnail.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
+            return URL(string: thumbnail.replacingCharacters(in: r, with: "=w\(size)-h\(size)"))
+        }
+        return URL(string: thumbnail)
+    }
+
     /// Build from one /search JSON object.
     init?(json: [String: Any]) {
         guard let vid = json["videoId"] as? String, !vid.isEmpty else { return nil }

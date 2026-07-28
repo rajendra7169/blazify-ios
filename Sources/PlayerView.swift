@@ -10,12 +10,15 @@ struct PlayerView: View {
     @ObservedObject private var downloads = Downloads.shared
     @Environment(\.dismiss) private var dismiss
 
+    @AppStorage("playerDesign") private var designRaw = PlayerDesign.classic.rawValue
     @State private var scrub: Double?
     @State private var showQueue = false
     @State private var showSleep = false
     @State private var showDesign = false
     @State private var lyricsMode = false   // lyrics replace the art (inline, like Android)
     @State private var immersive = false    // hide transport + bottom row, lyrics + title + slider only
+
+    private var design: PlayerDesign { PlayerDesign(rawValue: designRaw) ?? .classic }
 
     var body: some View {
         // Smaller than before so the controls below get more room.
@@ -31,6 +34,16 @@ struct PlayerView: View {
             .ignoresSafeArea()
             .animation(.easeInOut(duration: 0.6), value: player.artColor)
 
+            // Full-art design: the artwork is the whole background.
+            if design == .fullArt, !lyricsMode {
+                RemoteImage(url: player.current?.artURL(size: 1280)) { ArtPlaceholder() }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .ignoresSafeArea()
+                LinearGradient(colors: [.clear, .black.opacity(0.9)], startPoint: .center, endPoint: .bottom)
+                    .ignoresSafeArea()
+            }
+
             VStack(spacing: 0) {
                 header
                 Spacer(minLength: 12)
@@ -38,8 +51,10 @@ struct PlayerView: View {
                     LyricsPane(player: player)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
+                } else if design == .fullArt {
+                    Color.clear   // art fills the background instead
                 } else {
-                    albumArt(side: art)
+                    stage(side: art)
                 }
                 Spacer(minLength: 18)
                 titleAndProgress
@@ -67,7 +82,7 @@ struct PlayerView: View {
                     }
                 },
         )
-        .sheet(isPresented: $showDesign) { PlayerDesignSheet() }
+        .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
         .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }
     }
@@ -99,32 +114,21 @@ struct PlayerView: View {
         }
     }
 
-    // MARK: Album art
+    // MARK: Artwork stage (per selected design)
 
-    /// Request a larger image for the big full-screen art than the 720 the rails use.
-    private var hiResArtURL: URL? {
-        guard let raw = player.current?.thumbnail, !raw.isEmpty else { return nil }
-        if let r = raw.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
-            return URL(string: raw.replacingCharacters(in: r, with: "=w1080-h1080"))
-        }
-        return URL(string: raw)
-    }
-
-    private func albumArt(side: CGFloat) -> some View {
-        RemoteImage(url: hiResArtURL) {
-            ZStack {
-                Blaze.gradient
-                Image(systemName: "music.note")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.white.opacity(0.85))
+    @ViewBuilder private func stage(side: CGFloat) -> some View {
+        Group {
+            switch design {
+            case .classic: SquareArtwork(player: player, side: side)
+            case .ring: RingArtwork(player: player, side: side)
+            case .record: RecordArtwork(player: player, side: side)
+            case .cassette: CassetteArtwork(player: player, side: side)
+            case .fullArt: SquareArtwork(player: player, side: side)
             }
         }
-        .frame(width: side, height: side)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
         .overlay {
             if player.isLoading {
-                ProgressView().tint(.white).scaleEffect(1.4)
+                ProgressView().tint(.white).scaleEffect(1.3)
             }
         }
     }
