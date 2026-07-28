@@ -63,10 +63,12 @@ struct PlayerView: View {
                 .animation(.easeInOut(duration: 0.25), value: lyricsMode)
                 .animation(.easeInOut(duration: 0.25), value: immersive)
         }
-        // 16pt top corners while dragging, square once fully expanded (binary, not lerped).
-        .clipShape(RoundedRectangle(cornerRadius: dragOffset > 0 ? 16 : 0, style: .continuous))
+        // NB: no clipShape here — clipping happens at the safe-area bounds, which
+        // cropped the background's ignoresSafeArea and put a black band under the
+        // status bar. Full-bleed matters more than the 16pt drag corners.
         .offset(y: dragOffset)
         .gesture(sheetDrag)
+        .onAppear { dragOffset = 0 }
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
         .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }

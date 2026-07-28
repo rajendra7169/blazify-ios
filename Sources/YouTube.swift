@@ -340,6 +340,49 @@ enum YouTube {
         return AccountInfo(name: name, email: email.isEmpty ? nil : email)
     }
 
+    // MARK: - Like / library writes (signed-in)
+
+    /// Like or un-like a song in the user's YouTube Music library.
+    /// (InnerTube `like/like` + `like/removelike`, the same calls the web app makes.)
+    @discardableResult
+    static func rateSong(videoId: String, like: Bool) async -> Bool {
+        guard Auth.shared.isLoggedIn, !videoId.isEmpty else { return false }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "target": ["videoId": videoId],
+        ]
+        let endpoint = "https://music.youtube.com/youtubei/v1/like/"
+            + (like ? "like" : "removelike") + "?prettyPrint=false"
+        let json = await post(endpoint, name: "67", version: remixVersion,
+                              userAgent: webUA, visitor: visitor, body: body, login: true)
+        // A successful call echoes a responseContext; errors carry an "error" object.
+        guard let json else { return false }
+        return json["error"] == nil
+    }
+
+    /// The user's Liked songs (the "LM" auto-playlist).
+    static func likedSongs() async -> [Track] {
+        guard Auth.shared.isLoggedIn else { return [] }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": "US"]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_liked_videos"]
+        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return [] }
+        var out: [Track] = []
+        var seen = Set<String>()
+        collectTracks(json, into: &out, seen: &seen)
+        return out
+    }
+
     // MARK: - Library (signed-in)
 
     /// The user's saved/created playlists (FEmusic_liked_playlists grid).

@@ -126,11 +126,11 @@ struct PhoneFrame<Content: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 33, style: .continuous))
             .overlay(alignment: .top) {
-                // Speaker slit — the only hardware detail (no notch/island).
+                // iPhone Dynamic Island (Android's frame draws a speaker slit here).
                 Capsule()
-                    .fill(.white.opacity(0.14))
-                    .frame(width: 40, height: 4)
-                    .padding(.top, 7)
+                    .fill(.black)
+                    .frame(width: 46, height: 13)
+                    .padding(.top, 8)
             }
             .padding(7)
             .background(

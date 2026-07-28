@@ -47,6 +47,8 @@ final class Player: ObservableObject {
     init() {
         configureSession()
         setupRemoteCommands()
+        loadFavorites()
+        Task { await syncFavorites() }
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: nil,
@@ -109,12 +111,49 @@ final class Player: ObservableObject {
 
     func toggleFavorite() {
         guard let id = current?.videoId else { return }
-        if favorites.contains(id) { favorites.remove(id) } else { favorites.insert(id) }
+        setFavorite(id, liked: !favorites.contains(id))
+    }
+
+    /// Optimistic local toggle, mirrored to the YouTube library when signed in
+    /// (and reverted if the call fails).
+    func setFavorite(_ id: String, liked: Bool) {
+        if liked { favorites.insert(id) } else { favorites.remove(id) }
+        saveFavorites()
+        guard Auth.shared.isLoggedIn else { return }
+        Task {
+            let ok = await YouTube.rateSong(videoId: id, like: liked)
+            if !ok {
+                await MainActor.run {
+                    if liked { self.favorites.remove(id) } else { self.favorites.insert(id) }
+                    self.saveFavorites()
+                }
+            }
+        }
     }
 
     var isCurrentFavorite: Bool {
         guard let id = current?.videoId else { return false }
         return favorites.contains(id)
+    }
+
+    /// Pull the account's Liked songs so hearts reflect the real library.
+    func syncFavorites() async {
+        guard Auth.shared.isLoggedIn else { return }
+        let liked = await YouTube.likedSongs()
+        guard !liked.isEmpty else { return }
+        await MainActor.run {
+            self.favorites.formUnion(liked.map(\.videoId))
+            self.saveFavorites()
+        }
+    }
+
+    private func saveFavorites() {
+        UserDefaults.standard.set(Array(favorites), forKey: "favoriteVideoIds")
+    }
+
+    private func loadFavorites() {
+        let saved = UserDefaults.standard.stringArray(forKey: "favoriteVideoIds") ?? []
+        favorites = Set(saved)
     }
 
     /// Jump to a specific queue position (from the Queue screen).

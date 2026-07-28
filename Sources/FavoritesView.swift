@@ -6,6 +6,7 @@ struct FavoritesView: View {
     @ObservedObject var player: Player
 
     @State private var playlists: [HomeItem] = []
+    @State private var liked: [Track] = []
     @State private var loading = false
     @State private var showLogin = false
 
@@ -19,12 +20,41 @@ struct FavoritesView: View {
                 } else if loading {
                     ProgressView().tint(Blaze.amber)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if playlists.isEmpty {
+                } else if playlists.isEmpty, liked.isEmpty {
                     Text("No playlists yet")
                         .foregroundStyle(.white.opacity(0.6))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
+                        if !liked.isEmpty {
+                            NavigationLink(value: LikedRoute()) {
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        Blaze.cardGradient
+                                        Image(systemName: "heart.fill")
+                                            .font(.system(size: 26)).foregroundStyle(.white)
+                                    }
+                                    .frame(width: 64, height: 64)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("Liked songs")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(.white)
+                                        Text("\(liked.count) songs")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(.white.opacity(0.6))
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption).foregroundStyle(.white.opacity(0.4))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(playlists) { item in
                                 NavigationLink(value: item) {
@@ -42,6 +72,9 @@ struct FavoritesView: View {
             .navigationTitle("Your Library")
             .navigationDestination(for: HomeItem.self) { item in
                 PlaylistView(item: item, player: player)
+            }
+            .navigationDestination(for: LikedRoute.self) { _ in
+                TrackListView(title: "Liked songs", tracks: liked, player: player)
             }
         }
         .sheet(isPresented: $showLogin) { LoginView() }
@@ -70,15 +103,49 @@ struct FavoritesView: View {
     private func load() async {
         guard auth.isLoggedIn else {
             playlists = []
+            liked = []
             return
         }
-        guard playlists.isEmpty else { return }
+        guard playlists.isEmpty, liked.isEmpty else { return }
         loading = true
-        let p = await YouTube.libraryPlaylists()
+        async let playlistsTask = YouTube.libraryPlaylists()
+        async let likedTask = YouTube.likedSongs()
+        let (p, l) = await (playlistsTask, likedTask)
         await MainActor.run {
             playlists = p
+            liked = l
             loading = false
         }
+    }
+}
+
+/// Navigation marker for the Liked songs list.
+struct LikedRoute: Hashable {}
+
+/// A plain list of tracks (Liked songs, and reusable elsewhere).
+struct TrackListView: View {
+    let title: String
+    let tracks: [Track]
+    @ObservedObject var player: Player
+
+    var body: some View {
+        List {
+            ForEach(Array(tracks.enumerated()), id: \.element.id) { pair in
+                Button {
+                    player.play(tracks, startAt: pair.offset)
+                    player.showFullPlayer = true
+                } label: {
+                    TrackRow(track: pair.element)
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(Color.clear)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Blaze.scaffold.ignoresSafeArea())
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
