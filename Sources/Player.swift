@@ -180,20 +180,9 @@ final class Player: ObservableObject {
         favorites = Set(saved.map(\.videoId))
     }
 
-    /// Play counts, so Top 50 reflects what you actually listen to.
+    /// Log the play so Trending, Stats and History all have something to read.
     private func countPlay(_ track: Track) {
-        var counts = UserDefaults.standard.dictionary(forKey: "playCounts") as? [String: Int] ?? [:]
-        counts[track.videoId, default: 0] += 1
-        UserDefaults.standard.set(counts, forKey: "playCounts")
-
-        var seen = UserDefaults.standard.data(forKey: "playedTracks")
-            .flatMap { try? JSONDecoder().decode([Track].self, from: $0) } ?? []
-        seen.removeAll { $0.videoId == track.videoId }
-        seen.insert(track, at: 0)
-        if seen.count > 300 { seen = Array(seen.prefix(300)) }
-        if let data = try? JSONEncoder().encode(seen) {
-            UserDefaults.standard.set(data, forKey: "playedTracks")
-        }
+        PlayHistory.record(track)
     }
 
     /// Jump to a specific queue position (from the Queue screen).
@@ -531,18 +520,3 @@ final class Player: ObservableObject {
     }
 }
 
-/// Local listening history, backing "Recently played" and "Your Top 50".
-enum PlayHistory {
-    static var recent: [Track] {
-        guard let data = UserDefaults.standard.data(forKey: "playedTracks"),
-              let tracks = try? JSONDecoder().decode([Track].self, from: data) else { return [] }
-        return tracks
-    }
-
-    static var top: [Track] {
-        let counts = UserDefaults.standard.dictionary(forKey: "playCounts") as? [String: Int] ?? [:]
-        return recent
-            .filter { (counts[$0.videoId] ?? 0) > 0 }
-            .sorted { (counts[$0.videoId] ?? 0) > (counts[$1.videoId] ?? 0) }
-    }
-}
