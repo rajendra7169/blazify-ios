@@ -296,6 +296,8 @@ struct PlayerView: View {
             SlimSlider(
                 value: Binding(get: { scrub ?? player.progress }, set: { scrub = $0 }),
                 active: player.artColor,
+                duration: player.duration,
+                isPlaying: player.isPlaying,
             ) { v in
                 player.seek(to: v)
                 scrub = nil

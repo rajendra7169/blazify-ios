@@ -60,12 +60,19 @@ struct LookAndFeelView: View {
 
     // MARK: Preview — the interior switches with the tab
 
+    @AppStorage("playerDesign") private var playerDesignRaw = PlayerDesign.classic.rawValue
+
+    /// Player shows the REAL design gallery preview; Lyrics its sample page;
+    /// Theme, Mini and Home all show the home mock — exactly as on Android.
     @ViewBuilder private var preview: some View {
         switch tab {
-        case .player: LookFeelPlayerPreview(player: player)
-        case .lyrics: LookFeelLyricsPreview(player: player, position: look.lyricsPosition)
-        case .mini: LookFeelMiniPreview(player: player)
-        default: LookFeelThemePreview()
+        case .player:
+            DesignLivePreview(design: PlayerDesign(rawValue: playerDesignRaw) ?? .classic,
+                              player: player)
+        case .lyrics:
+            LookFeelLyricsPreview(player: player, position: look.lyricsPosition)
+        default:
+            LookFeelThemePreview(player: player)
         }
     }
 
@@ -98,7 +105,7 @@ struct LookAndFeelView: View {
         switch tab {
         case .theme: LookFeelThemeControls()
         case .player: LookFeelPlayerControls(player: player)
-        case .mini: LookFeelMiniControls()
+        case .mini: LookFeelMiniControls(player: player)
         case .lyrics: LookFeelLyricsControls()
         case .home: LookFeelHomeControls()
         }

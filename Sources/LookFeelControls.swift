@@ -214,67 +214,90 @@ struct LookFeelPlayerControls: View {
         }
         .sheet(isPresented: $showSlider) {
             SliderStyleSheet()
-                .presentationDetents([.height(340)])
+                .presentationDetents([.height(480)])
         }
     }
 }
 
-/// Slider style picker — Android shows squiggly as a switch under Wavy.
+/// Slider style picker, ported from SliderStyleDialog.kt: a 2×2 grid of square
+/// tiles — Capsule · Wavy · Slim · Squiggly — each showing its slider live,
+/// outlined in the accent when active. Squiggly is WAVY + a flag underneath,
+/// but Android presents it as its own tile, so we do too.
 struct SliderStyleSheet: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var look = LookFeel.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Slider style")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(palette.onSurface)
-                .padding(20)
+                .padding(.top, 20)
 
-            ForEach(SliderStyle.allCases) { style in
-                Button {
-                    look.sliderStyle = style
-                    if style != .wavy { look.squigglySlider = false }
-                } label: {
-                    HStack(spacing: 14) {
-                        LookFeelSliderPreview(style: style, squiggly: look.squigglySlider,
-                                              tint: palette.accent)
-                            .frame(width: 90)
-                        Text(style.title(squiggly: look.squigglySlider))
-                            .font(.system(size: 15))
-                            .foregroundStyle(palette.onSurface)
-                        Spacer(minLength: 0)
-                        if look.sliderStyle == style {
-                            Image(systemName: "checkmark").foregroundStyle(palette.accent)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
+            HStack(spacing: 12) {
+                tile("Capsule", selected: look.sliderStyle == .capsule) {
+                    look.sliderStyle = .capsule; look.squigglySlider = false
+                } content: {
+                    CapsuleTrack(fraction: 0.2, active: palette.accent,
+                                 label: "0:36 / 2:59", compact: true)
                 }
-                .buttonStyle(.plain)
+                tile("Wavy", selected: look.sliderStyle == .wavy && !look.squigglySlider) {
+                    look.sliderStyle = .wavy; look.squigglySlider = false
+                } content: {
+                    WavyTrack(fraction: 0.5, active: palette.accent,
+                              squiggly: false, isPlaying: true)
+                }
+            }
+            HStack(spacing: 12) {
+                tile("Slim", selected: look.sliderStyle == .slim) {
+                    look.sliderStyle = .slim; look.squigglySlider = false
+                } content: {
+                    SlimTrack(fraction: 0.65, active: palette.accent)
+                }
+                tile("Squiggly", selected: look.sliderStyle == .wavy && look.squigglySlider) {
+                    look.sliderStyle = .wavy; look.squigglySlider = true
+                } content: {
+                    WavyTrack(fraction: 0.5, active: palette.accent,
+                              squiggly: true, isPlaying: true)
+                }
             }
 
-            if look.sliderStyle == .wavy {
-                Toggle("Squiggly", isOn: $look.squigglySlider)
-                    .font(.system(size: 15))
-                    .foregroundStyle(palette.onSurface)
-                    .tint(palette.accent)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-            }
-
-            Spacer(minLength: 0)
-            Button("Done") { dismiss() }
+            Button("Cancel") { dismiss() }
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(palette.accent)
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 20)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.vertical, 8)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.surface)
         .presentationBackground(palette.surface)
+    }
+
+    /// One square tile: the live slider above its name, outlined when active.
+    private func tile<Content: View>(_ label: String, selected: Bool,
+                                     action: @escaping () -> Void,
+                                     @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 4) {
+            content()
+                .frame(maxHeight: .infinity)
+                .allowsHitTesting(false)
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(palette.onSurface)
+        }
+        .padding(12)
+        .aspectRatio(1, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(selected ? palette.accent : palette.separator,
+                              lineWidth: selected ? 2 : 1),
+        )
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
     }
 }
 
@@ -282,32 +305,29 @@ struct SliderStyleSheet: View {
 
 struct LookFeelMiniControls: View {
     @Environment(\.palette) private var palette
+    @ObservedObject var player: Player
     @ObservedObject private var look = LookFeel.shared
     @State private var showBackground = false
 
     var body: some View {
-        VStack(spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(MiniPlayerDesign.allCases) { design in
-                        let active = look.miniPlayerDesign == design
-                        VStack(spacing: 4) {
-                            Text(design.title)
-                                .font(.system(size: 13, weight: active ? .bold : .medium))
-                                .foregroundStyle(active ? palette.onAccent : palette.onSurface)
-                            Text(design.subtitle)
-                                .font(.system(size: 10))
-                                .foregroundStyle(active ? palette.onAccent.opacity(0.8)
-                                                        : palette.onSurfaceVariant)
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(active ? AnyShapeStyle(palette.accent)
-                                           : AnyShapeStyle(palette.surfaceHigh))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .contentShape(Rectangle())
-                        .onTapGesture { look.miniPlayerDesign = design }
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Mini player design")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(palette.onSurface)
+                Text("How the bar above the navigation looks")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(palette.onSurfaceVariant)
+            }
+            .padding(.horizontal, 16)
+
+            // Two designs per row, each card drawing its design live —
+            // the layout AppearanceSettings.kt uses.
+            ForEach(Array(stride(from: 0, to: MiniPlayerDesign.allCases.count, by: 2)), id: \.self) { i in
+                HStack(spacing: 12) {
+                    designCard(MiniPlayerDesign.allCases[i])
+                    if i + 1 < MiniPlayerDesign.allCases.count {
+                        designCard(MiniPlayerDesign.allCases[i + 1])
                     }
                 }
                 .padding(.horizontal, 16)
@@ -330,6 +350,33 @@ struct LookFeelMiniControls: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    private func designCard(_ design: MiniPlayerDesign) -> some View {
+        let selected = look.miniPlayerDesign == design
+        return VStack(spacing: 8) {
+            MiniPlayerPreviewBar(player: player, design: design,
+                                 background: look.miniPlayerBackground)
+                .allowsHitTesting(false)
+            Text(design.title)
+                .font(.system(size: 13, weight: selected ? .bold : .medium))
+                .foregroundStyle(selected ? palette.accent : palette.onSurface)
+            Text(design.subtitle)
+                .font(.system(size: 10))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .lineLimit(1)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .background(palette.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(selected ? palette.accent : palette.separator,
+                              lineWidth: selected ? 2 : 1),
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { look.miniPlayerDesign = design }
     }
 }
 

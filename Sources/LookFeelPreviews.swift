@@ -1,178 +1,332 @@
 import SwiftUI
 
-/// The theme preview: a miniature Home — greeting card, search pill, chips and
-/// a rail — painted with the palette currently selected, so switching mode or
-/// colour repaints it live.
+/// Faithful port of Android's `ThemePhonePreview`: a miniature of the real home
+/// — header with the actual logo, greeting card with the hero spilling out of
+/// its top, search pill with mic, mood chips, Quick picks rows, the REAL
+/// mini-player (art + title from what's playing, drawn in the chosen design and
+/// background) and the nav bar in the chosen style. Used by the Theme, Mini and
+/// Home tabs, exactly as on Android.
 struct LookFeelThemePreview: View {
     @Environment(\.palette) private var palette
+    @ObservedObject var player: Player
     @ObservedObject private var look = LookFeel.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Spacer().frame(height: 22)
-
-            HStack(spacing: 5) {
-                Circle().fill(palette.onSurface.opacity(0.25)).frame(width: 11, height: 11)
-                Spacer()
-                Text("Blazify")
-                    .font(.system(size: 9, weight: .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(palette.onSurface)
-                Spacer()
-                Circle().fill(palette.onSurface.opacity(0.25)).frame(width: 11, height: 11)
-            }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 8)
+        VStack(spacing: 0) {
+            header
+            Spacer().frame(height: 6)
 
             if look.showHomeGreeting {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(palette.heroGradient)
-                    .frame(height: 46)
-                    .overlay(alignment: .leading) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Good Evening")
-                                .font(.system(size: 8, weight: .bold))
-                            Text("Enjoy the music")
-                                .font(.system(size: 6))
-                                .opacity(0.85)
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.leading, 9)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 7)
+                greetingCard
+                Spacer().frame(height: 9)
             }
-
             if look.showHomeSearchBar {
-                Capsule()
-                    .fill(palette.onSurface.opacity(0.10))
-                    .frame(height: 17)
-                    .overlay(alignment: .leading) {
-                        Text("Search songs, albums…")
-                            .font(.system(size: 6))
-                            .foregroundStyle(palette.onSurfaceVariant)
-                            .padding(.leading, 9)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 7)
+                searchPill
+                Spacer().frame(height: 8)
             }
 
-            HStack(spacing: 4) {
-                ForEach(["All", "Workout", "Relax"], id: \.self) { chip in
-                    let active = chip == "All"
-                    Text(chip)
-                        .font(.system(size: 5.5, weight: .semibold))
-                        .foregroundStyle(active ? palette.onAccent : palette.onSurface)
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(active ? AnyShapeStyle(palette.accent)
-                                           : AnyShapeStyle(palette.onSurface.opacity(0.08)))
-                        .clipShape(Capsule())
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 8)
-
-            Text("Listen again")
-                .font(.system(size: 8.5, weight: .bold))
-                .foregroundStyle(palette.onSurface)
-                .padding(.horizontal, 10)
-                .padding(.bottom, 5)
-
-            HStack(spacing: 6) {
-                ForEach(0..<3, id: \.self) { i in
-                    VStack(alignment: .leading, spacing: 3) {
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(palette.onSurface.opacity(0.12))
-                            .frame(width: cardSide, height: cardSide)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(palette.onSurface.opacity(0.22))
-                            .frame(width: cardSide * 0.8, height: 4)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(palette.onSurface.opacity(0.12))
-                            .frame(width: cardSide * 0.55, height: 3)
-                    }
-                    .opacity(i == 2 ? 0.5 : 1)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10)
+            moodChips
+            Spacer().frame(height: 9)
+            quickPicksHeader
+            Spacer().frame(height: 7)
+            songRows
 
             Spacer(minLength: 0)
-            LookFeelNavBarPreview()
+            miniPlayer
+            Spacer().frame(height: look.slimNavBar ? 7 : 9)
+            navBar
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 14)
+        // Room for the frame's notch, which the Kotlin frame draws above this.
+        .padding(.top, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.scaffold)
     }
 
-    /// Grid size actually changes the card width, so the preview shows it.
-    private var cardSide: CGFloat { look.gridItemSize == .small ? 40 : 52 }
-}
+    // MARK: Header — person · logo + wordmark · settings
 
-/// The bottom bar as configured — style and slimness both visible.
-struct LookFeelNavBarPreview: View {
-    @Environment(\.palette) private var palette
-    @ObservedObject private var look = LookFeel.shared
+    private var header: some View {
+        HStack {
+            Image(systemName: "person.crop.circle")
+                .font(.system(size: 12))
+                .foregroundStyle(palette.onSurface.opacity(0.75))
+            Spacer()
+            HStack(spacing: 3) {
+                Image(bundleImage: palette.dark ? "blaze_logo_white" : "blaze_logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 13, height: 13)
+                Text("Blazify")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(palette.onSurface)
+            }
+            Spacer()
+            Image(systemName: "gearshape")
+                .font(.system(size: 12))
+                .foregroundStyle(palette.onSurface.opacity(0.75))
+        }
+    }
 
-    private let tabs = ["house.fill", "safari.fill", "sparkles", "books.vertical.fill"]
+    // MARK: Greeting card — hero spills out of the top, like the real home
 
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(tabs.enumerated()), id: \.offset) { i, icon in
-                let active = i == 0
-                VStack(spacing: 2) {
-                    Image(systemName: icon)
-                        .font(.system(size: 10))
-                        .foregroundStyle(active ? activeInk : palette.onSurfaceVariant)
-                    if !look.slimNavBar {
-                        Text(" ")
-                            .font(.system(size: 5))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(active ? activeInk : palette.onSurfaceVariant)
-                                    .frame(width: 12, height: 2.5),
-                            )
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5..<12: return "Good\nMorning 🌅"
+        case 12..<17: return "Good\nAfternoon ☀️"
+        case 17..<21: return "Good\nEvening 🌆"
+        default: return "Good\nNight 🌙"
+        }
+    }
+
+    private var greetingCard: some View {
+        ZStack(alignment: .bottomTrailing) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [palette.accent,
+                             palette.accent.mixed(with: .black, palette.dark ? 0.30 : 0.20)],
+                    startPoint: .leading, endPoint: .trailing))
+                .frame(height: 68)
+
+            // Taller than the card and shifted up, so only the top spills out —
+            // an un-clipped sibling, the same trick the real home uses.
+            Image(bundleImage: palette.dark ? "blaze_home_dark" : "blaze_home_light")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 78, height: 92)
+                .offset(y: -12)
+                .allowsHitTesting(false)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(greeting)
+                    .font(.system(size: 8.5, weight: .bold))
+                    .lineSpacing(0)
+                Text("Music Lover")
+                    .font(.system(size: 7.5, weight: .bold))
+                    .opacity(0.95)
+                Text("Enjoy the music 🎵")
+                    .font(.system(size: 5.5, weight: .medium))
+                    .opacity(0.85)
+            }
+            .foregroundStyle(.white)
+            .padding(.leading, 11)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        }
+        .frame(height: 68)
+    }
+
+    // MARK: Search pill — icon · placeholder · mic
+
+    private var searchPill: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "magnifyingglass").font(.system(size: 9))
+            Text("Search songs, artists…").font(.system(size: 7))
+            Spacer(minLength: 0)
+            Image(systemName: "mic.fill").font(.system(size: 9))
+        }
+        .foregroundStyle(palette.dark ? .white.opacity(0.7) : .black.opacity(0.54))
+        .padding(.horizontal, 9)
+        .frame(height: 24)
+        .background(palette.dark ? Color.white.opacity(0.10) : Color(hex: 0xEEEEEE))
+        .clipShape(Capsule())
+    }
+
+    // MARK: Mood chips — the rail runs off the edge, like the real one
+
+    private var moodChips: some View {
+        HStack(spacing: 4) {
+            ForEach(["Energize", "Relax", "Feel good", "Workout", "Party"], id: \.self) { label in
+                Text(label)
+                    .font(.system(size: 5))
+                    .foregroundStyle(palette.onSurfaceVariant)
+                    .padding(.horizontal, 7)
+                    .frame(height: 10)
+                    .background(palette.surfaceHigh)
+                    .clipShape(Capsule())
+                    .fixedSize()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+    }
+
+    // MARK: Quick picks
+
+    private var quickPicksHeader: some View {
+        HStack {
+            Text("Quick picks")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(palette.accent)
+            Spacer()
+            Text("Play all")
+                .font(.system(size: 4.5, weight: .medium))
+                .foregroundStyle(palette.accent)
+                .padding(.horizontal, 8)
+                .frame(height: 10)
+                .overlay(Capsule().strokeBorder(palette.accent.opacity(0.7), lineWidth: 0.6))
+        }
+    }
+
+    private var songRows: some View {
+        // Art size follows the grid-size setting, as the Kotlin preview does.
+        let artSize: CGFloat = look.gridItemSize == .big ? 28 : 23
+        let artTints: [Color] = [palette.accent.opacity(0.35),
+                                 palette.accent.opacity(0.2),
+                                 palette.surfaceHigh]
+        return VStack(spacing: 6) {
+            ForEach(0..<4, id: \.self) { i in
+                HStack(spacing: 0) {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(artTints[i % artTints.count])
+                        .frame(width: artSize, height: artSize)
+                    Spacer().frame(width: 8)
+                    VStack(alignment: .leading, spacing: 3) {
+                        GeometryReader { g in
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(palette.onSurface.opacity(0.85))
+                                .frame(width: g.size.width * 0.68, height: 5)
+                        }
+                        .frame(height: 5)
+                        GeometryReader { g in
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(palette.onSurfaceVariant.opacity(0.6))
+                                .frame(width: g.size.width * 0.44, height: 4)
+                        }
+                        .frame(height: 4)
+                    }
+                    Spacer().frame(width: 6)
+                    VStack(spacing: 1.5) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Circle().fill(palette.onSurfaceVariant.opacity(0.6))
+                                .frame(width: 2.5, height: 2.5)
+                        }
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, look.slimNavBar ? 5 : 7)
-                .background(activeBackground(active))
-                .overlay(alignment: .bottom) {
-                    if look.navBarStyle == .underline, active {
-                        Capsule().fill(palette.accent).frame(width: 18, height: 2)
+            }
+        }
+    }
+
+    // MARK: Mini player — real art + title, in the chosen design and background
+
+    private var miniPlayer: some View {
+        let design = look.miniPlayerDesign
+        let bg = look.miniPlayerBackground
+        let isFloating = design == .floating
+        let isFlat = design == .flat
+
+        let onMini: Color = {
+            switch bg {
+            case .gradient: return palette.onAccent
+            case .pureBlack: return .white
+            default: return palette.onSurface
+            }
+        }()
+
+        return HStack(spacing: 0) {
+            RemoteImage(url: player.current?.artURL(size: 120), size: 23) {
+                onMini.opacity(0.85)
+            }
+            .frame(width: 23, height: 23)
+            .clipShape(isFlat || isFloating
+                       ? AnyShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                       : AnyShape(Circle()))
+
+            Spacer().frame(width: 7)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(player.current?.title ?? "Song title")
+                    .font(.system(size: 7, weight: .bold)).lineLimit(1)
+                Text(player.current?.artist ?? "Artist")
+                    .font(.system(size: 5.5)).opacity(0.7).lineLimit(1)
+            }
+            .foregroundStyle(onMini)
+            Spacer(minLength: 5)
+
+            switch design {
+            case .rounded:
+                HStack(spacing: 2) {
+                    Image(systemName: "backward.end.fill").font(.system(size: 8))
+                        .foregroundStyle(onMini)
+                    Circle().fill(onMini)
+                        .frame(width: 15, height: 15)
+                        .overlay(Image(systemName: "play.fill")
+                            .font(.system(size: 7))
+                            .foregroundStyle(bg == .gradient ? palette.accent : palette.surface))
+                    Image(systemName: "forward.end.fill").font(.system(size: 8))
+                        .foregroundStyle(onMini)
+                }
+            case .flat:
+                Image(systemName: "heart").font(.system(size: 9)).foregroundStyle(onMini)
+            default:
+                HStack(spacing: 5) {
+                    Image(systemName: "text.badge.plus").font(.system(size: 9))
+                    Image(systemName: "heart").font(.system(size: 9))
+                }
+                .foregroundStyle(onMini.opacity(0.9))
+            }
+        }
+        .padding(.horizontal, 6)
+        .frame(height: 34)
+        .frame(maxWidth: .infinity)
+        .background(miniBackground)
+        .clipShape(RoundedRectangle(cornerRadius: isFlat ? 6 : (isFloating ? 12 : 17),
+                                    style: .continuous))
+        .shadow(color: isFloating ? .black.opacity(0.3) : .clear, radius: 4, y: 2)
+        .padding(.horizontal, isFloating ? 8 : 0)
+    }
+
+    @ViewBuilder private var miniBackground: some View {
+        switch look.miniPlayerBackground {
+        case .gradient:
+            LinearGradient(colors: [palette.accent, palette.accent.opacity(0.72)],
+                           startPoint: .leading, endPoint: .trailing)
+        case .pureBlack: Color.black
+        case .blur: palette.surfaceHigh
+        default: palette.surfaceHigh
+        }
+    }
+
+    // MARK: Nav bar — real icons, the default-open tab highlighted per style
+
+    private var navBar: some View {
+        let icons: [(DefaultTab, String)] = [
+            (.home, "house.fill"), (.explore, "magnifyingglass"),
+            (.yours, "square.grid.2x2"), (.library, "books.vertical"),
+        ]
+        return HStack {
+            ForEach(icons, id: \.1) { tab, icon in
+                let active = tab == look.defaultTab
+                let tint: Color = active ? palette.accent : palette.onSurfaceVariant.opacity(0.55)
+                VStack(spacing: 2) {
+                    Image(systemName: icon)
+                        .font(.system(size: look.slimNavBar ? 10 : 12))
+                        .foregroundStyle(active && look.navBarStyle == .gradient ? palette.onAccent : tint)
+                        .padding(.horizontal, active && look.navBarStyle != .underline ? 5 : 0)
+                        .padding(.vertical, active && look.navBarStyle != .underline ? 2 : 0)
+                        .background(navHighlight(active))
+                    if !look.slimNavBar, look.navBarStyle != .gradient {
+                        Capsule().fill(tint.opacity(active ? 1 : 0.5))
+                            .frame(width: 12, height: 2.5)
                     }
                 }
                 .frame(maxWidth: .infinity)
             }
         }
-        .padding(.vertical, look.slimNavBar ? 3 : 5)
-        .background(palette.surface)
-        .overlay(alignment: .top) {
-            Rectangle().fill(palette.separator).frame(height: 0.5)
-        }
     }
 
-    private var activeInk: Color {
-        switch look.navBarStyle {
-        case .pill, .gradient: palette.onAccent
-        case .underline, .outlined: palette.accent
-        }
-    }
-
-    @ViewBuilder
-    private func activeBackground(_ active: Bool) -> some View {
+    @ViewBuilder private func navHighlight(_ active: Bool) -> some View {
         if active {
             switch look.navBarStyle {
-            case .pill:
-                Capsule().fill(palette.accent)
+            case .pill: Capsule().fill(palette.accent.opacity(0.22))
             case .gradient:
-                Capsule().fill(LinearGradient(
-                    colors: [palette.accent, palette.accent.mixed(with: .black, 0.3)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(LinearGradient(colors: [palette.accent,
+                                                  palette.accent.mixed(with: .black, 0.3)],
+                                         startPoint: .leading, endPoint: .trailing))
             case .outlined:
-                Capsule().strokeBorder(palette.accent, lineWidth: 1.2)
-            case .underline:
-                Color.clear
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(palette.accent.opacity(0.14))
+            case .underline: Color.clear
             }
         } else {
             Color.clear
@@ -180,247 +334,102 @@ struct LookFeelNavBarPreview: View {
     }
 }
 
-/// The player preview: whichever design is selected, drawn small.
-struct LookFeelPlayerPreview: View {
-    @ObservedObject var player: Player
-    @AppStorage("playerDesign") private var designRaw = PlayerDesign.classic.rawValue
-    @ObservedObject private var look = LookFeel.shared
-
-    private var design: PlayerDesign { PlayerDesign(rawValue: designRaw) ?? .classic }
-
-    var body: some View {
-        ZStack {
-            LinearGradient(colors: [player.artColor.mixed(with: .black, 0.45), .black],
-                           startPoint: .top, endPoint: .bottom)
-
-            VStack(spacing: 0) {
-                Spacer().frame(height: 26)
-                artwork
-                Spacer().frame(height: 12)
-
-                Text(player.current?.title ?? "Song title")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Text(player.current?.artist ?? "Artist")
-                    .font(.system(size: 7))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
-
-                Spacer().frame(height: 10)
-                LookFeelSliderPreview(style: look.sliderStyle, squiggly: look.squigglySlider,
-                                      tint: player.artColor)
-                    .padding(.horizontal, 18)
-
-                Spacer().frame(height: 12)
-                HStack(spacing: 16) {
-                    Image(systemName: "backward.end.fill").font(.system(size: 11))
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 13))
-                        .frame(width: 30, height: 30)
-                        .background(player.artColor)
-                        .clipShape(Circle())
-                    Image(systemName: "forward.end.fill").font(.system(size: 11))
-                }
-                .foregroundStyle(.white)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-        }
-    }
-
-    @ViewBuilder private var artwork: some View {
-        let art = player.current?.artURL(size: 360)
-        switch design {
-        case .ring:
-            RemoteImage(url: art, size: 110) { Color.white.opacity(0.1) }
-                .clipShape(Circle())
-                .padding(8)
-                .overlay(Circle().strokeBorder(player.artColor, lineWidth: 3))
-                .frame(width: 118, height: 118)
-        case .fullArt:
-            RemoteImage(url: art, size: 160) { Color.white.opacity(0.1) }
-                .frame(height: 140)
-                .clipped()
-        case .record:
-            RemoteImage(url: art, size: 110) { Color.white.opacity(0.1) }
-                .clipShape(Circle())
-                .frame(width: 112, height: 112)
-                .overlay(Circle().fill(.black).frame(width: 16, height: 16))
-        case .cassette:
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.white.opacity(0.12))
-                .frame(width: 140, height: 92)
-                .overlay {
-                    HStack(spacing: 18) {
-                        Circle().fill(.white.opacity(0.25)).frame(width: 24, height: 24)
-                        Circle().fill(.white.opacity(0.25)).frame(width: 24, height: 24)
-                    }
-                }
-        case .classic:
-            RemoteImage(url: art, size: 130) { Color.white.opacity(0.1) }
-                .frame(width: 118, height: 118)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-    }
-}
-
-/// The seek bar in each of its three styles, used by the player preview.
-struct LookFeelSliderPreview: View {
-    let style: SliderStyle
-    let squiggly: Bool
-    let tint: Color
-    var progress: Double = 0.42
-
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            ZStack(alignment: .leading) {
-                switch style {
-                case .capsule:
-                    Capsule().fill(.white.opacity(0.24)).frame(height: 5)
-                    Capsule().fill(tint).frame(width: max(w * progress, 5), height: 5)
-                case .slim:
-                    Capsule().fill(.white.opacity(0.24)).frame(height: 3)
-                    Capsule().fill(tint).frame(width: max(w * progress, 3), height: 3)
-                case .wavy:
-                    Capsule().fill(.white.opacity(0.24)).frame(height: 2)
-                    Wave(amplitude: squiggly ? 3.5 : 2, wavelength: squiggly ? 9 : 16)
-                        .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                        .frame(width: max(w * progress, 6), height: 10)
-                }
-            }
-            .frame(maxHeight: .infinity, alignment: .center)
-        }
-        .frame(height: 12)
-    }
-}
-
-/// A sine used by the wavy/squiggly slider — squiggly is just tighter and taller.
-struct Wave: Shape {
-    var amplitude: CGFloat
-    var wavelength: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let mid = rect.midY
-        path.move(to: CGPoint(x: 0, y: mid))
-        var x: CGFloat = 0
-        while x <= rect.width {
-            let y = mid + amplitude * sin(x / wavelength * 2 * .pi)
-            path.addLine(to: CGPoint(x: x, y: y))
-            x += 1
-        }
-        return path
-    }
-}
-
-/// The lyrics preview — alignment follows the position setting, as Android's does.
+/// Faithful port of `LyricsSampleInterior`: Language pill, three stanzas spread
+/// down the page (dim · bright · dim) aligned per the position setting, then the
+/// song bar (real art · title/artist · fullscreen/theme/more) and the progress
+/// bar with times, over the tinted gradient.
 struct LookFeelLyricsPreview: View {
+    @Environment(\.palette) private var palette
     @ObservedObject var player: Player
     let position: LyricsPosition
 
     var body: some View {
-        VStack(alignment: position.alignment, spacing: 0) {
-            Spacer().frame(height: 26)
+        VStack(spacing: 0) {
+            Spacer().frame(height: 24)
 
             HStack(spacing: 3) {
                 Image(systemName: "character.bubble").font(.system(size: 6))
                 Text("Language").font(.system(size: 5.5))
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 7).padding(.vertical, 3)
+            .padding(.horizontal, 7).padding(.vertical, 2.5)
             .background(.white.opacity(0.16))
             .clipShape(Capsule())
-            .frame(maxWidth: .infinity, alignment: .center)
 
-            VStack(alignment: position.alignment, spacing: 14) {
-                Spacer(minLength: 0)
-                line("Baatein teri,\nraatein-saugaate", opacity: 0.30, size: 9)
-                line("Tere bina jeena\nseekh liya maine", opacity: 1, size: 11, bold: true)
-                line("Phir bhi teri yaad\naati hai", opacity: 0.30, size: 9)
-                Spacer(minLength: 0)
+            // Stanzas fill the page height, spread evenly like the real screen.
+            VStack(spacing: 0) {
+                Spacer()
+                stanza("Baatein teri,\nraatein-saugaate\nin teri", dim: true, size: 10)
+                Spacer()
+                stanza("Kyun tera sab\nyeh ho gaya?\nHua kya?", dim: false, size: 13)
+                Spacer()
+                stanza("Main kahin bhi\njaata hoon, tum\nse hi mil jaata hoon", dim: true, size: 10)
+                Spacer()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: position.frameAlignment)
-            .padding(.horizontal, 14)
+            .frame(maxHeight: .infinity)
 
-            HStack(spacing: 6) {
-                RemoteImage(url: player.current?.artURL(size: 120), size: 22) {
-                    Color.white.opacity(0.15)
+            // Song bar: real art · title/artist · fullscreen / theme / more.
+            HStack(spacing: 0) {
+                RemoteImage(url: player.current?.artURL(size: 120), size: 20) {
+                    palette.accent
                 }
-                .frame(width: 22, height: 22)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                VStack(alignment: .leading, spacing: 1) {
+                .frame(width: 20, height: 20)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+
+                Spacer().frame(width: 6)
+                VStack(alignment: .leading, spacing: 0) {
                     Text(player.current?.title ?? "Song title")
-                        .font(.system(size: 6.5, weight: .semibold)).lineLimit(1)
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(.white).lineLimit(1)
                     Text(player.current?.artist ?? "Artist")
-                        .font(.system(size: 5.5)).opacity(0.7).lineLimit(1)
+                        .font(.system(size: 5.5))
+                        .foregroundStyle(.white.opacity(0.7)).lineLimit(1)
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "ellipsis").font(.system(size: 7))
+                Spacer(minLength: 4)
+
+                ForEach(["arrow.up.left.and.arrow.down.right", "paintpalette", "ellipsis"],
+                        id: \.self) { icon in
+                    Circle().fill(.white)
+                        .frame(width: 13, height: 13)
+                        .overlay(Image(systemName: icon)
+                            .font(.system(size: 6))
+                            .foregroundStyle(.black))
+                        .padding(.leading, 3)
+                }
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 14)
+
+            Spacer().frame(height: 7)
+            // Progress + times.
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.25))
+                    Capsule().fill(palette.accent).frame(width: g.size.width * 0.48)
+                }
+            }
+            .frame(height: 3)
+            Spacer().frame(height: 3)
+            HStack {
+                Text("2:33")
+                Spacer()
+                Text("5:21")
+            }
+            .font(.system(size: 5))
+            .foregroundStyle(.white.opacity(0.8))
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            LinearGradient(colors: [player.artColor.mixed(with: .black, 0.62), .black],
+            LinearGradient(colors: [palette.accent.mixed(with: .black, 0.62), palette.scaffold],
                            startPoint: .top, endPoint: .bottom),
         )
     }
 
-    private func line(_ text: String, opacity: Double, size: CGFloat, bold: Bool = false) -> some View {
+    private func stanza(_ text: String, dim: Bool, size: CGFloat) -> some View {
         Text(text)
-            .font(.system(size: size, weight: bold ? .bold : .regular))
-            .foregroundStyle(.white.opacity(opacity))
+            .font(.system(size: size, weight: .bold))
+            .foregroundStyle(.white.opacity(dim ? 0.30 : 1))
             .multilineTextAlignment(position.textAlignment)
             .frame(maxWidth: .infinity, alignment: position.frameAlignment)
-    }
-}
-
-/// The mini-player preview: the chosen design over a sample page.
-struct LookFeelMiniPreview: View {
-    @Environment(\.palette) private var palette
-    @ObservedObject var player: Player
-    @ObservedObject private var look = LookFeel.shared
-
-    var body: some View {
-        VStack(spacing: 0) {
-            LookFeelThemePreviewBody()
-            Spacer(minLength: 0)
-            MiniPlayerPreviewBar(player: player,
-                                 design: look.miniPlayerDesign,
-                                 background: look.miniPlayerBackground)
-                .padding(.horizontal, look.miniPlayerDesign == .flat ? 0 : 8)
-                .padding(.bottom, look.miniPlayerDesign == .flat ? 0 : 6)
-            LookFeelNavBarPreview()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(palette.scaffold)
-    }
-}
-
-/// Just the content half of the theme preview, reused by the mini-player tab.
-struct LookFeelThemePreviewBody: View {
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Spacer().frame(height: 24)
-            Text("Listen again")
-                .font(.system(size: 8.5, weight: .bold))
-                .foregroundStyle(palette.onSurface)
-                .padding(.horizontal, 10)
-            HStack(spacing: 6) {
-                ForEach(0..<3, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(palette.onSurface.opacity(0.12))
-                        .frame(width: 40, height: 40)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10)
-        }
     }
 }
