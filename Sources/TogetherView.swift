@@ -4,6 +4,7 @@ import UIKit
 /// Listen Together: host a room or join one by code, then everyone follows the
 /// host's playback. Works with Blazify on Android — same server, same protocol.
 struct TogetherView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject private var lt = ListenTogether.shared
     @ObservedObject private var theme = AppTheme.shared
     @Environment(\.dismiss) private var dismiss
@@ -28,7 +29,7 @@ struct TogetherView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }.tint(Blaze.amber)
+                    Button("Close") { dismiss() }.tint(palette.accent)
                 }
             }
         }
@@ -41,12 +42,12 @@ struct TogetherView: View {
         VStack(spacing: 18) {
             VStack(spacing: 8) {
                 Image(systemName: "person.2.wave.2")
-                    .font(.system(size: 40)).foregroundStyle(Blaze.amber)
+                    .font(.system(size: 40)).foregroundStyle(palette.accent)
                 Text("Listen with friends")
-                    .font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
+                    .font(.system(size: 20, weight: .bold)).foregroundStyle(palette.onSurface)
                 Text("Everyone hears the same song at the same time. Works with Blazify on Android too.")
                     .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(palette.onSurfaceVariant)
                     .multilineTextAlignment(.center)
             }
             .padding(.top, 12)
@@ -54,13 +55,13 @@ struct TogetherView: View {
             card {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Your name").font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(palette.onSurfaceVariant)
                     TextField("Name", text: $name)
                         .textFieldStyle(.plain)
-                        .foregroundStyle(.white)
-                        .tint(Blaze.amber)
+                        .foregroundStyle(palette.onSurface)
+                        .tint(palette.accent)
                         .padding(.horizontal, 14).padding(.vertical, 11)
-                        .background(Color.white.opacity(0.07))
+                        .background(palette.onSurface.opacity(0.06))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .onChange(of: name) { lt.saveUsername(name) }
                 }
@@ -74,7 +75,7 @@ struct TogetherView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(Blaze.gradient)
+                    .background(palette.heroGradient)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -82,16 +83,16 @@ struct TogetherView: View {
             card {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Join a room").font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(palette.onSurfaceVariant)
                     HStack(spacing: 10) {
                         TextField("Room code", text: $joinCode)
                             .textFieldStyle(.plain)
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
-                            .foregroundStyle(.white)
-                            .tint(Blaze.amber)
+                            .foregroundStyle(palette.onSurface)
+                            .tint(palette.accent)
                             .padding(.horizontal, 14).padding(.vertical, 11)
-                            .background(Color.white.opacity(0.07))
+                            .background(palette.onSurface.opacity(0.06))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         Button {
@@ -102,7 +103,7 @@ struct TogetherView: View {
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(.black)
                                 .padding(.horizontal, 20).frame(height: 44)
-                                .background(Blaze.amber)
+                                .background(palette.accent)
                                 .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
@@ -112,7 +113,7 @@ struct TogetherView: View {
             }
 
             if case .connecting = lt.state {
-                ProgressView().tint(Blaze.amber)
+                ProgressView().tint(palette.accent)
             }
             if case .failed(let message) = lt.state {
                 Text(message)
@@ -130,23 +131,23 @@ struct TogetherView: View {
                 VStack(spacing: 10) {
                     Text(lt.isHost ? "You're hosting" : "In the room")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(palette.onSurfaceVariant)
                     Text(lt.roomCode)
                         .font(.system(size: 34, weight: .bold, design: .monospaced))
                         .tracking(4)
-                        .foregroundStyle(Blaze.amber)
+                        .foregroundStyle(palette.accent)
                     Button {
                         UIPasteboard.general.string = lt.roomCode
                     } label: {
                         Label("Copy code", systemImage: "doc.on.doc")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(palette.onSurface)
                     }
                     .buttonStyle(.plain)
                     if lt.isHost {
                         Text("Share this code — what you play, they hear.")
                             .font(.system(size: 12))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(palette.onSurfaceVariant)
                             .multilineTextAlignment(.center)
                     }
                 }
@@ -157,19 +158,19 @@ struct TogetherView: View {
                 card {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Wants to join").font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(palette.onSurfaceVariant)
                         ForEach(lt.pendingJoins) { member in
                             HStack {
-                                Text(member.name).foregroundStyle(.white).lineLimit(1)
+                                Text(member.name).foregroundStyle(palette.onSurface).lineLimit(1)
                                 Spacer()
                                 Button("Allow") { lt.approve(member) }
                                     .buttonStyle(.plain)
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(Blaze.amber)
+                                    .foregroundStyle(palette.accent)
                                 Button("Deny") { lt.reject(member) }
                                     .buttonStyle(.plain)
                                     .font(.system(size: 13))
-                                    .foregroundStyle(.white.opacity(0.5))
+                                    .foregroundStyle(palette.onSurfaceVariant)
                             }
                         }
                     }
@@ -180,13 +181,13 @@ struct TogetherView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Listening (\(lt.members.count))")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(palette.onSurfaceVariant)
                     ForEach(lt.members) { member in
                         HStack(spacing: 10) {
                             Image(systemName: member.isHost ? "crown.fill" : "person.fill")
                                 .font(.system(size: 13))
-                                .foregroundStyle(member.isHost ? Blaze.amber : .white.opacity(0.6))
-                            Text(member.name).foregroundStyle(.white).lineLimit(1)
+                                .foregroundStyle(member.isHost ? palette.accent : .white.opacity(0.6))
+                            Text(member.name).foregroundStyle(palette.onSurface).lineLimit(1)
                             Spacer()
                         }
                     }

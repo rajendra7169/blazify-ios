@@ -4,6 +4,7 @@ import SwiftUI
 /// filters the top-level rows, quick toggles for theme mode / dynamic / pure
 /// black, then the grouped sections.
 struct SettingsView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject var player: Player
     @ObservedObject private var auth = Auth.shared
     @ObservedObject private var theme = AppTheme.shared
@@ -97,7 +98,7 @@ struct SettingsView: View {
                             Text(group.title.uppercased())
                                 .font(.system(size: 12, weight: .bold))
                                 .tracking(1.2)
-                                .foregroundStyle(.white.opacity(0.6))
+                                .foregroundStyle(palette.onSurfaceVariant)
                                 .padding(.leading, 6)
                             Spacer()
                         }
@@ -107,7 +108,7 @@ struct SettingsView: View {
                             ForEach(Array(group.rows.enumerated()), id: \.element.id) { i, row in
                                 settingRow(row, index: i)
                                 if i < group.rows.count - 1 {
-                                    Divider().overlay(Color.white.opacity(0.08))
+                                    Divider().overlay(palette.onSurface.opacity(0.06))
                                         .padding(.leading, 68)
                                 }
                             }
@@ -126,7 +127,7 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }.tint(Blaze.amber)
+                    Button("Close") { dismiss() }.tint(palette.accent)
                 }
             }
         }
@@ -143,25 +144,25 @@ struct SettingsView: View {
             if auth.isLoggedIn { showAccount = true } else { showLogin = true }
         } label: {
             HStack(spacing: 14) {
-                Circle().fill(Blaze.amber)
+                Circle().fill(palette.accent)
                     .frame(width: 46, height: 46)
                     .overlay(Image(systemName: "person.fill")
                         .font(.system(size: 22)).foregroundStyle(.black))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(auth.accountName ?? "Guest")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white).lineLimit(1)
+                        .foregroundStyle(palette.onSurface).lineLimit(1)
                     Text(auth.isLoggedIn ? "Manage your account" : "Tap to sign in")
                         .font(.system(size: 12.5))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(palette.onSurfaceVariant)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14)).foregroundStyle(.white.opacity(0.5))
+                    .font(.system(size: 14)).foregroundStyle(palette.onSurfaceVariant)
             }
             .padding(14)
             .background(
-                LinearGradient(colors: [Blaze.amber.opacity(0.18), Blaze.amber.opacity(0.06)],
+                LinearGradient(colors: [palette.accent.opacity(0.18), palette.accent.opacity(0.06)],
                                startPoint: .leading, endPoint: .trailing),
             )
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -172,22 +173,22 @@ struct SettingsView: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16)).foregroundStyle(.white.opacity(0.6))
+                .font(.system(size: 16)).foregroundStyle(palette.onSurfaceVariant)
             TextField("Search settings", text: $query)
                 .font(.system(size: 15))
-                .foregroundStyle(.white)
-                .tint(Blaze.amber)
+                .foregroundStyle(palette.onSurface)
+                .tint(palette.accent)
                 .autocorrectionDisabled()
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(palette.onSurface.opacity(0.35))
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
-        .background(Color.white.opacity(0.08))
+        .background(palette.onSurface.opacity(0.06))
         .clipShape(Capsule())
     }
 
@@ -231,14 +232,14 @@ struct SettingsView: View {
                 Text(label).font(.system(size: 11, weight: active ? .semibold : .regular))
                     .lineLimit(1)
             }
-            .foregroundStyle(active ? Blaze.amber : .white.opacity(0.8))
+            .foregroundStyle(active ? palette.accent : .white.opacity(0.8))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12).padding(.horizontal, 8)
-            .background(active ? Blaze.amber.opacity(0.18) : Color.white.opacity(0.06))
+            .background(active ? palette.accent.opacity(0.18) : palette.onSurface.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(active ? Blaze.amber : .clear, lineWidth: 1.5),
+                    .stroke(active ? palette.accent : .clear, lineWidth: 1.5),
             )
         }
         .buttonStyle(.plain)
@@ -248,7 +249,7 @@ struct SettingsView: View {
 
     private func settingRow(_ row: Row, index: Int) -> some View {
         // Icon chips cycle through three accents by row index, as on Android.
-        let tints: [Color] = [Blaze.amber, Blaze.orange, player.artColor]
+        let tints: [Color] = [palette.accent, Blaze.orange, player.artColor]
         let tint = tints[index % 3]
         let live = row.action != .none
 
@@ -270,14 +271,14 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white).lineLimit(1)
+                        .foregroundStyle(palette.onSurface).lineLimit(1)
                     Text(live ? row.subtitle : row.subtitle + " · coming soon")
                         .font(.system(size: 12.5))
                         .foregroundStyle(.white.opacity(0.55)).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13)).foregroundStyle(.white.opacity(0.45))
+                    .font(.system(size: 13)).foregroundStyle(palette.onSurface.opacity(0.35))
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .contentShape(Rectangle())

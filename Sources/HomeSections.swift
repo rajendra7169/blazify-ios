@@ -3,6 +3,7 @@ import SwiftUI
 /// Category chips under the greeting (All / Relax / Workout…). Tapping re-browses
 /// the home feed filtered to that mood.
 struct ChipsRow: View {
+    @Environment(\.palette) private var palette
     let chips: [HomeChip]
     let selected: HomeChip?
     let onSelect: (HomeChip) -> Void
@@ -14,10 +15,10 @@ struct ChipsRow: View {
                     let isSelected = (selected?.title ?? chips.first?.title) == chip.title
                     Text(chip.title)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isSelected ? .black : .white)
+                        .foregroundStyle(isSelected ? palette.onAccent : palette.onSurface)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(isSelected ? AnyShapeStyle(Blaze.amber) : AnyShapeStyle(Color.white.opacity(0.08)))
+                        .background(isSelected ? AnyShapeStyle(palette.accent) : AnyShapeStyle(palette.onSurface.opacity(0.06)))
                         .clipShape(Capsule())
                         .contentShape(Capsule())
                         .onTapGesture { onSelect(chip) }
@@ -32,6 +33,7 @@ struct ChipsRow: View {
 /// Quick Picks: individual songs in a 4-row, horizontally-paged grid. Tap plays
 /// the whole shelf from that song.
 struct QuickPicksGrid: View {
+    @Environment(\.palette) private var palette
     let section: HomeSection
     @ObservedObject var player: Player
 
@@ -41,7 +43,7 @@ struct QuickPicksGrid: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(section.title)
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 12)
@@ -65,17 +67,17 @@ struct QuickPicksGrid: View {
 
     private func cell(_ item: HomeItem) -> some View {
         HStack(spacing: 10) {
-            RemoteImage(url: item.thumbnailURL) { Color.white.opacity(0.06) }
+            RemoteImage(url: item.thumbnailURL) { palette.onSurface.opacity(0.06) }
                 .frame(width: 48, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white).lineLimit(1)
+                    .foregroundStyle(palette.onSurface).lineLimit(1)
                 if !item.subtitle.isEmpty {
                     Text(item.subtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                        .foregroundStyle(palette.onSurfaceVariant).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
@@ -86,6 +88,7 @@ struct QuickPicksGrid: View {
 
 /// Colored Mood & Genres tiles (2 rows, horizontal scroll).
 struct MoodTiles: View {
+    @Environment(\.palette) private var palette
     let moods: [MoodItem]
     let onTap: (MoodItem) -> Void
 
@@ -95,7 +98,7 @@ struct MoodTiles: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Moods & genres")
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 12)
@@ -106,7 +109,7 @@ struct MoodTiles: View {
                         Button { onTap(mood) } label: {
                             Text(mood.title)
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(palette.onSurface)
                                 .lineLimit(1)
                                 .padding(.horizontal, 16)
                                 .frame(width: 150, height: 52, alignment: .leading)
@@ -124,26 +127,27 @@ struct MoodTiles: View {
 
 /// Square playlist/album tile for 2-column grids (library, mood detail).
 struct PlaylistGridCard: View {
+    @Environment(\.palette) private var palette
     let item: HomeItem
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             RemoteImage(url: item.thumbnailURL) {
-                Color.white.opacity(0.06)
+                palette.onSurface.opacity(0.06)
                     .overlay(Image(systemName: "music.note.list")
                         .font(.system(size: 36))
-                        .foregroundStyle(.white.opacity(0.35)))
+                        .foregroundStyle(palette.onSurface.opacity(0.35)))
             }
             .aspectRatio(1, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             Text(item.title)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white).lineLimit(1)
+                .foregroundStyle(palette.onSurface).lineLimit(1)
             if !item.subtitle.isEmpty {
                 Text(item.subtitle)
                     .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                    .foregroundStyle(palette.onSurfaceVariant).lineLimit(1)
             }
         }
     }

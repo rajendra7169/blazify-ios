@@ -3,6 +3,7 @@ import SwiftUI
 /// The signed-in account's YouTube Music library, ported from AccountScreen.kt:
 /// a Playlists / Albums / Artists chip row over an adaptive grid.
 struct AccountLibraryView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject var player: Player
     @ObservedObject private var theme = AppTheme.shared
     @Environment(\.dismiss) private var dismiss
@@ -39,8 +40,8 @@ struct AccountLibraryView: View {
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(on ? .black : .white)
                                 .padding(.horizontal, 16).padding(.vertical, 8)
-                                .background(on ? AnyShapeStyle(Blaze.amber)
-                                               : AnyShapeStyle(Color.white.opacity(0.08)))
+                                .background(on ? AnyShapeStyle(palette.accent)
+                                               : AnyShapeStyle(palette.onSurface.opacity(0.06)))
                                 .clipShape(Capsule())
                                 .onTapGesture {
                                     kind = k
@@ -56,7 +57,7 @@ struct AccountLibraryView: View {
                     SkeletonGrid()
                 } else if items.isEmpty {
                     Text("Nothing here yet")
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(palette.onSurfaceVariant)
                         .padding(.top, 60)
                 } else {
                     LazyVGrid(columns: columns, spacing: 16) {
@@ -76,7 +77,7 @@ struct AccountLibraryView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }.tint(Blaze.amber)
+                    Button("Close") { dismiss() }.tint(palette.accent)
                 }
             }
         }

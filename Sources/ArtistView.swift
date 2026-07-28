@@ -4,6 +4,7 @@ import SwiftUI
 /// over it, a shuffle CTA, then the artist's shelves — song lists inline, and
 /// albums / singles / similar artists as horizontal card rows.
 struct ArtistView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject private var theme = AppTheme.shared
     let browseId: String
     @ObservedObject var player: Player
@@ -32,9 +33,9 @@ struct ArtistView: View {
                 } else {
                     VStack(spacing: 10) {
                         Image(systemName: "person.slash").font(.system(size: 36))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(palette.onSurfaceVariant)
                         Text("Couldn't load this artist")
-                            .foregroundStyle(.white.opacity(0.6))
+                            .foregroundStyle(palette.onSurfaceVariant)
                     }
                     .padding(.top, 80)
                 }
@@ -43,7 +44,7 @@ struct ArtistView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }.tint(Blaze.amber)
+                    Button("Close") { dismiss() }.tint(palette.accent)
                 }
             }
         }
@@ -67,12 +68,12 @@ struct ArtistView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(page.name)
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.onSurface)
                     .lineLimit(2)
                 if !page.subscribers.isEmpty {
                     Text(page.subscribers)
                         .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(palette.onSurfaceVariant)
                 }
                 if let songs = firstSongs, !songs.isEmpty {
                     Button {
@@ -85,7 +86,7 @@ struct ArtistView: View {
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 24).padding(.vertical, 11)
-                        .background(Blaze.gradient)
+                        .background(palette.heroGradient)
                         .clipShape(Capsule())
                     }
                     .padding(.top, 4)
@@ -104,7 +105,7 @@ struct ArtistView: View {
         if !section.title.isEmpty {
             Text(section.title)
                 .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
                 .padding(.horizontal, 16)
                 .padding(.top, 20)
                 .padding(.bottom, 10)

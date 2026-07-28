@@ -4,6 +4,7 @@ import SwiftUI
 /// home: custom header, amber greeting card, search pill, and horizontal rails
 /// of real YouTube Music recommendations.
 struct HomeView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject private var theme = AppTheme.shared
     @ObservedObject var player: Player
     @ObservedObject private var auth = Auth.shared
@@ -121,7 +122,7 @@ struct HomeView: View {
             } label: {
                 Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
                     .font(.system(size: 26))
-                    .foregroundStyle(auth.isLoggedIn ? Blaze.amber : .white)
+                    .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
             }
             Spacer()
             HStack(spacing: 8) {
@@ -131,13 +132,13 @@ struct HomeView: View {
                     .frame(width: 30, height: 30)
                 Text("Blazify")
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.onSurface)
             }
             Spacer()
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 24))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.onSurface)
             }
         }
         .padding(.horizontal, 16)
@@ -154,15 +155,15 @@ struct HomeView: View {
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 18))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(palette.onSurfaceVariant)
                 Text("Search songs, albums, artists…")
                     .font(.system(size: 15))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(palette.onSurfaceVariant)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 15)
-            .background(Color.white.opacity(0.10))
+            .background(palette.onSurface.opacity(0.10))
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -181,6 +182,7 @@ struct SearchRoute: Hashable {}
 /// on two lines, name, tagline, and the Blaze mascot overflowing the card's top —
 /// her hair pokes out above the card with a soft 3D drop shadow.
 struct GreetingCard: View {
+    @Environment(\.palette) private var palette
     @ObservedObject private var auth = Auth.shared
 
     private var greeting: (line1: String, line2: String) {
@@ -195,7 +197,7 @@ struct GreetingCard: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: 20)
-            .fill(Blaze.cardGradient)
+            .fill(palette.heroGradient)
             .frame(height: 160)
             .overlay(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -214,6 +216,7 @@ struct GreetingCard: View {
                         .opacity(0.85)
                         .padding(.top, 2)
                 }
+                // Sits on the accent gradient, so it stays white in both themes.
                 .foregroundStyle(.white)
                 .padding(20)
                 .frame(maxWidth: 210, alignment: .leading)
@@ -239,6 +242,7 @@ struct GreetingCard: View {
 
 /// A titled horizontal rail of cards.
 struct HomeRail: View {
+    @Environment(\.palette) private var palette
     let section: HomeSection
     let onTap: (HomeItem) -> Void
 
@@ -246,7 +250,7 @@ struct HomeRail: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(section.title)
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 12)
@@ -265,6 +269,7 @@ struct HomeRail: View {
 
 /// A 140-wide card: art (square or circular) + title + subtitle.
 struct MusicCard: View {
+    @Environment(\.palette) private var palette
     let item: HomeItem
     let onTap: () -> Void
 
@@ -272,11 +277,11 @@ struct MusicCard: View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 8) {
                 RemoteImage(url: item.thumbnailURL) {
-                    Color.white.opacity(0.06)
+                    palette.onSurface.opacity(0.06)
                         .overlay(
                             Image(systemName: item.isCircular ? "person.fill" : "music.note")
                                 .font(.system(size: 40))
-                                .foregroundStyle(.white.opacity(0.35)),
+                                .foregroundStyle(palette.onSurface.opacity(0.35)),
                         )
                 }
                 .frame(width: 140, height: 140)
@@ -285,14 +290,14 @@ struct MusicCard: View {
 
                 Text(item.title)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.onSurface)
                     .lineLimit(1)
                     .multilineTextAlignment(.leading)
 
                 if !item.subtitle.isEmpty {
                     Text(item.subtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(palette.onSurfaceVariant)
                         .lineLimit(1)
                         .multilineTextAlignment(.leading)
                 }

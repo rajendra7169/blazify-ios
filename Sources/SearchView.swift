@@ -55,6 +55,7 @@ struct SearchView: View {
 
 /// One search-result row: art, title, artist.
 struct TrackRow: View {
+    @Environment(\.palette) private var palette
     let track: Track
 
     var body: some View {
@@ -62,17 +63,17 @@ struct TrackRow: View {
             AsyncImage(url: track.thumbnailURL) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
-                Color.white.opacity(0.1)
+                palette.onSurface.opacity(0.10)
             }
             .frame(width: 52, height: 52)
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(track.title)
-                    .font(.subheadline).foregroundStyle(.white)
+                    .font(.subheadline).foregroundStyle(palette.onSurface)
                     .lineLimit(1)
                 Text(track.artist)
-                    .font(.caption).foregroundStyle(.white.opacity(0.6))
+                    .font(.caption).foregroundStyle(palette.onSurfaceVariant)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)

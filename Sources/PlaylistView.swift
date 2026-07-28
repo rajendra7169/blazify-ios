@@ -3,6 +3,7 @@ import SwiftUI
 /// A playlist or album opened from a home card: big art header, Play / Shuffle
 /// actions, then the track list. Tapping any row starts playback from there.
 struct PlaylistView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject private var theme = AppTheme.shared
     let item: HomeItem
     @ObservedObject var player: Player
@@ -23,10 +24,10 @@ struct PlaylistView: View {
         ScrollView {
             VStack(spacing: 16) {
                 RemoteImage(url: item.thumbnailURL) {
-                    Color.white.opacity(0.06)
+                    palette.onSurface.opacity(0.06)
                         .overlay(Image(systemName: "music.note.list")
                             .font(.system(size: 48))
-                            .foregroundStyle(.white.opacity(0.35)))
+                            .foregroundStyle(palette.onSurface.opacity(0.35)))
                 }
                 .frame(width: 200, height: 200)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
@@ -36,12 +37,12 @@ struct PlaylistView: View {
                 VStack(spacing: 4) {
                     Text(item.title)
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(palette.onSurface)
                         .multilineTextAlignment(.center)
                     if !item.subtitle.isEmpty {
                         Text(item.subtitle)
                             .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .foregroundStyle(palette.onSurfaceVariant)
                             .multilineTextAlignment(.center)
                     }
                 }
@@ -64,7 +65,7 @@ struct PlaylistView: View {
                     SkeletonTrackList(rows: 7).padding(.top, 8)
                 } else if tracks.isEmpty {
                     Text("Nothing to play here")
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(palette.onSurfaceVariant)
                         .padding(.top, 40)
                 } else {
                     LazyVStack(spacing: 0) {
@@ -98,7 +99,7 @@ struct PlaylistView: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(Blaze.gradient)
+            .background(palette.heroGradient)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)

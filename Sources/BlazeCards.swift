@@ -17,6 +17,7 @@ enum BlazePalette {
 
 /// Section title with an optional "See More", 22pt bold.
 struct BlazeSectionHeader: View {
+    @Environment(\.palette) private var palette
     let title: String
     var onSeeMore: (() -> Void)?
 
@@ -24,13 +25,13 @@ struct BlazeSectionHeader: View {
         HStack {
             Text(title)
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
                 .lineLimit(1)
             Spacer(minLength: 12)
             if let onSeeMore {
                 Button("See More", action: onSeeMore)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Blaze.amber)
+                    .foregroundStyle(palette.accent)
                     .buttonStyle(.plain)
             }
         }
@@ -43,6 +44,7 @@ struct BlazeSectionHeader: View {
 /// The wide gradient playlist card: artwork fills the right half and a
 /// left-to-right wash of the seed colour blends it into the card.
 struct BlazePlaylistCard: View {
+    @Environment(\.palette) private var palette
     let title: String
     var subtitle: String = ""
     var thumbnails: [String] = []
@@ -75,6 +77,8 @@ struct BlazePlaylistCard: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     GeometryReader { g in
+                        // On the saturated card fill, not the page — white stays
+                        // correct in both light and dark.
                         Text(title)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
@@ -141,6 +145,7 @@ struct PlaylistArtwork: View {
 
 /// 140pt rail card — square art, or a circle for artists.
 struct BlazeMusicCard: View {
+    @Environment(\.palette) private var palette
     let title: String
     var subtitle: String = ""
     var thumbnail: String?
@@ -152,10 +157,10 @@ struct BlazeMusicCard: View {
         Button(action: action) {
             VStack(alignment: isCircular ? .center : .leading, spacing: 0) {
                 RemoteImage(url: thumbnail.flatMap { URL(string: $0) }) {
-                    Color.white.opacity(0.08)
+                    palette.onSurface.opacity(0.06)
                         .overlay(Image(systemName: fallbackIcon)
                             .font(.system(size: 40))
-                            .foregroundStyle(.white.opacity(0.45)))
+                            .foregroundStyle(palette.onSurface.opacity(0.35)))
                 }
                 .frame(width: 140, height: 140)
                 .clipShape(isCircular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 12)))
@@ -163,7 +168,7 @@ struct BlazeMusicCard: View {
                 Spacer().frame(height: 8)
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.onSurface)
                     .lineLimit(1)
                     .multilineTextAlignment(isCircular ? .center : .leading)
                     .frame(maxWidth: isCircular ? .infinity : nil,
@@ -172,7 +177,7 @@ struct BlazeMusicCard: View {
                     Spacer().frame(height: 2)
                     Text(subtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(palette.onSurfaceVariant)
                         .lineLimit(1)
                         .multilineTextAlignment(isCircular ? .center : .leading)
                         .frame(maxWidth: isCircular ? .infinity : nil,
@@ -198,6 +203,7 @@ struct BlazeCategoryTile: View {
             ZStack {
                 LinearGradient(colors: [color, color.opacity(0.7)],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
+                // Drawn on the tile's own gradient, so white regardless of theme.
                 VStack(spacing: 8) {
                     Image(systemName: icon)
                         .font(.system(size: 34))

@@ -2,6 +2,7 @@ import SwiftUI
 
 /// The offline library — every downloaded track, plays with no network.
 struct DownloadsView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject private var theme = AppTheme.shared
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
@@ -13,10 +14,10 @@ struct DownloadsView: View {
                 if downloads.tracks.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 44)).foregroundStyle(Blaze.amber)
-                        Text("No downloads yet").foregroundStyle(.white.opacity(0.75))
+                            .font(.system(size: 44)).foregroundStyle(palette.accent)
+                        Text("No downloads yet").foregroundStyle(palette.onSurfaceVariant)
                         Text("Tap ⋮ → Download on a song, or Download on a playlist.")
-                            .font(.caption).foregroundStyle(.white.opacity(0.5))
+                            .font(.caption).foregroundStyle(palette.onSurfaceVariant)
                             .multilineTextAlignment(.center).padding(.horizontal, 40)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -49,7 +50,7 @@ struct DownloadsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.tint(Blaze.amber)
+                    Button("Done") { dismiss() }.tint(palette.accent)
                 }
             }
         }

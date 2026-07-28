@@ -2,6 +2,7 @@ import SwiftUI
 
 /// A Mood/Genre page: the playlists inside a mood tile, in a 2-column grid.
 struct MoodDetailView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject private var theme = AppTheme.shared
     let mood: MoodItem
     @ObservedObject var player: Player
@@ -17,7 +18,7 @@ struct MoodDetailView: View {
                 SkeletonGrid()
             } else if playlists.isEmpty {
                 Text("Nothing here")
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(palette.onSurfaceVariant)
                     .padding(.top, 60)
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {

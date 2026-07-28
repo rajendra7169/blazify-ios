@@ -4,6 +4,7 @@ import SwiftUI
 /// action on top, then the user's editable playlists. Creating one adds the
 /// song to it straight away.
 struct AddToPlaylistSheet: View {
+    @Environment(\.palette) private var palette
     let track: Track
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var auth = Auth.shared
@@ -31,11 +32,11 @@ struct AddToPlaylistSheet: View {
                                     .font(.system(size: 17, weight: .semibold))
                                     .foregroundStyle(.black)
                                     .frame(width: 44, height: 44)
-                                    .background(Blaze.amber)
+                                    .background(palette.accent)
                                     .clipShape(Circle())
                                 Text("Create playlist")
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(palette.onSurface)
                                 Spacer(minLength: 0)
                             }
                         }
@@ -51,7 +52,7 @@ struct AddToPlaylistSheet: View {
 
                         if playlists.isEmpty {
                             Text("No playlists yet")
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(palette.onSurfaceVariant)
                                 .listRowBackground(Color.clear)
                         }
                     }
@@ -59,12 +60,12 @@ struct AddToPlaylistSheet: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .background(Blaze.surface.ignoresSafeArea())
+            .background(palette.surface.ignoresSafeArea())
             .navigationTitle("Add to playlist")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }.tint(Blaze.amber)
+                    Button("Close") { dismiss() }.tint(palette.accent)
                 }
             }
         }
@@ -84,23 +85,23 @@ struct AddToPlaylistSheet: View {
     private func row(_ playlist: UserPlaylist) -> some View {
         HStack(spacing: 14) {
             RemoteImage(url: playlist.thumbnailURL) {
-                Color.white.opacity(0.06)
+                palette.onSurface.opacity(0.06)
                     .overlay(Image(systemName: "music.note.list")
-                        .foregroundStyle(.white.opacity(0.35)))
+                        .foregroundStyle(palette.onSurface.opacity(0.35)))
             }
             .frame(width: 44, height: 44)
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             Text(playlist.title)
                 .font(.system(size: 16))
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
                 .lineLimit(1)
             Spacer(minLength: 0)
 
             if busyID == playlist.id {
                 ProgressView().tint(.white)
             } else if addedID == playlist.id {
-                Image(systemName: "checkmark").foregroundStyle(Blaze.amber)
+                Image(systemName: "checkmark").foregroundStyle(palette.accent)
             }
         }
         .contentShape(Rectangle())
@@ -108,8 +109,8 @@ struct AddToPlaylistSheet: View {
 
     private func message(_ text: String, icon: String) -> some View {
         VStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 34)).foregroundStyle(Blaze.amber)
-            Text(text).foregroundStyle(.white.opacity(0.7))
+            Image(systemName: icon).font(.system(size: 34)).foregroundStyle(palette.accent)
+            Text(text).foregroundStyle(palette.onSurfaceVariant)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

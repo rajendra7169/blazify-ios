@@ -5,6 +5,7 @@ import UIKit
 /// card pinned near the top (72pt down, 16pt sides, 28pt radius) over a dimmed
 /// tap-to-dismiss backdrop.
 struct AccountPopup: View {
+    @Environment(\.palette) private var palette
     @ObservedObject var player: Player
     @Binding var isPresented: Bool
 
@@ -64,13 +65,13 @@ struct AccountPopup: View {
         HStack {
             Text("Blazify")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
                 .padding(.leading, 4)
             Spacer()
             Button { isPresented = false } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.onSurface)
                     .frame(width: 32, height: 32)
             }
         }
@@ -85,9 +86,9 @@ struct AccountPopup: View {
         } label: {
             HStack(spacing: 12) {
                 if auth.isLoggedIn {
-                    Circle().fill(Blaze.cardGradient)
+                    Circle().fill(palette.heroGradient)
                         .frame(width: 40, height: 40)
-                        .overlay(Image(systemName: "person.fill").foregroundStyle(.white))
+                        .overlay(Image(systemName: "person.fill").foregroundStyle(palette.onSurface))
                 } else {
                     iconChip("rectangle.portrait.and.arrow.right")
                 }
@@ -95,11 +96,11 @@ struct AccountPopup: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(auth.isLoggedIn ? (auth.accountName ?? "Account") : "Login")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white).lineLimit(1)
+                        .foregroundStyle(palette.onSurface).lineLimit(1)
                     if let email = auth.accountEmail, auth.isLoggedIn {
                         Text(email)
                             .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                            .foregroundStyle(palette.onSurfaceVariant).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
@@ -108,7 +109,7 @@ struct AccountPopup: View {
                     Button { confirmLogout = true } label: {
                         Text("Log out")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(palette.onSurface)
                             .padding(.horizontal, 14).padding(.vertical, 8)
                             .overlay(Capsule().stroke(.white.opacity(0.25), lineWidth: 1))
                     }
@@ -116,7 +117,7 @@ struct AccountPopup: View {
                 }
             }
             .padding(.horizontal, 20).padding(.vertical, 16)
-            .background(Color.white.opacity(0.06))
+            .background(palette.onSurface.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -159,7 +160,7 @@ struct AccountPopup: View {
             ScrollView {
                 Text(tokenText)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.onSurface)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
@@ -169,10 +170,10 @@ struct AccountPopup: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Copy") { UIPasteboard.general.string = tokenText }.tint(Blaze.amber)
+                    Button("Copy") { UIPasteboard.general.string = tokenText }.tint(palette.accent)
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { showTokenSheet = false }.tint(Blaze.amber)
+                    Button("Close") { showTokenSheet = false }.tint(palette.accent)
                 }
             }
         }
@@ -196,7 +197,7 @@ struct AccountPopup: View {
             }
             .buttonStyle(.plain)
         }
-        .background(Color.white.opacity(0.06))
+        .background(palette.onSurface.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
@@ -207,7 +208,7 @@ struct AccountPopup: View {
             iconChip(icon)
             Text(title)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 20).padding(.vertical, 16)
@@ -224,23 +225,23 @@ struct AccountPopup: View {
             Spacer(minLength: 0)
             Toggle("", isOn: isOn)
                 .labelsHidden()
-                .tint(Blaze.amber)
+                .tint(palette.accent)
                 .disabled(!auth.isLoggedIn)
                 .onChange(of: isOn.wrappedValue) {
                     UserDefaults.standard.set(isOn.wrappedValue, forKey: key)
                 }
         }
         .padding(.horizontal, 20).padding(.vertical, 16)
-        .background(Color.white.opacity(0.06))
+        .background(palette.onSurface.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func iconChip(_ icon: String) -> some View {
         Image(systemName: icon)
             .font(.system(size: 18))
-            .foregroundStyle(Blaze.amber)
+            .foregroundStyle(palette.accent)
             .frame(width: 40, height: 40)
-            .background(Blaze.amber.opacity(0.12))
+            .background(palette.accent.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
