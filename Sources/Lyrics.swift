@@ -41,9 +41,10 @@ struct LyricsCandidate: Identifiable, Equatable {
     var script: String? { Lyrics.detectScript(result.raw ?? result.plain ?? "") }
 }
 
-/// Multi-source lyrics. Apple Music, LrcLib and KuGou all work without any
-/// account, so all three are queried concurrently and every candidate is
-/// offered in the picker.
+/// Multi-source lyrics — the same five providers Android uses: Apple Music
+/// (via Paxsenix), BetterLyrics, LrcLib, KuGou and YouTube Music's own. None
+/// needs an account, so all five are queried concurrently and every candidate
+/// is offered in the picker.
 enum Lyrics {
     static let sourceName = "LrcLib"   // shown until a provider is resolved
 
@@ -51,12 +52,15 @@ enum Lyrics {
 
     /// Every candidate from every provider, best-first.
     /// `videoId` unlocks YouTube's own lyrics when known.
-    static func search(title: String, artist: String, videoId: String = "") async -> [LyricsCandidate] {
+    static func search(title: String, artist: String, videoId: String = "",
+                       duration: Double = 0) async -> [LyricsCandidate] {
         async let lrc = lrcLib(title: title, artist: artist)
         async let kugou = kuGou(title: title, artist: artist)
         async let apple = appleMusic(title: title, artist: artist)
         async let yt = youTube(videoId: videoId, title: title, artist: artist)
-        let all = await apple + lrc + kugou + yt
+        async let better = betterLyrics(title: title, artist: artist,
+                                        videoId: videoId, duration: duration)
+        let all = await apple + better + lrc + kugou + yt
         // Synced first, then by provider rank, preserving arrival order within a rank.
         return all.enumerated().sorted { a, b in
             if a.element.synced != b.element.synced { return a.element.synced }
@@ -69,14 +73,50 @@ enum Lyrics {
     private static func rank(_ provider: String) -> Int {
         switch provider.lowercased() {
         case "apple music": return 0
-        case "lrclib": return 1
-        case "kugou": return 2
-        default: return 3   // YouTube / Musixmatch — plain only
+        case "betterlyrics": return 1
+        case "lrclib": return 2
+        case "kugou": return 3
+        default: return 4   // YouTube / Musixmatch — plain only
         }
     }
 
     static func best(_ candidates: [LyricsCandidate]) -> LyricsResult? {
         candidates.first(where: { $0.synced })?.result ?? candidates.first?.result
+    }
+
+    // MARK: BetterLyrics (word-level TTML, no account)
+
+    /// Deliberately queries the *exact* title and artist, as the Android module
+    /// does: normalising them tends to match a different cut of the song (radio
+    /// edit vs original) whose timings then drift against what's playing.
+    private static func betterLyrics(title: String, artist: String,
+                                     videoId: String, duration: Double) async -> [LyricsCandidate] {
+        guard !title.isEmpty, !artist.isEmpty else { return [] }
+
+        var comps = URLComponents(string: "https://lyrics-api.boidu.dev/getLyrics")!
+        var items = [URLQueryItem(name: "s", value: title), URLQueryItem(name: "a", value: artist)]
+        if duration > 0 { items.append(URLQueryItem(name: "d", value: String(Int(duration)))) }
+        comps.queryItems = items
+        guard let url = comps.url else { return [] }
+
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 15
+        req.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                     forHTTPHeaderField: "User-Agent")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        // A miss comes back as 401, not 404 — anything non-200 just means no match.
+        guard let (data, response) = try? await URLSession.shared.data(for: req),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ttml = json["ttml"] as? String, !ttml.isEmpty,
+              let lrc = TTML.toLRC(ttml)
+        else { return [] }
+
+        let lines = parseLRC(lrc)
+        guard !lines.isEmpty else { return [] }
+        return [LyricsCandidate(provider: "BetterLyrics", trackName: title, artistName: artist,
+                                result: LyricsResult(lines: lines, plain: nil, synced: true, raw: lrc))]
     }
 
     // MARK: LrcLib

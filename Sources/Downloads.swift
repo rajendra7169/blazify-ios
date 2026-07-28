@@ -101,7 +101,8 @@ final class Downloads: ObservableObject {
             }
 
             // Cache lyrics too, so a downloaded song is fully offline.
-            let candidates = await Lyrics.search(title: track.title, artist: track.artist, videoId: id)
+            let candidates = await Lyrics.search(title: track.title, artist: track.artist,
+                                                 videoId: id, duration: track.duration)
             if let lyrics = Lyrics.best(candidates) {
                 if let lrc = lyrics.raw {
                     try? lrc.write(to: lyricsURL(for: id), atomically: true, encoding: .utf8)
