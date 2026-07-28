@@ -289,6 +289,15 @@ struct LyricsPane: View {
         autoScroll = true
         ready = false
         guard let track = player.current else { loading = false; return }
+
+        // A downloaded song carries its lyrics on disk — use them offline.
+        if let cached = Downloads.shared.cachedLyrics(for: track.videoId) {
+            result = cached
+            loading = false
+            ready = true
+            return
+        }
+
         let found = await Lyrics.search(title: track.title, artist: track.artist)
         await MainActor.run {
             candidates = found

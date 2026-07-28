@@ -28,6 +28,19 @@ final class Downloads: ObservableObject {
 
     private func audioURL(for id: String) -> URL { dir.appendingPathComponent("\(id).m4a") }
     private func artURL(for id: String) -> URL { dir.appendingPathComponent("\(id).jpg") }
+    private func lyricsURL(for id: String) -> URL { dir.appendingPathComponent("\(id).lrc") }
+    private func plainLyricsURL(for id: String) -> URL { dir.appendingPathComponent("\(id).txt") }
+
+    /// Lyrics saved alongside a download, so they work with no network.
+    func cachedLyrics(for id: String) -> LyricsResult? {
+        if let lrc = try? String(contentsOf: lyricsURL(for: id), encoding: .utf8), !lrc.isEmpty {
+            return LyricsResult(lines: Lyrics.parseLRC(lrc), plain: nil, synced: true, raw: lrc)
+        }
+        if let plain = try? String(contentsOf: plainLyricsURL(for: id), encoding: .utf8), !plain.isEmpty {
+            return LyricsResult(lines: [], plain: plain, synced: false, raw: nil)
+        }
+        return nil
+    }
 
     func localAudioURL(for id: String) -> URL? {
         let u = audioURL(for: id)
@@ -57,6 +70,8 @@ final class Downloads: ObservableObject {
     func remove(_ id: String) {
         try? FileManager.default.removeItem(at: audioURL(for: id))
         try? FileManager.default.removeItem(at: artURL(for: id))
+        try? FileManager.default.removeItem(at: lyricsURL(for: id))
+        try? FileManager.default.removeItem(at: plainLyricsURL(for: id))
         tracks.removeAll { $0.videoId == id }
         durations[id] = nil
         states[id] = nil
@@ -83,6 +98,16 @@ final class Downloads: ObservableObject {
                let (adata, _) = try? await URLSession.shared.data(from: remote) {
                 try? adata.write(to: artURL(for: id))
                 artPath = artURL(for: id).absoluteString
+            }
+
+            // Cache lyrics too, so a downloaded song is fully offline.
+            let candidates = await Lyrics.search(title: track.title, artist: track.artist)
+            if let lyrics = Lyrics.best(candidates) {
+                if let lrc = lyrics.raw {
+                    try? lrc.write(to: lyricsURL(for: id), atomically: true, encoding: .utf8)
+                } else if let plain = lyrics.plain {
+                    try? plain.write(to: plainLyricsURL(for: id), atomically: true, encoding: .utf8)
+                }
             }
 
             let stored = Track(videoId: id, title: track.title, artist: track.artist,

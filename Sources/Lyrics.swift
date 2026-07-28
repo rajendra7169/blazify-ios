@@ -11,6 +11,8 @@ struct LyricsResult: Equatable {
     let lines: [LyricLine]   // empty when only plain lyrics exist
     let plain: String?
     let synced: Bool
+    /// The original LRC text, kept so downloads can cache and re-parse it.
+    var raw: String?
 }
 
 /// One alternate lyrics version for the language/source picker.
@@ -71,10 +73,11 @@ enum Lyrics {
                 out.append(LyricsCandidate(id: id, trackName: name, artistName: by,
                                            result: LyricsResult(lines: parseLRC(lrc),
                                                                 plain: item["plainLyrics"] as? String,
-                                                                synced: true)))
+                                                                synced: true, raw: lrc)))
             } else if let plain = item["plainLyrics"] as? String, !plain.isEmpty {
                 out.append(LyricsCandidate(id: id, trackName: name, artistName: by,
-                                           result: LyricsResult(lines: [], plain: plain, synced: false)))
+                                           result: LyricsResult(lines: [], plain: plain,
+                                                                synced: false, raw: nil)))
             }
         }
         return out
