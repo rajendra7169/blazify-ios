@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The player seek bar in whichever style Look & Feel selects, each ported from
 /// its Android counterpart:

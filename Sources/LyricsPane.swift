@@ -10,6 +10,14 @@ import UIKit
 struct LyricsPane: View {
     @ObservedObject var player: Player
     @ObservedObject private var look = LookFeel.shared
+    /// The 4 Hz position drives the sync anchor, so observe it directly rather
+    /// than trusting the parent to re-render us.
+    @ObservedObject private var clock: PlaybackClock
+
+    init(player: Player) {
+        self.player = player
+        _clock = ObservedObject(wrappedValue: player.clock)
+    }
 
     @State private var candidates: [LyricsCandidate] = []
     @State private var result: LyricsResult?
@@ -39,7 +47,7 @@ struct LyricsPane: View {
             content
         }
         .task(id: player.current?.videoId) { await load() }
-        .onChange(of: player.currentTime) {
+        .onChange(of: clock.currentTime) {
             // Re-anchor whenever the player reports a new position.
             anchorPos = player.currentTime
             anchorWall = Date()
