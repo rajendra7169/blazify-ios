@@ -317,6 +317,41 @@ final class Player: ObservableObject {
     }
 
     /// Jump to a specific queue position (from the Queue screen).
+    /// Drag-to-reorder from the queue. The playing song keeps playing: its index
+    /// just follows it to wherever it ended up.
+    func moveInQueue(from offsets: IndexSet, to destination: Int) {
+        guard let playing = current else { return }
+        queue.move(fromOffsets: offsets, toOffset: destination)
+        originalQueue = queue
+        if let now = queue.firstIndex(where: { $0.videoId == playing.videoId }) {
+            index = now
+        }
+        saveQueue()
+    }
+
+    /// Remove one track. Dropping the playing song moves to what took its place.
+    func removeFromQueue(at position: Int) {
+        guard queue.indices.contains(position) else { return }
+        let wasPlaying = position == index
+        let removed = queue.remove(at: position)
+        originalQueue.removeAll { $0.videoId == removed.videoId }
+
+        if queue.isEmpty {
+            avPlayer?.pause()
+            isPlaying = false
+            index = 0
+            saveQueue()
+            return
+        }
+        if wasPlaying {
+            index = min(position, queue.count - 1)
+            loadCurrent()
+        } else if position < index {
+            index -= 1
+        }
+        saveQueue()
+    }
+
     func jump(to i: Int) {
         guard queue.indices.contains(i) else { return }
         index = i

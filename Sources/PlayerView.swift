@@ -296,12 +296,6 @@ struct PlayerView: View {
                             .frame(width: 40, height: 40)
                     }
                 } else {
-                    Button { showEqualizer = true } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 21, weight: .semibold))
-                            .foregroundStyle(Equalizer.shared.enabled ? palette.accent : .white)
-                            .frame(width: 34, height: 40)
-                    }
                     Button { player.toggleFavorite() } label: {
                         Image(systemName: player.isCurrentFavorite ? "heart.fill" : "heart")
                             .font(.system(size: 26))
