@@ -39,11 +39,11 @@ struct SettingsView: View {
     private var groups: [Group] {
         [
             Group(title: "Personalize", rows: [
-                Row(icon: "paintbrush", title: "Appearance",
-                    subtitle: "Theme, colors, dark mode, layout"),
                 Row(icon: "rectangle.on.rectangle", title: "Look & Feel",
                     subtitle: "Preview and style theme, player, mini-player and home",
                     action: .lookFeel),
+                Row(icon: "paintbrush", title: "Appearance",
+                    subtitle: "Theme, colors, dark mode, layout"),
             ]),
             Group(title: "Playback", rows: [
                 Row(icon: "play.circle", title: "Player and audio",
@@ -138,6 +138,18 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }.tint(palette.accent)
+                }
+            }
+            // This sheet covers the root's mini player, so carry our own.
+            // Opening the full player closes Settings first — the player is
+            // presented by the root, and would otherwise open behind us.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if player.current != nil {
+                    MiniPlayerView(player: player) {
+                        dismiss()
+                        player.showFullPlayer = true
+                    }
+                    .padding(.bottom, 6)
                 }
             }
         }
