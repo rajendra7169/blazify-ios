@@ -474,9 +474,28 @@ final class Player: ObservableObject {
 
     private func stopForSleep() {
         cancelSleepTimer()
-        avPlayer?.pause()
-        isPlaying = false
-        updateNowPlaying()
+        guard PlaybackPrefs.shared.sleepFadeOut, let player = avPlayer, isPlaying else {
+            avPlayer?.pause()
+            isPlaying = false
+            updateNowPlaying()
+            return
+        }
+        // Ease the volume down over five seconds rather than cutting off
+        // mid-note, then restore it so the next play isn't silent.
+        let startVolume = player.volume
+        let steps = 25
+        let interval = 5.0 / Double(steps)
+        for step in 1...steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(step)) { [weak self] in
+                guard let self, let player = self.avPlayer else { return }
+                player.volume = startVolume * Float(1 - Double(step) / Double(steps))
+                guard step == steps else { return }
+                player.pause()
+                player.volume = startVolume
+                self.isPlaying = false
+                self.updateNowPlaying()
+            }
+        }
     }
 
     func prev() {

@@ -8,8 +8,10 @@ struct SleepTimerView: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
 
-    @State private var minutes: Double = 30
-    @State private var songs = 0     // 0 = minutes mode
+    @State private var minutes: Double = PlaybackPrefs.shared.sleepDefaultMinutes
+    /// 0 = minutes mode. Starts at 1 when "Finish the song" is the default, so
+    /// the sheet opens on the behaviour you asked for in Settings.
+    @State private var songs = PlaybackPrefs.shared.sleepStopAfterSong ? 1 : 0
     @State private var sheetHeight: CGFloat = 420
 
     private var songsMode: Bool { songs > 0 }
