@@ -122,7 +122,7 @@ enum YouTube {
     static func search(_ query: String) async -> [Track] {
         let visitor = await visitorData()
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = [
             "context": ["client": client],
@@ -145,7 +145,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "input": q]
 
@@ -221,7 +221,7 @@ enum YouTube {
     static func home(params: String? = nil, continuation: String? = nil) async -> HomeFeed {
         let visitor = await visitorData()
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
 
         var body: [String: Any] = ["context": ["client": client]]
@@ -313,7 +313,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
 
         // The lyrics tab hangs off `next` as a browseId beginning MPLY.
@@ -371,7 +371,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
 
         let nextURL = "https://music.youtube.com/youtubei/v1/next?prettyPrint=false"
@@ -427,7 +427,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = [
             "context": ["client": client],
@@ -474,7 +474,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": browseId]
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
@@ -542,7 +542,7 @@ enum YouTube {
     static func moods() async -> [MoodItem] {
         let visitor = await visitorData()
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_moods_and_genres"]
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
@@ -580,7 +580,7 @@ enum YouTube {
         guard !browseId.isEmpty else { return [] }
         let visitor = await visitorData()
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         var body: [String: Any] = ["context": ["client": client], "browseId": browseId]
         if let params { body["params"] = params }
@@ -634,7 +634,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": browseId]
         // Signed in: the user's own playlists are private, so an unauthenticated
@@ -686,7 +686,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_history"]
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
@@ -733,7 +733,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client]]
         guard let json = await post(musicAccount, name: "67", version: remixVersion,
@@ -764,7 +764,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = [
             "context": ["client": client],
@@ -785,7 +785,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_liked_videos"]
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
@@ -805,7 +805,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_liked_playlists"]
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
@@ -856,7 +856,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = [
             "context": ["client": client],
@@ -877,7 +877,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let id = playlistId.hasPrefix("VL") ? String(playlistId.dropFirst(2)) : playlistId
         let body: [String: Any] = [
@@ -906,7 +906,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client],
                                    "browseId": "FEmusic_library_privately_owned_tracks"]
@@ -925,7 +925,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": browseId]
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
@@ -983,7 +983,7 @@ enum YouTube {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
-                                     "hl": "en", "gl": "US"]
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client],
                                    "browseId": "FEmusic_charts",

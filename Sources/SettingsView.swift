@@ -23,6 +23,7 @@ struct SettingsView: View {
     @State private var showLyrics = false
     @State private var showPlayerSettings = false
     @State private var showStreams = false
+    @State private var showContent = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -30,7 +31,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content }
     }
 
     private struct Group: Identifiable {
@@ -57,7 +58,9 @@ struct SettingsView: View {
                     action: .streams),
             ]),
             Group(title: "Content", rows: [
-                Row(icon: "globe", title: "Content", subtitle: "Region, explicit, video songs"),
+                Row(icon: "globe", title: "Content",
+                    subtitle: "Language, region, explicit and video filters",
+                    action: .content),
                 Row(icon: "quote.bubble", title: "Lyrics",
                     subtitle: "Sources, priority, style, display",
                     action: .lyrics),
@@ -198,6 +201,11 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showStreams) {
             NavigationStack { StreamSourcesView().settingsMiniPlayer(player) }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .sheet(isPresented: $showContent) {
+            NavigationStack { ContentSettingsView().settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
@@ -361,6 +369,7 @@ struct SettingsView: View {
             case .lyrics: showLyrics = true
             case .player: showPlayerSettings = true
             case .streams: showStreams = true
+            case .content: showContent = true
             case .none: break
             }
         } label: {

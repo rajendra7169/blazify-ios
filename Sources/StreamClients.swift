@@ -59,17 +59,17 @@ enum StreamClient: String, CaseIterable, Identifiable, Codable {
             return ["clientName": rawValue, "clientVersion": version,
                     "deviceMake": "Oculus", "deviceModel": "Quest 3",
                     "osName": "Android", "osVersion": "12", "androidSdkVersion": 32,
-                    "hl": "en", "gl": "US"]
+                    "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         case .visionOS:
             return ["clientName": rawValue, "clientVersion": version,
                     "deviceMake": "Apple", "deviceModel": "RealityDevice14,1",
                     "osName": "visionOS", "osVersion": "1.3.21O771",
-                    "hl": "en", "gl": "US"]
+                    "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         case .ios:
             return ["clientName": rawValue, "clientVersion": version,
                     "deviceMake": "Apple", "deviceModel": "iPhone16,2",
                     "osName": "iOS", "osVersion": "18.3.2.22D82",
-                    "hl": "en", "gl": "US"]
+                    "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         }
     }
 }
