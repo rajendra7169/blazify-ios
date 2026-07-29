@@ -82,15 +82,36 @@ final class Downloads: ObservableObject {
         if isDownloaded(track.videoId) { remove(track.videoId) } else { download(track) }
     }
 
+    // Queued, two at a time. Six at once used to fire six full pipelines in
+    // parallel — thirty-plus requests contending — and some tasks just died.
+    private var pending: [Track] = []
+    private var activeCount = 0
+    private let maxConcurrent = 2
+
     func download(_ track: Track) {
         let id = track.videoId
         guard !id.isEmpty, state(id) == .none else { return }
         states[id] = .downloading
-        Task { await perform(track) }
+        pending.append(track)
+        pump()
     }
 
     func downloadAll(_ tracks: [Track]) {
         for t in tracks { download(t) }
+    }
+
+    private func pump() {
+        while activeCount < maxConcurrent, !pending.isEmpty {
+            let next = pending.removeFirst()
+            activeCount += 1
+            Task {
+                await perform(next)
+                await MainActor.run {
+                    self.activeCount -= 1
+                    self.pump()
+                }
+            }
+        }
     }
 
     func remove(_ id: String) {
@@ -106,7 +127,13 @@ final class Downloads: ObservableObject {
 
     private func perform(_ track: Track) async {
         let id = track.videoId
-        guard let stream = await YouTube.streamURL(for: id) else {
+        // One retry: a burst of enqueues sometimes drops the first resolve.
+        var stream = await YouTube.streamURL(for: id)
+        if stream == nil {
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            stream = await YouTube.streamURL(for: id)
+        }
+        guard let stream else {
             await MainActor.run { self.states[id] = DownloadState.none }
             return
         }
@@ -118,27 +145,11 @@ final class Downloads: ObservableObject {
             try? FileManager.default.removeItem(at: audioURL(for: id))
             try FileManager.default.moveItem(at: tmp, to: audioURL(for: id))
 
-            // Cache artwork too, so offline art works.
-            var artPath = track.thumbnail
-            if let remote = track.thumbnailURL,
-               let (adata, _) = try? await URLSession.shared.data(from: remote) {
-                try? adata.write(to: artURL(for: id))
-                artPath = artURL(for: id).absoluteString
-            }
-
-            // Cache lyrics too, so a downloaded song is fully offline.
-            let candidates = await Lyrics.search(title: track.title, artist: track.artist,
-                                                 videoId: id, duration: track.duration)
-            if let lyrics = Lyrics.best(candidates) {
-                if let lrc = lyrics.raw {
-                    try? lrc.write(to: lyricsURL(for: id), atomically: true, encoding: .utf8)
-                } else if let plain = lyrics.plain {
-                    try? plain.write(to: plainLyricsURL(for: id), atomically: true, encoding: .utf8)
-                }
-            }
-
+            // The song is offline the moment the audio lands — mark it done NOW.
+            // Art and lyrics used to run first, which meant a five-provider
+            // lyrics hunt before the row would even say "downloaded".
             let stored = Track(videoId: id, title: track.title, artist: track.artist,
-                               thumbnail: artPath, duration: stream.duration)
+                               thumbnail: track.thumbnail, duration: stream.duration)
             await MainActor.run {
                 self.durations[id] = stream.duration
                 self.tracks.removeAll { $0.videoId == id }
@@ -147,8 +158,36 @@ final class Downloads: ObservableObject {
                 self.saveMeta()
                 self.refreshSize()
             }
+            await enrich(track, id: id, duration: stream.duration)
         } catch {
             await MainActor.run { self.states[id] = DownloadState.none }
+        }
+    }
+
+    /// Best-effort offline extras after the audio is safe: artwork on disk and
+    /// lyrics, via the shared cache so a warm fetch isn't repeated.
+    private func enrich(_ track: Track, id: String, duration: Double) async {
+        if let remote = track.thumbnailURL,
+           let (adata, _) = try? await URLSession.shared.data(from: remote) {
+            try? adata.write(to: artURL(for: id))
+            let artPath = artURL(for: id).absoluteString
+            await MainActor.run {
+                if let i = self.tracks.firstIndex(where: { $0.videoId == id }) {
+                    self.tracks[i] = Track(videoId: id, title: track.title, artist: track.artist,
+                                           thumbnail: artPath, duration: duration)
+                    self.saveMeta()
+                }
+            }
+        }
+
+        let candidates = await LyricsCache.shared.warm(videoId: id, title: track.title,
+                                                       artist: track.artist, duration: duration)
+        if let lyrics = Lyrics.best(candidates) {
+            if let lrc = lyrics.raw {
+                try? lrc.write(to: lyricsURL(for: id), atomically: true, encoding: .utf8)
+            } else if let plain = lyrics.plain {
+                try? plain.write(to: plainLyricsURL(for: id), atomically: true, encoding: .utf8)
+            }
         }
     }
 

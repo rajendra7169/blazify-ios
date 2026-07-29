@@ -22,6 +22,9 @@ enum YouTube {
     private static var cachedVisitor: String?
     /// Resolved streams cached until near their expiry (lets us prefetch).
     private static var urlCache: [String: (url: URL, duration: Double, expires: Date)] = [:]
+    /// Concurrent downloads and the player's prefetch all touch the cache —
+    /// unlocked access was a data race that silently killed download tasks.
+    private static let urlCacheLock = NSLock()
 
     // MARK: - Stream (VISIONOS, uncapped → direct streaming)
 
@@ -29,7 +32,10 @@ enum YouTube {
     /// AVPlayer misreads this fragmented MP4's own duration (~2×), so we carry the
     /// true value from `approxDurationMs`/`lengthSeconds`.
     static func streamURL(for videoId: String) async -> (url: URL, duration: Double)? {
-        if let hit = urlCache[videoId], hit.expires > Date() { return (hit.url, hit.duration) }
+        urlCacheLock.lock()
+        let hit = urlCache[videoId]
+        urlCacheLock.unlock()
+        if let hit, hit.expires > Date() { return (hit.url, hit.duration) }
         let visitor = await visitorData()
         var client: [String: Any] = [
             "clientName": "VISIONOS", "clientVersion": visionVersion,
@@ -64,7 +70,9 @@ enum YouTube {
         if dur <= 0, let ls = (json["videoDetails"] as? [String: Any])?["lengthSeconds"] as? String {
             dur = Double(ls) ?? 0
         }
+        urlCacheLock.lock()
         urlCache[videoId] = (url, dur, Date().addingTimeInterval(4 * 3600))
+        urlCacheLock.unlock()
         return (url, dur)
     }
 
