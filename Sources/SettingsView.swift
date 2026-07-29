@@ -161,41 +161,47 @@ struct SettingsView: View {
         .preferredColorScheme(theme.preferredColorScheme)
         .environment(\.palette, Palette(dark: theme.resolvedDark))
         .sheet(isPresented: $showLogin) { LoginView() }
-        .sheet(isPresented: $showAccount) { AccountLibraryView(player: player) }
-        .sheet(isPresented: $showDownloads) { DownloadsView(player: player) }
+        .sheet(isPresented: $showAccount) {
+            AccountLibraryView(player: player).settingsMiniPlayer(player)
+        }
+        .sheet(isPresented: $showDownloads) {
+            DownloadsView(player: player).settingsMiniPlayer(player)
+        }
         .sheet(isPresented: $showStorage) {
-            NavigationStack { StorageSettingsView() }
+            NavigationStack { StorageSettingsView().settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
         .sheet(isPresented: $showAbout) {
-            NavigationStack { AboutView() }
+            NavigationStack { AboutView().settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
         .sheet(isPresented: $showPrivacy) {
-            NavigationStack { PrivacyView() }
+            NavigationStack { PrivacyView().settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
         .sheet(isPresented: $showLyrics) {
-            NavigationStack { LyricsSettingsView() }
+            NavigationStack { LyricsSettingsView().settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
         .sheet(isPresented: $showChangelog) {
             ChangelogView()
+                .settingsMiniPlayer(player)
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
         .sheet(isPresented: $showTogether) {
-            NavigationStack { TogetherSettingsView() }
+            NavigationStack { TogetherSettingsView().settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
         .fullScreenCover(isPresented: $showLookFeel) {
             NavigationStack {
                 LookAndFeelView(player: player)
+                    .settingsMiniPlayer(player)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Done") { showLookFeel = false }
