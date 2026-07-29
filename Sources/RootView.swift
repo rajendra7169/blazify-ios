@@ -150,8 +150,10 @@ enum BlazeTab: CaseIterable {
     }
 }
 
-/// Flutter's custom bottom bar, now honouring the Look & Feel nav-bar style and
-/// slim toggle. The active tint follows the album-art accent either way.
+/// The bottom bar, matching AppNavigation.kt per style:
+/// PILL is Material's indicator — a fixed capsule behind the ICON only, label
+/// outside it; GRADIENT and OUTLINED wrap icon+label in a rounded box;
+/// UNDERLINE is a plain icon with a bar underneath. Slim hides the labels.
 struct BlazeTabBar: View {
     @Binding var selection: BlazeTab
     let palette: Palette
@@ -164,34 +166,15 @@ struct BlazeTabBar: View {
                 Button {
                     selection = t
                 } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: t.icon)
-                            .font(.system(size: look.slimNavBar ? 21 : 24))
-                        // Slim mode drops the labels, as Android's does.
-                        if !look.slimNavBar {
-                            Text(t.label)
-                                .font(.system(size: 11, weight: active ? .semibold : .regular))
-                        }
-                    }
-                    .foregroundStyle(active ? activeInk : palette.onSurfaceVariant)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, look.slimNavBar ? 6 : 8)
-                    .background(indicator(active))
-                    .overlay(alignment: .bottom) {
-                        if look.navBarStyle == .underline, active {
-                            Capsule().fill(palette.accent).frame(width: 22, height: 2.5)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    // Without this the button only accepts taps that land on a
-                    // glyph, not anywhere in its column.
-                    .contentShape(Rectangle())
+                    item(t, active: active)
+                        .frame(maxWidth: .infinity)
+                        // Without this the button only accepts taps that land on
+                        // a glyph, not anywhere in its column.
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        // `safeAreaInset` already leaves room for the home indicator, so padding
-        // for it again is what once made the bar too tall.
         .frame(height: look.slimNavBar ? 54 : 70)
         .background(palette.surface)
         .overlay(alignment: .top) {
@@ -199,31 +182,85 @@ struct BlazeTabBar: View {
         }
     }
 
-    /// Pill and gradient put the icon on the accent; the others tint it.
-    private var activeInk: Color {
-        switch look.navBarStyle {
-        case .pill, .gradient: palette.onAccent
-        case .underline, .outlined: palette.accent
-        }
-    }
+    private var idle: Color { palette.onSurfaceVariant }
 
-    @ViewBuilder
-    private func indicator(_ active: Bool) -> some View {
-        if active {
-            switch look.navBarStyle {
-            case .pill:
-                Capsule().fill(palette.accent)
-            case .gradient:
-                Capsule().fill(LinearGradient(
-                    colors: [palette.accent, palette.accent.mixed(with: .black, 0.32)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing))
-            case .outlined:
-                Capsule().strokeBorder(palette.accent, lineWidth: 1.5)
-            case .underline:
-                Color.clear
+    @ViewBuilder private func item(_ t: BlazeTab, active: Bool) -> some View {
+        switch look.navBarStyle {
+        case .pill:
+            // Material's indicator: a fixed-size capsule behind the icon only.
+            VStack(spacing: 3) {
+                Image(systemName: t.icon)
+                    .font(.system(size: 20))
+                    .foregroundStyle(active ? palette.accent : idle)
+                    .frame(width: 56, height: 30)
+                    .background(active ? AnyShapeStyle(palette.accent.opacity(0.22))
+                                       : AnyShapeStyle(Color.clear))
+                    .clipShape(Capsule())
+                if !look.slimNavBar {
+                    Text(t.label)
+                        .font(.system(size: 11, weight: active ? .semibold : .regular))
+                        .foregroundStyle(active ? palette.accent : idle)
+                }
             }
-        } else {
-            Color.clear
+
+        case .gradient:
+            // The highlight wraps icon AND label, gradient-filled with a border.
+            VStack(spacing: 2) {
+                Image(systemName: t.icon)
+                    .font(.system(size: 20))
+                if !look.slimNavBar {
+                    Text(t.label).font(.system(size: 11))
+                }
+            }
+            .foregroundStyle(active ? palette.onAccent : idle)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background {
+                if active {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(LinearGradient(
+                            colors: [palette.accent.opacity(0.85),
+                                     palette.accent.mixed(with: .black, 0.3).opacity(0.85)],
+                            startPoint: .leading, endPoint: .trailing))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(palette.accent.opacity(0.55), lineWidth: 1))
+                }
+            }
+
+        case .outlined:
+            // Tinted box with an accent border around icon and label.
+            VStack(spacing: 2) {
+                Image(systemName: t.icon)
+                    .font(.system(size: 20))
+                if !look.slimNavBar {
+                    Text(t.label).font(.system(size: 11))
+                }
+            }
+            .foregroundStyle(active ? palette.accent : idle)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background {
+                if active {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(palette.accent.opacity(0.14))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(palette.accent.opacity(0.7), lineWidth: 1))
+                }
+            }
+
+        case .underline:
+            VStack(spacing: 4) {
+                Image(systemName: t.icon)
+                    .font(.system(size: 22))
+                    .foregroundStyle(active ? palette.accent : idle)
+                if !look.slimNavBar {
+                    Text(t.label)
+                        .font(.system(size: 11))
+                        .foregroundStyle(active ? palette.accent : idle)
+                }
+                Capsule().fill(active ? palette.accent : .clear)
+                    .frame(width: 22, height: 2.5)
+            }
         }
     }
 }

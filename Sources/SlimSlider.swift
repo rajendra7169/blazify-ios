@@ -103,8 +103,7 @@ struct CapsuleTrack: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
-            // Measure the label so the pill hugs it, clamped to the track.
-            let pillWidth = min(labelWidth + (compact ? 16 : 28), w)
+            let pillWidth = min(templateWidth + (compact ? 16 : 28), w)
             let travel = max(w - pillWidth, 0)
             let x = travel * fraction
 
@@ -118,6 +117,7 @@ struct CapsuleTrack: View {
                     .overlay(
                         Text(label)
                             .font(.system(size: labelSize, weight: .semibold))
+                            .monospacedDigit()
                             .foregroundStyle(active.isLight ? .black : .white)
                             .lineLimit(1),
                     )
@@ -127,9 +127,13 @@ struct CapsuleTrack: View {
         }
     }
 
-    private var labelWidth: CGFloat {
-        let font = UIFont.systemFont(ofSize: labelSize, weight: .semibold)
-        return (label as NSString).size(withAttributes: [.font: font]).width
+    /// Width of the label with every digit swapped for an "8", in monospaced
+    /// digits — so the pill keeps ONE width while the seconds tick, instead of
+    /// breathing as narrow digits come and go.
+    private var templateWidth: CGFloat {
+        let template = String(label.map { $0.isNumber ? "8" : $0 })
+        let font = UIFont.monospacedDigitSystemFont(ofSize: labelSize, weight: .semibold)
+        return (template as NSString).size(withAttributes: [.font: font]).width
     }
 }
 
@@ -143,38 +147,52 @@ struct WavyTrack: View {
     let squiggly: Bool
     let isPlaying: Bool
 
-    /// Squiggly is tighter and livelier than the broad wavy roll.
-    private var amplitude: CGFloat { squiggly ? 5 : 4 }
-    private var wavelength: CGFloat { squiggly ? 22 : 40 }
+    // Android: WavySlider rolls a broad Material wave (wavelength ~40dp,
+    // 4dp stroke, bar handle); SquigglySlider a tight squiggle (waveLength 80px
+    // ≈ 28dp, 3dp stroke, round thumb).
+    private var amplitude: CGFloat { squiggly ? 4 : 5 }
+    private var wavelength: CGFloat { squiggly ? 28 : 40 }
+    private var stroke: CGFloat { squiggly ? 3 : 4 }
+    private var speed: CGFloat { squiggly ? 34 : 22 }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying)) { timeline in
             GeometryReader { geo in
                 let w = geo.size.width
                 let x = w * fraction
+                // Negative phase rolls the crests forward, with playback.
                 let phase = isPlaying
-                    ? CGFloat(timeline.date.timeIntervalSinceReferenceDate)
-                        .truncatingRemainder(dividingBy: 1_000) * 40
+                    ? -CGFloat(timeline.date.timeIntervalSinceReferenceDate)
+                        .truncatingRemainder(dividingBy: 10_000) * speed
                     : 0
 
                 ZStack(alignment: .leading) {
-                    // Inactive: flat thin track ahead of the thumb.
+                    // Inactive: thin flat track ahead of the thumb, with a small
+                    // gap after it, as Material's wavy slider leaves.
                     Capsule().fill(Color.white.opacity(0.24))
-                        .frame(width: max(w - x, 0), height: 3)
-                        .offset(x: x)
+                        .frame(width: max(w - x - 8, 0), height: 3)
+                        .offset(x: min(x + 8, w))
 
-                    // Active: the wave, flattened while paused.
+                    // Active: the wave, settling flat while paused. The frame is
+                    // tall enough that crests never get clipped vertically.
                     WavePath(amplitude: isPlaying ? amplitude : 0,
                              wavelength: wavelength, phase: phase)
-                        .stroke(active, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                        .frame(width: max(x, 0), height: amplitude * 2 + 4)
+                        .stroke(active, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+                        .frame(width: max(x - 2, 0), height: amplitude * 2 + stroke + 6)
                         .clipped()
 
-                    // Bar thumb at the boundary, like Material's wavy slider.
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(active)
-                        .frame(width: 4, height: 16)
-                        .offset(x: min(max(x - 2, 0), w - 4))
+                    if squiggly {
+                        // The classic squiggly slider's round thumb.
+                        Circle().fill(active)
+                            .frame(width: 14, height: 14)
+                            .offset(x: min(max(x - 7, 0), w - 14))
+                    } else {
+                        // Material's bar handle.
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(active)
+                            .frame(width: 4, height: 18)
+                            .offset(x: min(max(x - 2, 0), w - 4))
+                    }
                 }
                 .animation(.easeInOut(duration: 0.3), value: isPlaying)
                 .frame(maxHeight: .infinity, alignment: .center)

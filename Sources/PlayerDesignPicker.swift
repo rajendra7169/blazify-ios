@@ -129,13 +129,14 @@ struct PhoneFrame<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        // `Color.clear` is what gets sized, with the preview layered on top — so
-        // the frame's dimensions always come from the phone, never its contents.
-        // Sizing the content directly let a wide design (the cassette) stretch
-        // its own frame wider than the rest.
-        Color.clear
-            .overlay { content() }
-            .clipShape(RoundedRectangle(cornerRadius: 33, style: .continuous))
+        // GeometryReader keeps the frame's size independent of its contents
+        // (the cassette once stretched it), and the explicit frame forces the
+        // interior to exactly the screen size so nothing spills past the clip.
+        GeometryReader { g in
+            content()
+                .frame(width: g.size.width, height: g.size.height)
+                .clipShape(RoundedRectangle(cornerRadius: 33, style: .continuous))
+        }
             .overlay(alignment: .top) {
                 // iPhone Dynamic Island (Android's frame draws a speaker slit here).
                 Capsule()
@@ -222,14 +223,27 @@ private struct PreviewPill: View {
 private struct PreviewSlider: View {
     @ObservedObject var player: Player
     var inactiveAlpha: Double = 0.22
+    /// The preview follows the chosen slider style live, as Android's does.
+    @ObservedObject private var look = LookFeel.shared
 
     var body: some View {
         VStack(spacing: 3) {
             GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(inactiveAlpha)).frame(height: 6)
-                    Capsule().fill(player.artColor)
-                        .frame(width: g.size.width * player.progress, height: 6)
+                Group {
+                    switch look.sliderStyle {
+                    case .slim:
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(.white.opacity(inactiveAlpha)).frame(height: 6)
+                            Capsule().fill(player.artColor)
+                                .frame(width: max(g.size.width * player.progress, 6), height: 6)
+                        }
+                    case .capsule:
+                        CapsuleTrack(fraction: player.progress, active: player.artColor,
+                                     label: capsuleLabel, compact: true)
+                    case .wavy:
+                        WavyTrack(fraction: player.progress, active: player.artColor,
+                                  squiggly: look.squigglySlider, isPlaying: player.isPlaying)
+                    }
                 }
                 .frame(maxHeight: .infinity, alignment: .center)
                 .contentShape(Rectangle())
@@ -247,6 +261,11 @@ private struct PreviewSlider: View {
             .font(.system(size: 9))
             .foregroundStyle(.white.opacity(0.8))
         }
+    }
+
+    private var capsuleLabel: String {
+        guard player.duration > 0 else { return "0:00 / 0:00" }
+        return "\(timeString(player.currentTime)) / \(timeString(player.duration))"
     }
 }
 

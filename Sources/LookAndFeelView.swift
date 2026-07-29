@@ -118,16 +118,21 @@ struct LookFeelPhoneFrame<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        Color.clear
-            .overlay { content() }
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .overlay(alignment: .top) {
-                Capsule()
-                    .fill(.black)
-                    .frame(width: 40, height: 11)
-                    .padding(.top, 7)
-            }
-            .padding(6)
+        // GeometryReader stays flexible for aspectRatio, and the explicit frame
+        // forces the interior to exactly the screen size — an `.overlay` only
+        // proposes, and an interior with a wider ideal width spilled the clip.
+        GeometryReader { g in
+            content()
+                .frame(width: g.size.width, height: g.size.height)
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .overlay(alignment: .top) {
+                    Capsule()
+                        .fill(.black)
+                        .frame(width: 40, height: 11)
+                        .padding(.top, 7)
+                }
+        }
+        .padding(6)
             .background(
                 RoundedRectangle(cornerRadius: 34, style: .continuous)
                     .fill(LinearGradient(
