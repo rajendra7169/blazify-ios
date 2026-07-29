@@ -162,6 +162,10 @@ final class LookFeel: ObservableObject {
     @Published var showHomeGreeting: Bool { didSet { save(showHomeGreeting, "showHomeGreeting") } }
     @Published var showHomeSearchBar: Bool { didSet { save(showHomeSearchBar, "showHomeSearchBar") } }
     @Published var defaultTab: DefaultTab { didSet { save(defaultTab.rawValue, "defaultOpenTab") } }
+    // Appearance — the player options Look & Feel doesn't preview.
+    @Published var swipeThumbnail: Bool { didSet { save(swipeThumbnail, "enableSwipeThumbnail") } }
+    @Published var cropAlbumArt: Bool { didSet { save(cropAlbumArt, "cropAlbumArt") } }
+    @Published var hidePlayerThumbnail: Bool { didSet { save(hidePlayerThumbnail, "hidePlayerThumbnail") } }
     @Published var miniPlayerDesign: MiniPlayerDesign { didSet { save(miniPlayerDesign.rawValue, "miniPlayerDesign") } }
     @Published var miniPlayerBackground: MiniPlayerBackground { didSet { save(miniPlayerBackground.rawValue, "miniPlayerBackground") } }
     // `playerDesign` deliberately lives only in @AppStorage("playerDesign"),
@@ -188,6 +192,9 @@ final class LookFeel: ObservableObject {
         showHomeGreeting = flag("showHomeGreeting", true)
         showHomeSearchBar = flag("showHomeSearchBar", true)
         defaultTab = read("defaultOpenTab", .home)
+        swipeThumbnail = flag("enableSwipeThumbnail", true)
+        cropAlbumArt = flag("cropAlbumArt", true)
+        hidePlayerThumbnail = flag("hidePlayerThumbnail", false)
         miniPlayerDesign = read("miniPlayerDesign", .modern)
         miniPlayerBackground = read("miniPlayerBackground", .gradient)
     }

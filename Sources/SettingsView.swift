@@ -26,6 +26,7 @@ struct SettingsView: View {
     @State private var showContent = false
     @State private var showBackup = false
     @State private var showIntegrations = false
+    @State private var showAppearance = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -33,7 +34,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content, backup, integrations }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content, backup, integrations, appearance }
     }
 
     private struct Group: Identifiable {
@@ -49,7 +50,8 @@ struct SettingsView: View {
                     subtitle: "Preview and style theme, player, mini-player and home",
                     action: .lookFeel),
                 Row(icon: "paintbrush", title: "Appearance",
-                    subtitle: "Theme, colors, dark mode, layout"),
+                    subtitle: "Layout, home cards, player artwork",
+                    action: .appearance),
             ]),
             Group(title: "Playback", rows: [
                 Row(icon: "play.circle", title: "Player and audio",
@@ -223,6 +225,11 @@ struct SettingsView: View {
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
+        .sheet(isPresented: $showAppearance) {
+            NavigationStack { AppearanceSettingsView().settingsMiniPlayer(player) }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
         .sheet(isPresented: $showChangelog) {
             ChangelogView()
                 .settingsMiniPlayer(player)
@@ -386,6 +393,7 @@ struct SettingsView: View {
             case .content: showContent = true
             case .backup: showBackup = true
             case .integrations: showIntegrations = true
+            case .appearance: showAppearance = true
             case .none: break
             }
         } label: {
