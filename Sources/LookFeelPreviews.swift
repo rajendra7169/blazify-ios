@@ -37,7 +37,7 @@ struct LookFeelThemePreview: View {
             navBar
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 14)
+        .padding(.vertical, 10)
         // Room for the frame's notch, which the Kotlin frame draws above this.
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -180,7 +180,7 @@ struct LookFeelThemePreview: View {
                                  palette.accent.opacity(0.2),
                                  palette.surfaceHigh]
         return VStack(spacing: 6) {
-            ForEach(0..<4, id: \.self) { i in
+            ForEach(0..<3, id: \.self) { i in
                 HStack(spacing: 0) {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(artTints[i % artTints.count])

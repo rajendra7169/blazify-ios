@@ -371,7 +371,9 @@ struct HomeView: View {
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 24))
-                    .foregroundStyle(palette.onSurface)
+                    // Accent, so it follows the palette and the album-art
+                    // colour like the rest of the app's action icons.
+                    .foregroundStyle(palette.accent)
             }
         }
         .padding(.horizontal, 16)

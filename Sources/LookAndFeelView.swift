@@ -83,7 +83,19 @@ struct LookAndFeelView: View {
         case .lyrics:
             LookFeelLyricsPreview(player: player, position: look.lyricsPosition)
         default:
-            LookFeelThemePreview(player: player)
+            // Authored against a ~150×322 screen. The frame shrank when this
+            // page gained a mini player, so scale to fit rather than let the
+            // nav bar drop off the bottom.
+            GeometryReader { g in
+                let reference = CGSize(width: 150, height: 322)
+                let scale = min(g.size.width / reference.width,
+                                g.size.height / reference.height)
+                LookFeelThemePreview(player: player)
+                    .frame(width: reference.width, height: reference.height)
+                    .scaleEffect(scale, anchor: .topLeading)
+                    .frame(width: g.size.width, height: g.size.height,
+                           alignment: .topLeading)
+            }
         }
     }
 
