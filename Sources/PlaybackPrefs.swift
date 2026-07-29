@@ -29,10 +29,10 @@ final class PlaybackPrefs: ObservableObject {
 
     // Audio
     @Published var quality: AudioQuality { didSet { save(quality.rawValue, "audioQuality") } }
-    @Published var normalizeVolume: Bool { didSet { save(normalizeVolume, "audioNormalization") } }
-    @Published var loudnessTarget: Double { didSet { save(loudnessTarget, "loudnessLevel") } }
-    @Published var speed: Double { didSet { save(speed, "playbackSpeed") } }
-    @Published var preservePitch: Bool { didSet { save(preservePitch, "preservePitch") } }
+    @Published var normalizeVolume: Bool { didSet { save(normalizeVolume, "audioNormalization"); audioChanged() } }
+    @Published var loudnessTarget: Double { didSet { save(loudnessTarget, "loudnessLevel"); audioChanged() } }
+    @Published var speed: Double { didSet { save(speed, "playbackSpeed"); audioChanged() } }
+    @Published var preservePitch: Bool { didSet { save(preservePitch, "preservePitch"); audioChanged() } }
     @Published var crossfade: Bool { didSet { save(crossfade, "crossfadeEnabled") } }
     @Published var crossfadeDuration: Double { didSet { save(crossfadeDuration, "crossfadeDuration") } }
 
@@ -105,7 +105,17 @@ final class PlaybackPrefs: ObservableObject {
         }
     }
 
+    /// Speed, pitch and normalisation have to reach the running player, not just
+    /// the next song.
+    private func audioChanged() {
+        NotificationCenter.default.post(name: .blazifyAudioPrefsChanged, object: nil)
+    }
+
     private func save(_ value: Any, _ key: String) {
         UserDefaults.standard.set(value, forKey: key)
     }
+}
+
+extension Notification.Name {
+    static let blazifyAudioPrefsChanged = Notification.Name("blazifyAudioPrefsChanged")
 }

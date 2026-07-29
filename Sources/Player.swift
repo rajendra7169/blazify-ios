@@ -60,6 +60,9 @@ final class Player: ObservableObject {
         restoreModes()
         restoreQueue()
         observeRouteChanges()
+        NotificationCenter.default.addObserver(
+            forName: .blazifyAudioPrefsChanged, object: nil, queue: .main,
+        ) { [weak self] _ in self?.applyAudioPrefs() }
         // Backgrounding is the moment worth persisting the position.
         NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main,
