@@ -475,7 +475,10 @@ struct LyricsPane: View {
         guard let track = player.current else { loading = false; return }
 
         // A downloaded song carries its lyrics on disk — use them offline.
-        if let cached = Downloads.shared.cachedLyrics(for: track.videoId) {
+        // Cached songs keep lyrics beside the audio too, so offline playback of
+        // anything you've heard before still shows words.
+        if let cached = Downloads.shared.cachedLyrics(for: track.videoId)
+            ?? AudioCache.shared.cachedLyrics(for: track.videoId) {
             result = cached
             prepareSecondary(result)
             loading = false

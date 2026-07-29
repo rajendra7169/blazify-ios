@@ -45,6 +45,7 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
         // here, fall back to the thumbnail every video has.
         if thumbnail.hasPrefix("file:") {
             if let local = Downloads.shared.localArtURL(for: videoId) { return local }
+            if let cached = AudioCache.shared.localArtURL(for: videoId) { return cached }
             return URL(string: Downloads.fallbackArt(videoId))
         }
         guard !thumbnail.isEmpty else {

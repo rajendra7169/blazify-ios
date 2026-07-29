@@ -50,6 +50,51 @@ final class AudioCache: ObservableObject {
     // MARK: Lookup
 
     private func fileURL(for id: String) -> URL { dir.appendingPathComponent("\(id).m4a") }
+    private func artFileURL(for id: String) -> URL { dir.appendingPathComponent("\(id).jpg") }
+    private func lrcURL(for id: String) -> URL { dir.appendingPathComponent("\(id).lrc") }
+    private func txtURL(for id: String) -> URL { dir.appendingPathComponent("\(id).txt") }
+
+    /// Artwork kept beside a cached song, so a cached track still has a cover
+    /// with no network. Downloads do the same; this is the automatic half.
+    func localArtURL(for id: String) -> URL? {
+        let u = artFileURL(for: id)
+        return FileManager.default.fileExists(atPath: u.path) ? u : nil
+    }
+
+    /// Lyrics kept beside a cached song.
+    func cachedLyrics(for id: String) -> LyricsResult? {
+        if let lrc = try? String(contentsOf: lrcURL(for: id), encoding: .utf8), !lrc.isEmpty {
+            return LyricsResult(lines: Lyrics.parseLRC(lrc), plain: nil, synced: true, raw: lrc)
+        }
+        if let plain = try? String(contentsOf: txtURL(for: id), encoding: .utf8), !plain.isEmpty {
+            return LyricsResult(lines: [], plain: plain, synced: false, raw: nil)
+        }
+        return nil
+    }
+
+    /// Fetch the cover and lyrics for a song we've just cached. Best effort and
+    /// detached — it must never hold up playback.
+    private func enrich(_ track: Track) {
+        let id = track.videoId
+        Task.detached(priority: .background) { [weak self] in
+            guard let self else { return }
+            if self.localArtURL(for: id) == nil,
+               let remote = track.artURL(size: 1080),
+               let (data, _) = try? await URLSession.shared.data(from: remote) {
+                try? data.write(to: self.artFileURL(for: id))
+            }
+            guard self.cachedLyrics(for: id) == nil else { return }
+            let candidates = await LyricsCache.shared.warm(
+                videoId: id, title: track.title, artist: track.artist,
+                duration: track.duration)
+            guard let lyrics = Lyrics.best(candidates) else { return }
+            if let lrc = lyrics.raw {
+                try? lrc.write(to: self.lrcURL(for: id), atomically: true, encoding: .utf8)
+            } else if let plain = lyrics.plain {
+                try? plain.write(to: self.txtURL(for: id), atomically: true, encoding: .utf8)
+            }
+        }
+    }
 
     /// A cached copy, if we have one. Touches its LRU stamp.
     func cachedURL(for id: String) -> URL? {
@@ -97,6 +142,7 @@ final class AudioCache: ObservableObject {
                 self.lastUsed[id] = Date()
                 self.tracks.removeAll { $0.videoId == id }
                 self.tracks.insert(track, at: 0)
+                self.enrich(track)
                 self.save()
                 self.evictIfNeeded()
                 self.refreshSize()
@@ -136,6 +182,9 @@ final class AudioCache: ObservableObject {
     }
 
     func remove(_ id: String) {
+        try? FileManager.default.removeItem(at: artFileURL(for: id))
+        try? FileManager.default.removeItem(at: lrcURL(for: id))
+        try? FileManager.default.removeItem(at: txtURL(for: id))
         try? FileManager.default.removeItem(at: fileURL(for: id))
         tracks.removeAll { $0.videoId == id }
         lastUsed[id] = nil

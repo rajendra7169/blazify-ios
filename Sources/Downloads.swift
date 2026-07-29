@@ -249,7 +249,9 @@ final class Downloads: ObservableObject {
     /// Best-effort offline extras after the audio is safe: artwork on disk and
     /// lyrics, via the shared cache so a warm fetch isn't repeated.
     private func enrich(_ track: Track, id: String, duration: Double) async {
-        if let remote = track.thumbnailURL,
+        // 1080, not the catalogue thumbnail: the saved copy has to fill the
+        // full player, where a 120px row image is visibly soft.
+        if let remote = track.artURL(size: 1080),
            let (adata, _) = try? await URLSession.shared.data(from: remote) {
             try? adata.write(to: artURL(for: id))
             let artPath = self.localArt(for: id) ?? track.thumbnail
