@@ -253,6 +253,13 @@ struct SeekableAlbumRing: View {
 struct RingLyricsCard: View {
     @ObservedObject var player: Player
     let onTap: () -> Void
+    @ObservedObject private var clock: PlaybackClock
+
+    init(player: Player, onTap: @escaping () -> Void) {
+        self.player = player
+        self.onTap = onTap
+        _clock = ObservedObject(wrappedValue: player.clock)
+    }
 
     @State private var lines: [LyricLine] = []
     @State private var loading = true

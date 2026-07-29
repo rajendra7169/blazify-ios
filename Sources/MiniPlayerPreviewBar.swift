@@ -1,97 +1,94 @@
 import SwiftUI
 
-/// The mini-player drawn small, in whichever of Android's four designs is
-/// selected. Shared by the Look & Feel preview so what you pick is what you get.
+/// The mini-player drawn small for pickers and previews — a faithful copy of
+/// the mini section in Android's `ThemePhonePreview`: art shape, trailing
+/// controls, card shape and background all switch with the design.
 struct MiniPlayerPreviewBar: View {
     @Environment(\.palette) private var palette
     @ObservedObject var player: Player
     let design: MiniPlayerDesign
     let background: MiniPlayerBackground
 
-    var body: some View {
-        HStack(spacing: 7) {
-            RemoteImage(url: player.current?.artURL(size: 120), size: 26) {
-                palette.onSurface.opacity(0.12)
-            }
-            .frame(width: 26, height: 26)
-            .clipShape(RoundedRectangle(cornerRadius: design == .flat ? 3 : 6, style: .continuous))
+    private var isFlat: Bool { design == .flat }
+    private var isFloating: Bool { design == .floating }
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(player.current?.title ?? "Song title")
-                    .font(.system(size: 7, weight: .semibold))
-                    .foregroundStyle(ink)
-                    .lineLimit(1)
-                Text(player.current?.artist ?? "Artist")
-                    .font(.system(size: 5.5))
-                    .foregroundStyle(ink.opacity(0.7))
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
-
-            // ROUNDED is the only design with previous/next either side of play.
-            if design == .rounded {
-                Image(systemName: "backward.end.fill").font(.system(size: 8)).foregroundStyle(ink)
-            }
-            Image(systemName: "play.fill").font(.system(size: 9)).foregroundStyle(ink)
-            if design == .rounded {
-                Image(systemName: "forward.end.fill").font(.system(size: 8)).foregroundStyle(ink)
-            }
+    /// Ink per background, as the Kotlin preview picks it.
+    private var onMini: Color {
+        switch background {
+        case .gradient: return palette.onAccent
+        case .pureBlack: return .white
+        default: return palette.onSurface
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(fill)
-        .clipShape(shape)
-        .overlay(alignment: .bottom) {
-            // The flat bar keeps the thin progress line the original had.
-            if design == .flat {
-                GeometryReader { g in
-                    Rectangle()
-                        .fill(palette.accent)
-                        .frame(width: g.size.width * max(player.progress, 0.05), height: 1.5)
-                }
-                .frame(height: 1.5)
-            }
-        }
-        .shadow(color: design == .floating ? .black.opacity(0.35) : .clear, radius: 5, y: 2)
     }
 
-    /// Text colour: dark designs sit on artwork, the flat one on the page.
-    private var ink: Color {
-        switch background {
-        case .followTheme, .transparent: palette.onSurface
-        default: design == .flat ? palette.onSurface : .white
+    var body: some View {
+        HStack(spacing: 0) {
+            RemoteImage(url: player.current?.artURL(size: 120), size: 23) {
+                onMini.opacity(0.85)
+            }
+            .frame(width: 23, height: 23)
+            .clipShape(isFlat || isFloating
+                       ? AnyShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                       : AnyShape(Circle()))
+
+            Spacer().frame(width: 7)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(player.current?.title ?? "Song title")
+                    .font(.system(size: 7, weight: .bold)).lineLimit(1)
+                Text(player.current?.artist ?? "Artist")
+                    .font(.system(size: 5.5)).opacity(0.7).lineLimit(1)
+            }
+            .foregroundStyle(onMini)
+            Spacer(minLength: 5)
+
+            switch design {
+            case .rounded:
+                // prev · play in a filled circle · next.
+                HStack(spacing: 2) {
+                    Image(systemName: "backward.end.fill").font(.system(size: 8))
+                        .foregroundStyle(onMini)
+                    Circle().fill(onMini)
+                        .frame(width: 15, height: 15)
+                        .overlay(Image(systemName: "play.fill")
+                            .font(.system(size: 7))
+                            .foregroundStyle(background == .gradient ? palette.accent
+                                                                     : palette.surface))
+                    Image(systemName: "forward.end.fill").font(.system(size: 8))
+                        .foregroundStyle(onMini)
+                }
+            case .flat:
+                Image(systemName: "heart").font(.system(size: 9)).foregroundStyle(onMini)
+            default:
+                HStack(spacing: 5) {
+                    Image(systemName: "text.badge.plus").font(.system(size: 9))
+                    Image(systemName: "heart").font(.system(size: 9))
+                }
+                .foregroundStyle(onMini.opacity(0.9))
+            }
         }
+        .padding(.horizontal, 6)
+        .frame(height: 34)
+        .frame(maxWidth: .infinity)
+        .background(fill)
+        .clipShape(shape)
+        .shadow(color: isFloating ? .black.opacity(0.3) : .clear, radius: 4, y: 2)
+        // Floating rides slightly inset, as the Kotlin's 0.94-width card does.
+        .padding(.horizontal, isFloating ? 8 : 0)
     }
 
     private var shape: AnyShape {
-        switch design {
-        case .flat: AnyShape(Rectangle())
-        case .modern, .rounded: AnyShape(Capsule())
-        case .floating: AnyShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
+        if isFlat { return AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)) }
+        if isFloating { return AnyShape(RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+        return AnyShape(Capsule())
     }
 
     @ViewBuilder private var fill: some View {
-        if design == .flat {
-            palette.surface
-        } else {
-            switch background {
-            case .followTheme: palette.surface
-            case .transparent: Color.clear
-            case .pureBlack: Color.black
-            case .blur:
-                // Artwork behind a blur, the way the real bar does it.
-                ZStack {
-                    RemoteImage(url: player.current?.artURL(size: 120), size: 60) {
-                        player.artColor
-                    }
-                    .blur(radius: 12)
-                    Color.black.opacity(0.28)
-                }
-            case .gradient:
-                LinearGradient(colors: [player.artColor, player.artColor.mixed(with: .black, 0.45)],
-                               startPoint: .leading, endPoint: .trailing)
-            }
+        switch background {
+        case .gradient:
+            LinearGradient(colors: [palette.accent, palette.accent.opacity(0.72)],
+                           startPoint: .leading, endPoint: .trailing)
+        case .pureBlack: Color.black
+        default: palette.surfaceHigh
         }
     }
 }

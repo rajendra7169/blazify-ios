@@ -7,6 +7,13 @@ import UIKit
 /// RECORD and FULL_ART share the standard control stack under different stages.
 struct PlayerView: View {
     @ObservedObject var player: Player
+    /// Ticks the transport (slider, times) — see PlaybackClock.
+    @ObservedObject private var clock: PlaybackClock
+
+    init(player: Player) {
+        self.player = player
+        _clock = ObservedObject(wrappedValue: player.clock)
+    }
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("playerDesign") private var designRaw = PlayerDesign.classic.rawValue

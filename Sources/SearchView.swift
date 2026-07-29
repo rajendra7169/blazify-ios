@@ -379,9 +379,7 @@ struct TrackRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: track.thumbnailURL) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
+            RemoteImage(url: track.thumbnailURL, size: 52) {
                 palette.onSurface.opacity(0.10)
             }
             .frame(width: 52, height: 52)

@@ -53,7 +53,7 @@ struct ArtistView: View {
     private func header(_ page: ArtistPage) -> some View {
         ZStack(alignment: .bottomLeading) {
             GeometryReader { g in
-                RemoteImage(url: page.thumbnailURL) { ArtPlaceholder() }
+                RemoteImage(url: page.thumbnailURL, size: 420) { ArtPlaceholder() }
                     .frame(width: g.size.width, height: g.size.width)
                     .clipped()
                     .overlay(

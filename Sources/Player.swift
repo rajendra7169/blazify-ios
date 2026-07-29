@@ -19,7 +19,14 @@ final class Player: ObservableObject {
     @Published var index = 0
     @Published var isPlaying = false
     @Published var isLoading = false
-    @Published var currentTime = 0.0
+    /// Live position lives on its OWN observable. As a @Published on Player it
+    /// re-rendered every screen observing the player four times a second —
+    /// Home, Artist, the whole shell — which is exactly the lag that showed.
+    let clock = PlaybackClock()
+    var currentTime: Double {
+        get { clock.currentTime }
+        set { clock.currentTime = newValue }
+    }
     @Published var duration = 0.0
     @Published var showFullPlayer = false
     @Published var lastError: String?
@@ -577,3 +584,10 @@ final class Player: ObservableObject {
     }
 }
 
+
+
+/// The 4 Hz playback position, isolated so only views that actually draw time
+/// (sliders, rings, lyrics) re-render with it.
+final class PlaybackClock: ObservableObject {
+    @Published var currentTime = 0.0
+}

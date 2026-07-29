@@ -225,6 +225,13 @@ private struct PreviewSlider: View {
     var inactiveAlpha: Double = 0.22
     /// The preview follows the chosen slider style live, as Android's does.
     @ObservedObject private var look = LookFeel.shared
+    @ObservedObject private var clock: PlaybackClock
+
+    init(player: Player, inactiveAlpha: Double = 0.22) {
+        self.player = player
+        self.inactiveAlpha = inactiveAlpha
+        _clock = ObservedObject(wrappedValue: player.clock)
+    }
 
     var body: some View {
         VStack(spacing: 3) {

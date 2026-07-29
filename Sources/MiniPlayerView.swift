@@ -11,14 +11,28 @@ struct MiniPlayerView: View {
     /// Overrides what tapping the card does. Screens presented ON TOP of the
     /// full player pass a dismiss, since the player is already behind them.
     var onOpenPlayer: (() -> Void)?
+    /// Only the ring reads this, but the view is small — observing is cheap.
+    @ObservedObject private var clock: PlaybackClock
     @State private var showArtist = false
     @State private var showAddToPlaylist = false
     @State private var resolvedArtistId: String?
 
+    init(player: Player, onOpenPlayer: (() -> Void)? = nil) {
+        self.player = player
+        self.onOpenPlayer = onOpenPlayer
+        _clock = ObservedObject(wrappedValue: player.clock)
+    }
+
     var body: some View {
         if let track = player.current {
             HStack(spacing: 0) {
-                playControl(track)
+                if look.miniPlayerDesign == .flat {
+                    RemoteImage(url: track.artURL(size: 144), size: 48) { ArtPlaceholder() }
+                        .frame(width: 48, height: 48)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                } else {
+                    playControl(track)
+                }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.title)
@@ -33,18 +47,33 @@ struct MiniPlayerView: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 6) {
-                    // ROUNDED swaps the shortcuts for transport controls, as
-                    // Android's rounded design does.
-                    if look.miniPlayerDesign == .rounded {
-                        circleButton("backward.end.fill") { player.prev() }
-                        circleButton("forward.end.fill") { player.next() }
-                    } else {
+                    switch look.miniPlayerDesign {
+                    case .flat:
+                        // LegacyMiniPlayer: plain play/pause and skip-next.
+                        plainButton(player.isPlaying ? "pause.fill" : "play.fill") {
+                            player.toggle()
+                        }
+                        plainButton("forward.end.fill") { player.next() }
+                    case .rounded:
+                        // MiniPlayerTransportCluster: prev · filled play · next.
+                        plainButton("backward.end.fill", size: 18) { player.prev() }
+                        Button { player.toggle() } label: {
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(palette.onAccent)
+                                .frame(width: 40, height: 40)
+                                .background(palette.accent)
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        plainButton("forward.end.fill", size: 18) { player.next() }
+                    default:
                         circleButton("person") { openArtist(track) }
                         circleButton("plus") { showAddToPlaylist = true }
-                    }
-                    circleButton(player.isCurrentFavorite ? "heart.fill" : "heart",
-                                 tint: player.isCurrentFavorite ? .red : ink) {
-                        player.toggleFavorite()
+                        circleButton(player.isCurrentFavorite ? "heart.fill" : "heart",
+                                     tint: player.isCurrentFavorite ? .red : ink) {
+                            player.toggleFavorite()
+                        }
                     }
                 }
             }
@@ -56,11 +85,15 @@ struct MiniPlayerView: View {
                 shape.stroke(ink.opacity(0.18), lineWidth: look.miniPlayerDesign == .flat ? 0 : 1),
             )
             .overlay(alignment: .bottom) {
-                // The flat bar keeps the original thin progress line.
+                // LegacyMiniPlayer's 2pt progress line: full-width track with
+                // the accent fill on top.
                 if look.miniPlayerDesign == .flat {
                     GeometryReader { g in
-                        Rectangle().fill(palette.accent)
-                            .frame(width: g.size.width * max(player.progress, 0.002), height: 2)
+                        ZStack(alignment: .leading) {
+                            Rectangle().fill(ink.opacity(0.2))
+                            Rectangle().fill(palette.accent)
+                                .frame(width: g.size.width * max(player.progress, 0.002))
+                        }
                     }
                     .frame(height: 2)
                 }
@@ -102,10 +135,26 @@ struct MiniPlayerView: View {
 
     private var shape: AnyShape {
         switch look.miniPlayerDesign {
-        case .flat: AnyShape(Rectangle())
-        case .modern, .rounded: AnyShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        case .floating: AnyShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        case .flat:
+            AnyShape(UnevenRoundedRectangle(topLeadingRadius: 16, topTrailingRadius: 16))
+        case .modern, .rounded:
+            AnyShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        case .floating:
+            AnyShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
+    }
+
+    /// A bare icon button, as the flat design's transport uses.
+    private func plainButton(_ icon: String, size: CGFloat = 20,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: size))
+                .foregroundStyle(ink)
+                .frame(width: 40, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder private var background: some View {
