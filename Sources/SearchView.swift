@@ -429,3 +429,23 @@ struct DownloadRing: View {
         }
     }
 }
+
+
+/// A tappable song row with its ⋮ menu. The menu has to sit BESIDE the button,
+/// not inside its label, or the button swallows the tap — so every list uses
+/// this instead of composing the two itself.
+struct SongRow: View {
+    let track: Track
+    @ObservedObject var player: Player
+    var trailingPadding: CGFloat = 8
+    let onTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: onTap) { TrackRow(track: track) }
+                .buttonStyle(.plain)
+            SongRowMenu(track: track, player: player)
+                .padding(.trailing, trailingPadding)
+        }
+    }
+}

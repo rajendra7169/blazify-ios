@@ -342,9 +342,15 @@ struct SongRowMenu: View {
     @Environment(\.palette) private var palette
     let track: Track
     @ObservedObject var player: Player
-    let onAddToPlaylist: () -> Void
-    let onOpenArtist: () -> Void
+    /// Hosts with their own navigation can take these over; everywhere else the
+    /// menu presents them itself.
+    var onAddToPlaylist: (() -> Void)?
+    var onOpenArtist: (() -> Void)?
     @ObservedObject private var downloads = Downloads.shared
+
+    @State private var playlistTrack: Track?
+    @State private var artistId: String?
+    @State private var showArtist = false
 
     private var isFavorite: Bool { player.favorites.contains(track.videoId) }
     private var isDownloaded: Bool { downloads.isDownloaded(track.videoId) }
@@ -361,7 +367,9 @@ struct SongRowMenu: View {
                 Label(isFavorite ? "Remove from favourites" : "Add to favourites",
                       systemImage: isFavorite ? "heart.slash" : "heart")
             }
-            Button(action: onAddToPlaylist) {
+            Button {
+                if let onAddToPlaylist { onAddToPlaylist() } else { playlistTrack = track }
+            } label: {
                 Label("Add to playlist", systemImage: "plus.circle")
             }
 
@@ -376,7 +384,9 @@ struct SongRowMenu: View {
                     Label("Download", systemImage: "arrow.down.circle")
                 }
             }
-            Button(action: onOpenArtist) {
+            Button {
+                if let onOpenArtist { onOpenArtist() } else { openArtist() }
+            } label: {
                 Label("View artist", systemImage: "person")
             }
             Button { share() } label: {
@@ -388,6 +398,28 @@ struct SongRowMenu: View {
                 .foregroundStyle(palette.onSurfaceVariant)
                 .frame(width: 40, height: 44)
                 .contentShape(Rectangle())
+        }
+        .sheet(item: $playlistTrack) { AddToPlaylistSheet(track: $0) }
+        .fullScreenCover(isPresented: $showArtist) {
+            if let artistId {
+                ArtistView(browseId: artistId, player: player)
+            }
+        }
+    }
+
+    /// Resolve the channel when the row didn't carry one (downloads often don't).
+    private func openArtist() {
+        if let id = track.artistId {
+            artistId = id
+            showArtist = true
+            return
+        }
+        Task {
+            let id = await YouTube.resolveArtistId(name: track.artist)
+            await MainActor.run {
+                artistId = id
+                if id != nil { showArtist = true }
+            }
         }
     }
 
