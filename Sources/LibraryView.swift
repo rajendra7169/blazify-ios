@@ -178,6 +178,13 @@ enum LibraryRoute: Hashable {
 struct LibraryRouteView: View {
     let route: LibraryRoute
     @ObservedObject var player: Player
+    // The Songs route snapshots Downloaded and Cached into plain arrays when
+    // this body runs, and `.navigationDestination` won't rebuild it just
+    // because the parent re-rendered. Without observing these here, a song
+    // downloaded while the list is open only appears when some unrelated
+    // Player change happens to redraw the screen.
+    @ObservedObject private var downloads = Downloads.shared
+    @ObservedObject private var cache = AudioCache.shared
 
     var body: some View {
         switch route {
