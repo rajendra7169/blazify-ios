@@ -51,10 +51,11 @@ struct PlayerView: View {
     var body: some View {
         ZStack {
             // The cover's presentation background is CLEAR (set in RootView), so
-            // the real app sits behind this. A dim that fades with the drag makes
-            // the app show through progressively as the sheet comes down —
-            // Android's bottom-sheet reveal — instead of a white void.
-            Color.black.opacity(0.5 * sheetProgress)
+            // the real app sits behind this. Fully opaque at rest — the gradient
+            // above has a soft 0.45 middle stop and would otherwise let the app
+            // show through — and fades only as the sheet is dragged down, which
+            // is what reveals the app behind. Android's bottom-sheet reveal.
+            Color.black.opacity(sheetProgress)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 

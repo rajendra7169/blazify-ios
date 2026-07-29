@@ -170,8 +170,10 @@ final class Downloads: ObservableObject {
         if let remote = track.thumbnailURL,
            let (adata, _) = try? await URLSession.shared.data(from: remote) {
             try? adata.write(to: artURL(for: id))
-            let artPath = artURL(for: id).absoluteString
+            let artPath = self.localArt(for: id) ?? track.thumbnail
             await MainActor.run {
+                // Remember where it came from before the row points at the file.
+                self.remoteArt[id] = track.thumbnail
                 if let i = self.tracks.firstIndex(where: { $0.videoId == id }) {
                     self.tracks[i] = Track(videoId: id, title: track.title, artist: track.artist,
                                            thumbnail: artPath, duration: duration)
@@ -193,6 +195,9 @@ final class Downloads: ObservableObject {
 
     // MARK: Persistence
 
+    /// Remote art URL per song, so a re-save never persists a container path.
+    private var remoteArt: [String: String] = [:]
+
     private struct StoredTrack: Codable {
         let videoId, title, artist, thumbnail: String
         let duration: Double
@@ -202,10 +207,28 @@ final class Downloads: ObservableObject {
         let durations: [String: Double]
     }
 
+    /// Derivable from the video id alone, so it always resolves even when the
+    /// catalogue thumbnail we saved has been lost.
+    static func fallbackArt(_ videoId: String) -> String {
+        "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
+    }
+
+    /// The on-disk art for a song, as a URL string, if we fetched it.
+    private func localArt(for id: String) -> String? {
+        let u = artURL(for: id)
+        return FileManager.default.fileExists(atPath: u.path) ? u.absoluteString : nil
+    }
+
     private func saveMeta() {
+        // Persist the REMOTE thumbnail, never the local file:// path: the app
+        // container's UUID changes on every reinstall, which left every
+        // downloaded song art-less after a new build. The local copy is
+        // resolved fresh in loadMeta().
         let stored = tracks.map {
             StoredTrack(videoId: $0.videoId, title: $0.title, artist: $0.artist,
-                        thumbnail: $0.thumbnail, duration: $0.duration)
+                        thumbnail: $0.thumbnail.hasPrefix("file:") ? (remoteArt[$0.videoId] ?? "")
+                                                                   : $0.thumbnail,
+                        duration: $0.duration)
         }
         if let data = try? JSONEncoder().encode(Meta(tracks: stored, durations: durations)) {
             try? data.write(to: metaURL)
@@ -217,8 +240,17 @@ final class Downloads: ObservableObject {
               let meta = try? JSONDecoder().decode(Meta.self, from: data) else { return }
         durations = meta.durations
         tracks = meta.tracks.map {
-            Track(videoId: $0.videoId, title: $0.title, artist: $0.artist,
-                  thumbnail: $0.thumbnail, duration: $0.duration)
+            remoteArt[$0.videoId] = $0.thumbnail
+            // Prefer the copy on disk, rebuilt against this install's container.
+            // Anything else that no longer resolves — a file:// path saved by an
+            // older build, or an empty slot — falls back to the thumbnail every
+            // video has, so an upgraded install isn't left with blank rows.
+            let stored = $0.thumbnail
+            let usable = !stored.isEmpty && !stored.hasPrefix("file:")
+            return Track(videoId: $0.videoId, title: $0.title, artist: $0.artist,
+                         thumbnail: localArt(for: $0.videoId)
+                                    ?? (usable ? stored : Downloads.fallbackArt($0.videoId)),
+                         duration: $0.duration)
         }
         for t in tracks { states[t.videoId] = .done }
     }
