@@ -17,6 +17,8 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("playerDesign") private var designRaw = PlayerDesign.classic.rawValue
+    /// Carried into the sleep sheet, which otherwise loses the app's colours.
+    @Environment(\.palette) private var palette
     @State private var scrub: Double?
     @State private var showQueue = false
     @State private var showSleep = false
@@ -89,7 +91,9 @@ struct PlayerView: View {
         .onAppear { dragOffset = 0 }
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
-        .sheet(isPresented: $showSleep) { SleepTimerView(player: player) }
+        .sheet(isPresented: $showSleep) {
+            SleepTimerView(player: player).environment(\.palette, palette)
+        }
         .sheet(isPresented: $showMenu) {
             PlayerMenuSheet(
                 player: player,

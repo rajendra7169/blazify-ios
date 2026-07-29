@@ -5,6 +5,7 @@ import SwiftUI
 /// and a live countdown with END / RESET while it runs.
 struct SleepTimerView: View {
     @ObservedObject var player: Player
+    @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
 
     @State private var minutes: Double = 30
@@ -17,7 +18,7 @@ struct SleepTimerView: View {
         VStack(spacing: 22) {
             Image(systemName: "moon.zzz.fill")
                 .font(.system(size: 30))
-                .foregroundStyle(Blaze.amber)
+                .foregroundStyle(palette.accent)
 
             if player.sleepActive {
                 running
@@ -37,12 +38,11 @@ struct SleepTimerView: View {
                     .onChange(of: geo.size.height) { sheetHeight = geo.size.height }
             },
         )
-        .background(Blaze.surface)
+        .background(palette.surface)
         // One surface for the whole sheet — the safe-area edges were painting
         // their own colours before, so the top, middle and bottom disagreed.
-        .presentationBackground(Blaze.surface)
+        .presentationBackground(palette.surface)
         .presentationDetents([.height(sheetHeight)])
-        .preferredColorScheme(.dark)
     }
 
     // MARK: Picker
@@ -52,10 +52,10 @@ struct SleepTimerView: View {
             Text(songsMode ? "\(songs) song\(songs == 1 ? "" : "s")" : timeString(minutes * 60))
                 .font(.system(size: 34, weight: .bold))
                 .tracking(2)
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
 
             Slider(value: $minutes, in: 5...120, step: 5)
-                .tint(Blaze.amber)
+                .tint(palette.accent)
                 .disabled(songsMode)
                 .opacity(songsMode ? 0.35 : 1)
                 .onChange(of: minutes) { songs = 0 }   // touching minutes leaves songs mode
@@ -73,11 +73,11 @@ struct SleepTimerView: View {
                 } label: {
                     Text("End of song")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Blaze.amber)
+                        .foregroundStyle(palette.accent)
                         .frame(maxWidth: .infinity)
                         .frame(height: 46)
                         .overlay(RoundedRectangle(cornerRadius: 24)
-                            .stroke(Blaze.amber, lineWidth: 2))
+                            .stroke(palette.accent, lineWidth: 2))
                 }
 
                 songsStepper
@@ -103,20 +103,20 @@ struct SleepTimerView: View {
             stepButton("minus") { songs = max(0, songs - 1) }
             Text(songs == 0 ? "songs" : "\(songs)")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(songsMode ? Blaze.amber : .white.opacity(0.6))
+                .foregroundStyle(songsMode ? palette.accent : palette.onSurfaceVariant)
                 .frame(minWidth: 44)
             stepButton("plus") { songs += 1 }
         }
         .padding(.horizontal, 6)
         .frame(height: 46)
-        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Blaze.amber, lineWidth: 2))
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(palette.accent, lineWidth: 2))
     }
 
     private func stepButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Blaze.amber)
+                .foregroundStyle(palette.accent)
                 .frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
@@ -128,7 +128,7 @@ struct SleepTimerView: View {
         VStack(spacing: 20) {
             Text(runningLabel)
                 .font(.system(size: 34, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.onSurface)
             HStack(spacing: 12) {
                 pill("END", filled: false) {
                     player.cancelSleepTimer()
@@ -157,10 +157,10 @@ struct SleepTimerView: View {
         } label: {
             Text("\(m)m")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(selected ? .white : .white.opacity(0.8))
+                .foregroundStyle(selected ? palette.onAccent : palette.onSurface.opacity(0.8))
                 .padding(.horizontal, 18).padding(.vertical, 10)
-                .background(selected ? AnyShapeStyle(Blaze.amber)
-                                     : AnyShapeStyle(Color.white.opacity(0.08)))
+                .background(selected ? AnyShapeStyle(palette.accent)
+                                     : AnyShapeStyle(palette.surfaceHigh))
                 .clipShape(RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(.plain)
@@ -170,11 +170,11 @@ struct SleepTimerView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(filled ? .white : Blaze.amber)
+                .foregroundStyle(filled ? palette.onAccent : palette.accent)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
-                .background(filled ? AnyShapeStyle(Blaze.amber) : AnyShapeStyle(Color.clear))
-                .overlay(Capsule().stroke(Blaze.amber, lineWidth: filled ? 0 : 2))
+                .background(filled ? AnyShapeStyle(palette.accent) : AnyShapeStyle(Color.clear))
+                .overlay(Capsule().stroke(palette.accent, lineWidth: filled ? 0 : 2))
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
