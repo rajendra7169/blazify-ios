@@ -119,7 +119,9 @@ final class ListenTogether: ObservableObject {
                 if case .data(let data) = message {
                     Task { @MainActor in self.handle(data) }
                 }
-                self.receive()
+                // Re-arm on the main actor: this callback runs on the socket's
+                // own queue, and receive() is main-actor isolated.
+                Task { @MainActor in self.receive() }
             }
         }
     }

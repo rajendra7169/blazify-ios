@@ -193,6 +193,8 @@ final class Recognizer: ObservableObject {
     private func captureSignature() async throws -> SHSignature {
         let session = AVAudioSession.sharedInstance()
         // Recording needs a category that permits input; restored in stopEngine().
+        // `allowBluetooth` warns as renamed to `allowBluetoothHFP`, but that
+        // spelling only exists from iOS 26 and we deploy to 17 — leave it.
         try session.setCategory(.playAndRecord, mode: .default,
                                 options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
         try session.setActive(true)

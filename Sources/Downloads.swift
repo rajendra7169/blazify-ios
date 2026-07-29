@@ -33,7 +33,7 @@ final class Downloads: ObservableObject {
     func refreshSize() {
         Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
-            let size = await self.measure()
+            let size = self.measure()
             await MainActor.run { self.sizeBytes = size }
         }
     }
