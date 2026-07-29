@@ -49,6 +49,7 @@ final class Player: ObservableObject {
     private var avPlayer: AVPlayer?
     private var timeObserver: Any?
     private var statusObs: NSKeyValueObservation?
+    private var rateObs: NSKeyValueObservation?
     private var isSeeking = false
     private var endHandled = false
     private var artwork: MPMediaItemArtwork?
@@ -60,6 +61,7 @@ final class Player: ObservableObject {
         restoreModes()
         restoreQueue()
         observeRouteChanges()
+        observeInterruptions()
         NotificationCenter.default.addObserver(
             forName: .blazifyAudioPrefsChanged, object: nil, queue: .main,
         ) { [weak self] _ in self?.applyAudioPrefs() }
@@ -129,16 +131,55 @@ final class Player: ObservableObject {
 
     /// Settings → Player → Resume on Bluetooth: start again when headphones or
     /// a speaker reconnect, which iOS reports as an route change.
+    /// Audio interruptions (a call, Siri) and iOS pausing us. Without this the
+    /// transport keeps claiming it's playing after the system has stopped us.
+    private func observeInterruptions() {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main,
+        ) { [weak self] note in
+            guard let self,
+                  let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+            switch type {
+            case .began:
+                self.isPlaying = false
+                self.updateNowPlaying()
+            case .ended:
+                let options = (note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
+                    .map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
+                guard options.contains(.shouldResume) else { return }
+                // The session goes inactive during an interruption; it has to be
+                // reactivated before the player will make sound again.
+                try? AVAudioSession.sharedInstance().setActive(true)
+                self.avPlayer?.play()
+                self.avPlayer?.rate = Float(PlaybackPrefs.shared.speed)
+            @unknown default:
+                break
+            }
+        }
+    }
+
     private func observeRouteChanges() {
         NotificationCenter.default.addObserver(
             forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main,
         ) { [weak self] note in
-            guard let self, PlaybackPrefs.shared.resumeOnBluetooth,
+            guard let self,
                   let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
-                  AVAudioSession.RouteChangeReason(rawValue: raw) == .newDeviceAvailable,
-                  self.hasTrack, !self.isPlaying
-            else { return }
-            self.toggle()
+                  let reason = AVAudioSession.RouteChangeReason(rawValue: raw) else { return }
+            switch reason {
+            case .oldDeviceUnavailable:
+                // Headphones or a speaker went away — iOS pauses us, so the
+                // transport must stop claiming it's playing.
+                self.avPlayer?.pause()
+                self.isPlaying = false
+                self.updateNowPlaying()
+            case .newDeviceAvailable:
+                guard PlaybackPrefs.shared.resumeOnBluetooth,
+                      self.hasTrack, !self.isPlaying else { return }
+                self.toggle()
+            default:
+                break
+            }
         }
     }
 
@@ -486,13 +527,15 @@ final class Player: ObservableObject {
 
     private func loadCurrent() {
         guard let track = current else { return }
-        saveQueue()
         // Last.fm: announce the song now, and arm the scrobble for later.
         scrobbleStart = Date()
         scrobbled = false
         Task { await LastFM.shared.nowPlaying(track) }
         duration = track.duration
         currentTime = 0
+        // Only now that the position is reset — saving earlier stored the
+        // previous song's position against this song's index.
+        saveQueue()
         isLoading = true
         endHandled = false
         lastError = nil
@@ -612,6 +655,19 @@ final class Player: ObservableObject {
         let p = AVPlayer(playerItem: item)
         avPlayer = p
         applyAudioPrefs()
+        // The single source of truth for the transport: whatever the player is
+        // actually doing. Anything that pauses us — an interruption, a route
+        // change, a stall — now moves the icon too.
+        rateObs = p.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let playing = player.timeControlStatus != .paused
+                if self.isPlaying != playing {
+                    self.isPlaying = playing
+                    self.updateNowPlaying()
+                }
+            }
+        }
         timeObserver = p.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
             queue: .main,
@@ -622,9 +678,9 @@ final class Player: ObservableObject {
         }
         // A session restored from disk resumes at its saved position, paused —
         // opening the app should never start music on its own.
-        if resumePosition > 1, realDuration > resumePosition {
-            let target = resumePosition
-            resumePosition = 0
+        let target = resumePosition
+        resumePosition = 0
+        if target > 1, realDuration > target {
             p.seek(to: CMTime(seconds: target, preferredTimescale: 600)) { [weak self] _ in
                 self?.currentTime = target
             }
@@ -679,7 +735,12 @@ final class Player: ObservableObject {
     }
 
     func toggle() {
-        guard let avPlayer else { return }
+        // A session restored from disk has a queue but nothing loaded yet;
+        // pressing play should start it rather than silently do nothing.
+        guard let avPlayer else {
+            if hasTrack { loadCurrent() }
+            return
+        }
         if isPlaying {
             avPlayer.pause()
         } else {
