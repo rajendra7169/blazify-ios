@@ -214,6 +214,7 @@ final class Player: ObservableObject {
         if liked, PlaybackPrefs.shared.autoDownloadOnLike {
             Downloads.shared.download(track)
         }
+        Task { await LastFM.shared.love(track, loved: liked) }
         let id = track.videoId
         apply(track, liked: liked)
         guard Auth.shared.isLoggedIn else { return }
@@ -480,6 +481,10 @@ final class Player: ObservableObject {
     private func loadCurrent() {
         guard let track = current else { return }
         saveQueue()
+        // Last.fm: announce the song now, and arm the scrobble for later.
+        scrobbleStart = Date()
+        scrobbled = false
+        Task { await LastFM.shared.nowPlaying(track) }
         duration = track.duration
         currentTime = 0
         isLoading = true
@@ -598,6 +603,7 @@ final class Player: ObservableObject {
         ) { [weak self] time in
             guard let self, !self.isSeeking else { return }
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
+            self.considerScrobble()
         }
         // A session restored from disk resumes at its saved position, paused —
         // opening the app should never start music on its own.
@@ -616,6 +622,22 @@ final class Player: ObservableObject {
         p.rate = Float(PlaybackPrefs.shared.speed)
         isPlaying = true
         updateNowPlaying()
+    }
+
+    /// When the current song started, and whether it's already been scrobbled.
+    private var scrobbleStart = Date()
+    private var scrobbled = false
+
+    /// Last.fm's rule, the same one the Android module uses: songs of at least
+    /// 30 s, scrobbled at half their length or four minutes in, whichever first.
+    private func considerScrobble() {
+        guard !scrobbled, let track = current,
+              duration >= LastFM.minDuration else { return }
+        let threshold = min(duration * LastFM.scrobbleFraction, LastFM.scrobbleCap)
+        guard currentTime >= threshold else { return }
+        scrobbled = true
+        let started = scrobbleStart
+        Task { await LastFM.shared.scrobble(track, startedAt: started) }
     }
 
     /// The playing song's loudness, if YouTube told us when resolving the stream.
