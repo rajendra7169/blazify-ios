@@ -69,14 +69,12 @@ struct PlaylistView: View {
                 } else {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(tracks.enumerated()), id: \.element.id) { pair in
-                            Button {
+                            SongRow(track: pair.element, player: player) {
                                 player.play(tracks, startAt: pair.offset)
                                 player.showFullPlayer = true
-                            } label: {
-                                TrackRow(track: pair.element)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 6)
                             }
+                            .padding(.leading, 16)
+                            .padding(.vertical, 6)
                             .buttonStyle(.plain)
                         }
                     }

@@ -69,14 +69,12 @@ struct HistoryView: View {
                         .padding(.bottom, 8)
 
                     ForEach(Array(section.tracks.enumerated()), id: \.element.id) { index, track in
-                        Button {
+                        SongRow(track: track, player: player) {
                             player.play(section.tracks, startAt: index)
                             player.showFullPlayer = true
-                        } label: {
-                            TrackRow(track: track)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 6)
                         }
+                        .padding(.leading, 16)
+                        .padding(.vertical, 6)
                         .buttonStyle(.plain)
                     }
                 }

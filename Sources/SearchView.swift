@@ -189,15 +189,13 @@ struct SearchView: View {
 
         // Playable results lead: tapping one starts music instead of another search.
         ForEach(suggestedSongs.prefix(6)) { song in
-            Button {
+            SongRow(track: song, player: player) {
                 history.add(trimmed)
                 player.play([song], startAt: 0)
                 player.showFullPlayer = true
-            } label: {
-                TrackRow(track: song)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
             }
+            .padding(.leading, 16)
+            .padding(.vertical, 6)
             .buttonStyle(.plain)
         }
 
@@ -251,15 +249,12 @@ struct SearchView: View {
 
     private var resultRows: some View {
         ForEach(Array(results.enumerated()), id: \.element.id) { index, track in
-            Button {
+            SongRow(track: track, player: player) {
                 player.play(results, startAt: index)
                 player.showFullPlayer = true
-            } label: {
-                TrackRow(track: track)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
             }
-            .buttonStyle(.plain)
+            .padding(.leading, 16)
+            .padding(.vertical, 6)
         }
     }
 

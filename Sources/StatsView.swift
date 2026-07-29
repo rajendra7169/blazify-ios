@@ -109,6 +109,7 @@ struct StatsView: View {
             Text("\(PlayHistory.playCount(track.videoId, in: period))×")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(palette.accent)
+            SongRowMenu(track: track, player: player)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)

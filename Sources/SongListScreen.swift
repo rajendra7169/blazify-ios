@@ -112,6 +112,8 @@ struct SongListScreen: View {
                         }
                         .buttonStyle(.plain)
 
+                        // This screen has its own sheet and cover already, so it
+                        // takes those two actions over from the menu.
                         SongRowMenu(track: track, player: player,
                                     onAddToPlaylist: { playlistTrack = track },
                                     onOpenArtist: { openArtist(track) })

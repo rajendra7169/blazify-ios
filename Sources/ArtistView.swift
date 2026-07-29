@@ -112,14 +112,12 @@ struct ArtistView: View {
         if !section.songs.isEmpty {
             LazyVStack(spacing: 0) {
                 ForEach(Array(section.songs.enumerated()), id: \.element.id) { pair in
-                    Button {
+                    SongRow(track: pair.element, player: player) {
                         player.play(section.songs, startAt: pair.offset)
                         player.showFullPlayer = true
-                    } label: {
-                        TrackRow(track: pair.element)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 6)
                     }
+                    .padding(.leading, 16)
+                    .padding(.vertical, 6)
                     .buttonStyle(.plain)
                 }
             }

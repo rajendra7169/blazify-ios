@@ -23,11 +23,10 @@ struct DownloadsView: View {
                 } else {
                     List {
                         ForEach(Array(downloads.tracks.enumerated()), id: \.element.id) { pair in
-                            Button {
+                            SongRow(track: pair.element, player: player,
+                                    trailingPadding: 0) {
                                 player.play(downloads.tracks, startAt: pair.offset)
                                 player.showFullPlayer = true
-                            } label: {
-                                TrackRow(track: pair.element)
                             }
                             .buttonStyle(.plain)
                             .listRowBackground(Color.clear)
