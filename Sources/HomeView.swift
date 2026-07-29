@@ -11,6 +11,10 @@ struct HomeView: View {
     @Binding var tab: BlazeTab
     @ObservedObject private var auth = Auth.shared
     @ObservedObject private var look = LookFeel.shared
+    @ObservedObject private var net = Reachability.shared
+    // Observed so the offline rails refresh the moment a download lands.
+    @ObservedObject private var downloads = Downloads.shared
+    @ObservedObject private var cache = AudioCache.shared
 
     @State private var feed = HomeFeed.empty
     @State private var moods: [MoodItem] = []
@@ -33,48 +37,52 @@ struct HomeView: View {
                     if look.showHomeGreeting { GreetingCard() }
                     if look.showHomeSearchBar { searchPill }
 
-                    if !feed.chips.isEmpty {
-                        ChipsRow(chips: feed.chips, selected: selectedChip) { selectChip($0) }
-                    }
-
-                    if loading {
-                        SkeletonRail()
-                        SkeletonRail()
+                    if !net.isOnline {
+                        offlineFeed
                     } else {
-                        // Locally-derived rails first, reshuffled on every load —
-                        // this is what makes the feed differ each time, as Android's
-                        // `.shuffled()` sections do.
-                        ForEach(localSections) { section in
-                            if section.isSongs {
-                                QuickPicksGrid(section: section, player: player)
-                            } else {
-                                HomeRail(section: section) { tap($0) }
+                        if !feed.chips.isEmpty {
+                            ChipsRow(chips: feed.chips, selected: selectedChip) { selectChip($0) }
+                        }
+
+                        if loading {
+                            SkeletonRail()
+                            SkeletonRail()
+                        } else {
+                            // Locally-derived rails first, reshuffled on every load —
+                            // this is what makes the feed differ each time, as Android's
+                            // `.shuffled()` sections do.
+                            ForEach(localSections) { section in
+                                if section.isSongs {
+                                    QuickPicksGrid(section: section, player: player)
+                                } else {
+                                    HomeRail(section: section) { tap($0) }
+                                }
                             }
-                        }
 
-                        ForEach(feed.sections) { section in
-                            if section.isSongs {
-                                QuickPicksGrid(section: section, player: player)
-                            } else {
-                                HomeRail(section: section) { tap($0) }
+                            ForEach(feed.sections) { section in
+                                if section.isSongs {
+                                    QuickPicksGrid(section: section, player: player)
+                                } else {
+                                    HomeRail(section: section) { tap($0) }
+                                }
                             }
-                        }
 
-                        if !moods.isEmpty {
-                            MoodTiles(moods: moods) { path.append($0) }
-                        }
+                            if !moods.isEmpty {
+                                MoodTiles(moods: moods) { path.append($0) }
+                            }
 
-                        // Reaching this marker means we're near the end: pull the
-                        // next page of shelves in, the way Android watches the last
-                        // visible index. The `.id` makes SwiftUI build a *new*
-                        // marker per token — otherwise the old one stays on screen,
-                        // never re-appears, and loading stops after one page.
-                        if let token = feed.continuation {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 24)
-                                .id(token)
-                                .onAppear { loadMore() }
+                            // Reaching this marker means we're near the end: pull the
+                            // next page of shelves in, the way Android watches the last
+                            // visible index. The `.id` makes SwiftUI build a *new*
+                            // marker per token — otherwise the old one stays on screen,
+                            // never re-appears, and loading stops after one page.
+                            if let token = feed.continuation {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 24)
+                                    .id(token)
+                                    .onAppear { loadMore() }
+                            }
                         }
                     }
                 }
@@ -95,6 +103,10 @@ struct HomeView: View {
         }
         .task {
             if feed.sections.isEmpty { await load() }
+        }
+        // Coming back online, pull the real feed in straight away.
+        .onChange(of: net.isOnline) {
+            if net.isOnline { Task { await load() } }
         }
         .onChange(of: auth.isLoggedIn) {
             Task { await load() }   // swap to (or from) the personalized feed
@@ -125,6 +137,11 @@ struct HomeView: View {
     }
 
     private func load(reshuffle: Bool = false) async {
+        // No point firing four requests that can only time out.
+        guard net.isOnline else {
+            await MainActor.run { loading = false }
+            return
+        }
         if !reshuffle { loading = true }   // pull-to-refresh has its own spinner
         let seeds = Self.seedPool(player: player)
         async let feedTask = YouTube.home(params: selectedChip?.params)
@@ -226,6 +243,84 @@ struct HomeView: View {
         if forgotten.count >= 4 {
             out.append(HomeSection(title: "Forgotten favourites",
                                    items: forgotten.map(\.asHomeItem), isSongs: false))
+        }
+        return out
+    }
+
+    // MARK: - Offline
+
+    /// What Home shows with no connection: a notice, then only music that will
+    /// actually play from this device.
+    @ViewBuilder private var offlineFeed: some View {
+        OfflineNotice { Task { await load() } }
+
+        let sections = Self.offlineSections(player: player)
+        if sections.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 40))
+                    .foregroundStyle(palette.accent)
+                Text("Nothing saved yet")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(palette.onSurface)
+                Text("Download songs while you're online and they'll be waiting here.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.onSurfaceVariant)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 56)
+        } else {
+            ForEach(sections) { section in
+                if section.isSongs {
+                    QuickPicksGrid(section: section, player: player)
+                } else {
+                    HomeRail(section: section) { tap($0) }
+                }
+            }
+        }
+    }
+
+    /// Offline rails, in the order YouTube Music puts them: what you saved
+    /// first, then what you reach for. Every rail is filtered to songs whose
+    /// audio is on the device — a rail of taps that error is worse than no
+    /// rail — and any that comes up empty is dropped rather than left blank.
+    @MainActor
+    private static func offlineSections(player: Player) -> [HomeSection] {
+        func playable(_ tracks: [Track]) -> [Track] {
+            var seen = Set<String>()
+            return tracks.filter {
+                guard !$0.videoId.isEmpty, seen.insert($0.videoId).inserted else { return false }
+                return Downloads.shared.isDownloaded($0.videoId)
+                    || AudioCache.shared.isCached($0.videoId)
+            }
+        }
+
+        var out: [HomeSection] = []
+
+        let downloaded = Downloads.shared.tracks
+        if !downloaded.isEmpty {
+            out.append(HomeSection(title: "Downloaded",
+                                   items: downloaded.map(\.asHomeItem), isSongs: true))
+        }
+
+        let recent = Array(playable(PlayHistory.recent).prefix(20))
+        if !recent.isEmpty {
+            out.append(HomeSection(title: "Recently played",
+                                   items: recent.map(\.asHomeItem), isSongs: false))
+        }
+
+        let liked = Array(playable(player.favoriteTracks).prefix(20))
+        if !liked.isEmpty {
+            out.append(HomeSection(title: "Your favourites",
+                                   items: liked.map(\.asHomeItem), isSongs: false))
+        }
+
+        let top = Array(playable(PlayHistory.mostPlayed(.all, limit: 80)).prefix(20))
+        if !top.isEmpty {
+            out.append(HomeSection(title: "Most played",
+                                   items: top.map(\.asHomeItem), isSongs: false))
         }
         return out
     }
@@ -448,5 +543,44 @@ struct MusicCard: View {
             .frame(width: look.gridItemSize.cardWidth, alignment: .leading)
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// The banner Home shows with no connection, in the app's own colours.
+private struct OfflineNotice: View {
+    @Environment(\.palette) private var palette
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(palette.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("You're offline")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(palette.onSurface)
+                Text("Showing music saved on this device")
+                    .font(.system(size: 12))
+                    .foregroundStyle(palette.onSurfaceVariant)
+            }
+            Spacer(minLength: 8)
+            Button(action: retry) {
+                Text("Retry")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(palette.onAccent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(palette.accent)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(palette.surfaceHigh)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
     }
 }
