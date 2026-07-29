@@ -1,10 +1,32 @@
 import Foundation
 
 /// One synced lyric line.
+/// One timed syllable inside a line. Only providers that serve word-level TTML
+/// (Apple Music, Better Lyrics) fill these in; everything else leaves them empty
+/// and the line simply animates as a whole.
+struct LyricWord: Equatable {
+    let text: String
+    let start: Double
+    let end: Double
+}
+
 struct LyricLine: Identifiable, Equatable {
     let id = UUID()
     let time: Double   // seconds
     let text: String
+    /// Empty unless the provider gave per-word stamps.
+    var words: [LyricWord] = []
+
+    var hasWordTimings: Bool { words.count > 1 }
+
+    /// How far through this line the given moment is, 0…1, using the word
+    /// stamps when we have them.
+    func progress(at position: Double) -> Double {
+        guard let first = words.first, let last = words.last, last.end > first.start else {
+            return position >= time ? 1 : 0
+        }
+        return min(max((position - first.start) / (last.end - first.start), 0), 1)
+    }
 }
 
 struct LyricsResult: Equatable {
@@ -188,11 +210,13 @@ enum Lyrics {
               (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let ttml = json["ttml"] as? String, !ttml.isEmpty,
-              let lrc = TTML.toLRC(ttml)
+              // Parse the TTML directly rather than round-tripping through LRC:
+              // the per-word stamps are what the word-by-word animations and the
+              // Blazify renderer run on, and LRC can't carry them.
+              let lines = TTML.parse(ttml), !lines.isEmpty
         else { return [] }
 
-        let lines = parseLRC(lrc)
-        guard !lines.isEmpty else { return [] }
+        let lrc = TTML.toLRC(ttml) ?? ""
         // Matched server-side on the exact title/artist/duration we sent, and
         // its 401-on-miss means a 200 is already a confirmation.
         return [LyricsCandidate(provider: "BetterLyrics", trackName: title, artistName: artist,
