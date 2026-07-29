@@ -51,9 +51,9 @@ final class ContentPrefs: ObservableObject {
         let deviceLanguage = Locale.current.language.languageCode?.identifier ?? "en"
         let deviceRegion = Locale.current.region?.identifier ?? "US"
         language = d.string(forKey: "contentLanguage")
-            ?? (languages.contains { $0.code == deviceLanguage } ? deviceLanguage : "en")
+            ?? (Self.languages.contains { $0.code == deviceLanguage } ? deviceLanguage : "en")
         country = d.string(forKey: "contentCountry")
-            ?? (countries.contains { $0.code == deviceRegion } ? deviceRegion : "US")
+            ?? (Self.countries.contains { $0.code == deviceRegion } ? deviceRegion : "US")
 
         hideExplicit = flag("hideExplicit", false)
         hideVideoSongs = flag("hideVideoSongs", false)

@@ -57,7 +57,10 @@ final class LyricsSecondary: ObservableObject {
         inFlight.insert(key)
         working = true
 
-        Task { [weak self] in
+        // Strong self: this is a singleton that lives for the app's lifetime,
+        // and a weak capture read back inside the main-actor hop is exactly the
+        // pattern Swift 6 rejects.
+        Task {
             let translated = await AITranslator.translate(
                 lyrics.map(\.text),
                 into: translate.targetLanguage)
@@ -67,7 +70,6 @@ final class LyricsSecondary: ObservableObject {
             }
             let result = out
             await MainActor.run {
-                guard let self else { return }
                 self.lines[videoId] = result
                 self.inFlight.remove(key)
                 self.working = false

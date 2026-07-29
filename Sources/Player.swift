@@ -459,9 +459,15 @@ final class Player: ObservableObject {
     private func extendWithRadio(from track: Track) {
         isLoading = true
         Task { @MainActor in
-            let related = await YouTube.related(videoId: track.videoId)
+            // `related` hands back shelves of cards, so flatten to the songs —
+            // items with a videoId and no browseId are playable tracks.
+            let shelves = await YouTube.related(videoId: track.videoId)
             let known = Set(self.queue.map(\.videoId))
-            let fresh = related.filter { !$0.videoId.isEmpty && !known.contains($0.videoId) }
+            let fresh = shelves
+                .flatMap(\.items)
+                .filter { $0.browseId == nil }
+                .map(\.asTrack)
+                .filter { !$0.videoId.isEmpty && !known.contains($0.videoId) }
             guard !fresh.isEmpty else {
                 self.isLoading = false
                 self.avPlayer?.pause()
