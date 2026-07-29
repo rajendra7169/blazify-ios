@@ -27,6 +27,7 @@ struct SettingsView: View {
     @State private var showBackup = false
     @State private var showIntegrations = false
     @State private var showAppearance = false
+    @State private var showEqualizer = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -34,7 +35,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content, backup, integrations, appearance }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content, backup, integrations, appearance, equalizer }
     }
 
     private struct Group: Identifiable {
@@ -57,6 +58,9 @@ struct SettingsView: View {
                 Row(icon: "play.circle", title: "Player and audio",
                     subtitle: "Quality, crossfade, sleep timer, queue",
                     action: .player),
+                Row(icon: "slider.horizontal.3", title: "Equaliser",
+                    subtitle: "Ten bands, bass and stereo width",
+                    action: .equalizer),
                 Row(icon: "antenna.radiowaves.left.and.right", title: "Stream sources",
                     subtitle: "Which clients resolve a song, and in what order",
                     action: .streams),
@@ -230,6 +234,11 @@ struct SettingsView: View {
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
+        .sheet(isPresented: $showEqualizer) {
+            NavigationStack { EqualizerView(player: player).settingsMiniPlayer(player) }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
         .sheet(isPresented: $showChangelog) {
             ChangelogView()
                 .settingsMiniPlayer(player)
@@ -394,6 +403,7 @@ struct SettingsView: View {
             case .backup: showBackup = true
             case .integrations: showIntegrations = true
             case .appearance: showAppearance = true
+            case .equalizer: showEqualizer = true
             case .none: break
             }
         } label: {
