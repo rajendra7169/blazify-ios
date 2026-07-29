@@ -276,6 +276,22 @@ enum PlayHistory {
     /// Top songs of all time, kept for the Library banner.
     static var top: [Track] { mostPlayed(.all, limit: topSize) }
 
+    /// Settings → Player → Keep history for: drop anything older than the
+    /// chosen window. 0 means keep everything, as Android's unlimited does.
+    @MainActor
+    static func pruneOld() {
+        let days = PlaybackPrefs.shared.historyDays
+        guard days > 0 else { return }
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+        let current = events
+        let kept = current.filter { $0.at >= cutoff }
+        guard kept.count != current.count else { return }
+        if let data = try? JSONEncoder().encode(kept) {
+            UserDefaults.standard.set(data, forKey: eventsKey)
+        }
+        invalidate()
+    }
+
     static func clear() {
         UserDefaults.standard.removeObject(forKey: eventsKey)
         UserDefaults.standard.removeObject(forKey: tracksKey)

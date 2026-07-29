@@ -90,7 +90,12 @@ struct PlayerView: View {
         .gesture(sheetDrag)
         // Settings → Lyrics → Hide the status bar, while lyrics are up.
         .statusBarHidden(lyricsMode && LyricsPrefs.shared.hideStatusBarFullscreen)
-        .onAppear { dragOffset = 0 }
+        .onAppear {
+            dragOffset = 0
+            // Settings → Player → Keep the screen on.
+            UIApplication.shared.isIdleTimerDisabled = PlaybackPrefs.shared.keepScreenOn
+        }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
         .sheet(isPresented: $showSleep) {

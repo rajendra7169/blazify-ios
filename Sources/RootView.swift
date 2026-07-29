@@ -114,6 +114,7 @@ struct RootView: View {
                 .environment(\.palette, palette)
         }
         .onAppear {
+            PlayHistory.pruneOld()
             safeBottom = UIApplication.shared.connectedScenes
                 .compactMap { ($0 as? UIWindowScene)?.keyWindow }
                 .first?.safeAreaInsets.bottom ?? 34

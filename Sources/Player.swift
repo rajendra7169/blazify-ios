@@ -13,7 +13,7 @@ import SwiftUI
 /// it paused halfway) and never fires "ended", so it wouldn't auto-advance.
 final class Player: ObservableObject {
 
-    enum RepeatMode { case off, all, one }
+    enum RepeatMode: Int { case off, all, one }
 
     @Published var queue: [Track] = []
     @Published var index = 0
@@ -57,6 +57,13 @@ final class Player: ObservableObject {
         configureSession()
         setupRemoteCommands()
         loadFavorites()
+        restoreModes()
+        restoreQueue()
+        observeRouteChanges()
+        // Backgrounding is the moment worth persisting the position.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main,
+        ) { [weak self] _ in self?.saveQueue() }
         Task { await syncFavorites() }
         Task { @MainActor in
             ListenTogether.shared.onRemote = { [weak self] action in
@@ -69,6 +76,66 @@ final class Player: ObservableObject {
             queue: .main,
         ) { [weak self] _ in
             self?.trackEnded()
+        }
+    }
+
+    // MARK: - Persistence of the session
+
+    private struct SavedQueue: Codable {
+        let tracks: [Track]
+        let index: Int
+        let position: Double
+    }
+
+    /// Settings → Player → Remember the queue.
+    private func saveQueue() {
+        guard PlaybackPrefs.shared.persistentQueue else { return }
+        let saved = SavedQueue(tracks: queue, index: index, position: currentTime)
+        if let data = try? JSONEncoder().encode(saved) {
+            UserDefaults.standard.set(data, forKey: "savedQueue")
+        }
+    }
+
+    /// Restores the queue paused at where you left off — never auto-playing,
+    /// which would start music the moment the app opens.
+    private func restoreQueue() {
+        guard PlaybackPrefs.shared.persistentQueue,
+              let data = UserDefaults.standard.data(forKey: "savedQueue"),
+              let saved = try? JSONDecoder().decode(SavedQueue.self, from: data),
+              !saved.tracks.isEmpty else { return }
+        queue = saved.tracks
+        originalQueue = saved.tracks
+        index = min(max(saved.index, 0), saved.tracks.count - 1)
+        resumePosition = saved.position
+    }
+
+    /// Where a restored session left off, applied once the stream is ready.
+    private var resumePosition: Double = 0
+
+    private func saveModes() {
+        guard PlaybackPrefs.shared.rememberShuffleRepeat else { return }
+        UserDefaults.standard.set(isShuffled, forKey: "shuffleOn")
+        UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode")
+    }
+
+    private func restoreModes() {
+        guard PlaybackPrefs.shared.rememberShuffleRepeat else { return }
+        isShuffled = UserDefaults.standard.bool(forKey: "shuffleOn")
+        repeatMode = RepeatMode(rawValue: UserDefaults.standard.integer(forKey: "repeatMode")) ?? .off
+    }
+
+    /// Settings → Player → Resume on Bluetooth: start again when headphones or
+    /// a speaker reconnect, which iOS reports as an route change.
+    private func observeRouteChanges() {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main,
+        ) { [weak self] note in
+            guard let self, PlaybackPrefs.shared.resumeOnBluetooth,
+                  let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                  AVAudioSession.RouteChangeReason(rawValue: raw) == .newDeviceAvailable,
+                  self.hasTrack, !self.isPlaying
+            else { return }
+            self.toggle()
         }
     }
 
@@ -101,6 +168,7 @@ final class Player: ObservableObject {
     // MARK: - Shuffle / repeat / favorite
 
     func toggleShuffle() {
+        defer { saveModes() }
         isShuffled.toggle()
         guard let cur = current else { return }
         if isShuffled {
@@ -122,6 +190,7 @@ final class Player: ObservableObject {
     }
 
     func cycleRepeat() {
+        defer { saveModes() }
         switch repeatMode {
         case .off: repeatMode = .all
         case .all: repeatMode = .one
@@ -407,6 +476,7 @@ final class Player: ObservableObject {
 
     private func loadCurrent() {
         guard let track = current else { return }
+        saveQueue()
         duration = track.duration
         currentTime = 0
         isLoading = true
@@ -525,6 +595,18 @@ final class Player: ObservableObject {
         ) { [weak self] time in
             guard let self, !self.isSeeking else { return }
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
+        }
+        // A session restored from disk resumes at its saved position, paused —
+        // opening the app should never start music on its own.
+        if resumePosition > 1, realDuration > resumePosition {
+            let target = resumePosition
+            resumePosition = 0
+            p.seek(to: CMTime(seconds: target, preferredTimescale: 600)) { [weak self] _ in
+                self?.currentTime = target
+            }
+            isPlaying = false
+            updateNowPlaying()
+            return
         }
         p.play()
         // Rate has to be set after play(), which resets it to 1.
