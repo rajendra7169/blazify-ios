@@ -632,8 +632,8 @@ final class Player: ObservableObject {
     /// 30 s, scrobbled at half their length or four minutes in, whichever first.
     private func considerScrobble() {
         guard !scrobbled, let track = current,
-              duration >= LastFM.minDuration else { return }
-        let threshold = min(duration * LastFM.scrobbleFraction, LastFM.scrobbleCap)
+              duration >= LastFMRules.minDuration else { return }
+        let threshold = min(duration * LastFMRules.scrobbleFraction, LastFMRules.scrobbleCap)
         guard currentTime >= threshold else { return }
         scrobbled = true
         let started = scrobbleStart

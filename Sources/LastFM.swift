@@ -6,6 +6,15 @@ import Foundation
 /// yours: Android reads them from a build secret that isn't set in this repo, so
 /// rather than ship an empty integration the key and secret are entered in
 /// Settings and kept in the Keychain, next to the YouTube cookie.
+/// Android's rules: at least 30 s long, scrobbled at half the track or four
+/// minutes in, whichever comes first. Kept outside the main-actor class so the
+/// player's time observer can read them without hopping actors.
+enum LastFMRules {
+    static let minDuration: Double = 30
+    static let scrobbleFraction: Double = 0.5
+    static let scrobbleCap: Double = 240
+}
+
 @MainActor
 final class LastFM: ObservableObject {
     static let shared = LastFM()
@@ -14,12 +23,6 @@ final class LastFM: ObservableObject {
     @Published var scrobbling: Bool { didSet { UserDefaults.standard.set(scrobbling, forKey: "lastfmScrobbling") } }
     @Published var loveOnFavorite: Bool { didSet { UserDefaults.standard.set(loveOnFavorite, forKey: "lastfmLoveOnFavorite") } }
     @Published var status: String?
-
-    /// Android's rules: at least 30 s long, scrobbled at half the track or four
-    /// minutes in, whichever comes first.
-    static let minDuration: Double = 30
-    static let scrobbleFraction: Double = 0.5
-    static let scrobbleCap: Double = 240
 
     private var apiKey: String? { Keychain.get("lastfmApiKey") }
     private var secret: String? { Keychain.get("lastfmSecret") }
