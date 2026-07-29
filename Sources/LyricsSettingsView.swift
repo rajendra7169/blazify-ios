@@ -27,6 +27,27 @@ struct LyricsSettingsView: View {
                     divider
                     link("list.number", "Provider priority",
                          "Which source wins when several have the song") { showPriority = true }
+                    divider
+                    NavigationLink { AISettingsView() } label: {
+                        HStack(spacing: 14) {
+                            icon("character.book.closed")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("AI translation")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(palette.onSurface)
+                                Text(AIPrefs.shared.enabled ? "On" : "Off")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(palette.onSurfaceVariant)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(palette.onSurfaceVariant.opacity(0.7))
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 group("Display") {
