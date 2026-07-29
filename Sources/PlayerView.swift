@@ -24,6 +24,8 @@ struct PlayerView: View {
     @State private var showSleep = false
     @State private var showDesign = false
     @State private var showMenu = false
+    @State private var showEqualizer = false
+    @State private var showLyricsSettings = false
     @State private var lyricsMode = false
     @State private var immersive = false
     @State private var dragOffset: CGFloat = 0
@@ -98,6 +100,14 @@ struct PlayerView: View {
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
         .sheet(isPresented: $showQueue) { QueueView(player: player) }
+        .sheet(isPresented: $showEqualizer) {
+            NavigationStack { EqualizerView(player: player) }
+                .environment(\.palette, palette)
+        }
+        .sheet(isPresented: $showLyricsSettings) {
+            NavigationStack { LyricsSettingsView() }
+                .environment(\.palette, palette)
+        }
         .sheet(isPresented: $showSleep) {
             SleepTimerView(player: player).environment(\.palette, palette)
         }
@@ -107,6 +117,8 @@ struct PlayerView: View {
                 onQueue: { showQueue = true },
                 onSleep: { showSleep = true },
                 onLyrics: { lyricsMode = true },
+                onLyricsSettings: { showLyricsSettings = true },
+                onEqualizer: { showEqualizer = true },
             )
         }
     }
@@ -284,6 +296,12 @@ struct PlayerView: View {
                             .frame(width: 40, height: 40)
                     }
                 } else {
+                    Button { showEqualizer = true } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundStyle(Equalizer.shared.enabled ? palette.accent : .white)
+                            .frame(width: 34, height: 40)
+                    }
                     Button { player.toggleFavorite() } label: {
                         Image(systemName: player.isCurrentFavorite ? "heart.fill" : "heart")
                             .font(.system(size: 26))
