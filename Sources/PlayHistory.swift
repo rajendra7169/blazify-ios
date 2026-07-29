@@ -131,6 +131,8 @@ enum PlayHistory {
     // MARK: Recording
 
     static func record(_ track: Track) {
+        // Privacy > Pause listen history.
+        guard !UserDefaults.standard.bool(forKey: "pauseListenHistory") else { return }
         guard !track.videoId.isEmpty else { return }
         var events = self.events
         events.append(PlayEvent(videoId: track.videoId, at: Date()))

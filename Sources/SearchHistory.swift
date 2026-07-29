@@ -16,6 +16,8 @@ final class SearchHistory: ObservableObject {
     }
 
     func add(_ query: String) {
+        // Privacy > Pause search history.
+        guard !UserDefaults.standard.bool(forKey: "pauseSearchHistory") else { return }
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         queries.removeAll { $0.caseInsensitiveCompare(q) == .orderedSame }
