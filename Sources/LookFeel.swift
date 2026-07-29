@@ -14,6 +14,16 @@ enum LyricsPosition: String, CaseIterable, Identifiable {
         case .right: "Right"
         }
     }
+    /// Anchor for the glow's slight scale-up, so the line grows away from its
+    /// own edge rather than drifting off-centre.
+    var scaleAnchor: UnitPoint {
+        switch self {
+        case .left: return .leading
+        case .center: return .center
+        case .right: return .trailing
+        }
+    }
+
     var alignment: HorizontalAlignment {
         switch self {
         case .left: .leading

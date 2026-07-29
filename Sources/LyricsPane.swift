@@ -10,6 +10,7 @@ import UIKit
 struct LyricsPane: View {
     @ObservedObject var player: Player
     @ObservedObject private var look = LookFeel.shared
+    @ObservedObject private var prefs = LyricsPrefs.shared
     /// The 4 Hz position drives the sync anchor, so observe it directly rather
     /// than trusting the parent to re-render us.
     @ObservedObject private var clock: PlaybackClock
@@ -150,7 +151,9 @@ struct LyricsPane: View {
             TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !player.isPlaying)) { timeline in
                 let pos = smoothedPosition(at: timeline.date)
                 let highlight = index(in: lines, at: pos)             // no lead
-                let scrollTo = max(index(in: lines, at: pos + 0.25), 0) // +250ms scroll lead
+                let scrollTo = prefs.autoScroll
+                    ? max(index(in: lines, at: pos + 0.25), 0)   // +250ms scroll lead
+                    : 0
                 let map = positions(active: scrollTo, heights: hs)
 
                 ZStack(alignment: .top) {
@@ -169,18 +172,25 @@ struct LyricsPane: View {
                         let distance = abs(i - scrollTo)
 
                         Text(line.text.isEmpty ? "♪" : line.text)
-                            .font(.system(size: 30, weight: .bold))
+                            .font(.system(size: prefs.textSize, weight: .bold))
                             .tracking(-0.5)
-                            .lineSpacing(4)
+                            // Android stores line spacing as a multiplier of the
+                            // type size; SwiftUI wants the extra leading in points.
+                            .lineSpacing(prefs.textSize * (prefs.lineSpacing - 1))
                             .multilineTextAlignment(look.lyricsPosition.textAlignment)
                             .foregroundStyle(.white.opacity(alpha(distance: distance, isActive: i == highlight)))
+                            .shadow(color: prefs.glowEffect && i == highlight
+                                    ? .white.opacity(0.45) : .clear,
+                                    radius: 12)
+                            .scaleEffect(prefs.glowEffect && i == highlight ? 1.03 : 1,
+                                         anchor: look.lyricsPosition.scaleAnchor)
                             .frame(maxWidth: .infinity, alignment: look.lyricsPosition.frameAlignment)
                             .padding(.vertical, 12)
                             .offset(y: target)
                             .animation(lineAnimation(distance: distance), value: target)
                             .animation(.easeInOut(duration: 0.25), value: highlight)
                             .contentShape(Rectangle())
-                            .onTapGesture { seek(to: line) }
+                            .onTapGesture { if prefs.clickToSeek { seek(to: line) } }
                     }
                 }
                 // Must fill the stage: offsets don't affect layout, so without an
@@ -195,15 +205,20 @@ struct LyricsPane: View {
         }
     }
 
-    /// Wrapped height of a line plus its 12pt vertical padding.
+    /// Wrapped height of a line plus its 12pt vertical padding, measured with
+    /// the very type it's drawn with — size and spacing both come from Settings,
+    /// so a stale constant here would misplace every line.
     private func lineHeight(_ text: String, width: CGFloat) -> CGFloat {
         guard width > 0 else { return fallbackHeight }
         let body = text.isEmpty ? "♪" : text
-        let font = UIFont.systemFont(ofSize: 30, weight: .bold)
+        let font = UIFont.systemFont(ofSize: prefs.textSize, weight: .bold)
+        let leading = prefs.textSize * (prefs.lineSpacing - 1)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = leading
         let rect = (body as NSString).boundingRect(
             with: CGSize(width: width, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: font], context: nil)
+            attributes: [.font: font, .paragraphStyle: paragraph], context: nil)
         return ceil(rect.height) + 24
     }
 
@@ -257,7 +272,7 @@ struct LyricsPane: View {
 
     /// tween(750ms, delay = min(distance × 20, 200)ms, FastOutSlowInEasing)
     private func lineAnimation(distance: Int) -> Animation? {
-        guard autoScroll, ready else { return nil }   // snap on first layout / manual scroll
+        guard autoScroll, prefs.autoScroll, ready else { return nil }   // snap on first layout / manual scroll
         let delay = min(Double(distance) * 0.02, 0.2)
         return .timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.75).delay(delay)
     }
