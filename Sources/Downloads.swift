@@ -295,6 +295,13 @@ final class Downloads: ObservableObject {
         "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
     }
 
+    /// The downloaded artwork for a song, resolved against THIS install's
+    /// container. Public so any row can prefer it over a saved path.
+    func localArtURL(for id: String) -> URL? {
+        let u = artURL(for: id)
+        return FileManager.default.fileExists(atPath: u.path) ? u : nil
+    }
+
     /// The on-disk art for a song, as a URL string, if we fetched it.
     private func localArt(for id: String) -> String? {
         let u = artURL(for: id)

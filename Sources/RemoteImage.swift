@@ -29,9 +29,12 @@ enum ImageCache {
 /// loading speed — a 52pt row was pulling a 720×720 image.
 enum ThumbSize {
     static func url(_ url: URL?, points: CGFloat?) -> URL? {
-        guard let url, let points, points > 0 else { return url }
+        guard let url else { return url }
+        // Without a declared draw size we'd use whatever the catalogue put in
+        // the URL — often 60px, which is why some art looked mushy. 544 is the
+        // size YouTube Music itself serves for a row.
         // Cap at 1080: past that we're paying for pixels no phone shows.
-        let pixels = min(Int((points * UIScreen.main.scale).rounded()), 1080)
+        let pixels = points.map { min(Int(($0 * UIScreen.main.scale).rounded()), 1080) } ?? 544
         let s = url.absoluteString
         guard let range = s.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) else {
             return url

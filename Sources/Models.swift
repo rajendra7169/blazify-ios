@@ -22,7 +22,7 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
     var isVideo: Bool { video ?? false }
 
     var id: String { videoId }
-    var thumbnailURL: URL? { URL(string: thumbnail) }
+    var thumbnailURL: URL? { artURL(size: 0) }
 
     init(videoId: String, title: String, artist: String, thumbnail: String,
          duration: Double, artistId: String? = nil,
@@ -39,8 +39,18 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
 
     /// Thumbnail upscaled to a requested square size (googleusercontent resize).
     func artURL(size: Int) -> URL? {
-        guard !thumbnail.isEmpty else { return nil }
-        if let r = thumbnail.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
+        // A file:// path saved by an earlier install points into a container
+        // that no longer exists — every reinstall gets a new one. Resolve the
+        // download against the CURRENT container, and if it isn't downloaded
+        // here, fall back to the thumbnail every video has.
+        if thumbnail.hasPrefix("file:") {
+            if let local = Downloads.shared.localArtURL(for: videoId) { return local }
+            return URL(string: Downloads.fallbackArt(videoId))
+        }
+        guard !thumbnail.isEmpty else {
+            return videoId.isEmpty ? nil : URL(string: Downloads.fallbackArt(videoId))
+        }
+        if size > 0, let r = thumbnail.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
             return URL(string: thumbnail.replacingCharacters(in: r, with: "=w\(size)-h\(size)"))
         }
         return URL(string: thumbnail)
