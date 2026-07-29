@@ -153,10 +153,13 @@ struct HomeView: View {
             // answers the home browse with nothing. Keep what we already have
             // rather than blanking the feed down to the local rails.
             if !f.sections.isEmpty { feed = f }
-            if !m.isEmpty { moods = m.shuffled() }
+            let shuffle = ContentPrefs.shared.randomizeHomeOrder
+            if !m.isEmpty { moods = shuffle ? m.shuffled() : m }
             // Shuffle the running order too, so it isn't always Quick picks on
             // top — the section that leads changes between refreshes.
-            localSections = (Self.buildLocalSections(player: player) + dynamic).shuffled()
+            // Settings → Content → Shuffle the section order.
+            let local = Self.buildLocalSections(player: player) + dynamic
+            localSections = shuffle ? local.shuffled() : local
             loading = false
         }
     }
