@@ -37,9 +37,6 @@ struct ContentSettingsView: View {
                 SettingsToggle(symbol: "text.alignleft", title: "Show the description",
                                isOn: $prefs.showArtistDescription)
                 SettingsDivider()
-                SettingsToggle(symbol: "chart.bar", title: "Show monthly listeners",
-                               isOn: $prefs.showMonthlyListeners)
-                SettingsDivider()
                 SettingsToggle(symbol: "person.badge.plus", title: "Show subscribers",
                                isOn: $prefs.showSubscriberCount)
             }

@@ -68,7 +68,7 @@ struct ArtistView: View {
                     .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(palette.onSurface)
                     .lineLimit(2)
-                if !page.subscribers.isEmpty {
+                if !page.subscribers.isEmpty, ContentPrefs.shared.showSubscriberCount {
                     Text(page.subscribers)
                         .font(.system(size: 13))
                         .foregroundStyle(palette.onSurfaceVariant)

@@ -14,7 +14,6 @@ final class ContentPrefs: ObservableObject {
     @Published var hideVideoSongs: Bool { didSet { save(hideVideoSongs, "hideVideoSongs") } }
 
     @Published var showArtistDescription: Bool { didSet { save(showArtistDescription, "showArtistDescription") } }
-    @Published var showMonthlyListeners: Bool { didSet { save(showMonthlyListeners, "showArtistMonthlyListeners") } }
     @Published var showSubscriberCount: Bool { didSet { save(showSubscriberCount, "showArtistSubscriberCount") } }
 
     @Published var randomizeHomeOrder: Bool { didSet { save(randomizeHomeOrder, "randomizeHomeOrder") } }
@@ -58,7 +57,6 @@ final class ContentPrefs: ObservableObject {
         hideExplicit = flag("hideExplicit", false)
         hideVideoSongs = flag("hideVideoSongs", false)
         showArtistDescription = flag("showArtistDescription", true)
-        showMonthlyListeners = flag("showArtistMonthlyListeners", true)
         showSubscriberCount = flag("showArtistSubscriberCount", true)
         randomizeHomeOrder = flag("randomizeHomeOrder", true)
         showStatsPlaylists = flag("showMostStatsPlaylists", true)

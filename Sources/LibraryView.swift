@@ -30,10 +30,13 @@ struct LibraryView: View {
                            seed: Color(hex: 0xB71C5A), icon: "heart.fill",
                            route: .tracks("Liked", likedTracks))
 
-                    banner(title: "Your Top \(PlayHistory.topSize)", subtitle: "",
-                           thumbs: PlayHistory.top.prefix(4).map(\.thumbnail),
-                           seed: Color(hex: 0xEF6C00), icon: "chart.line.uptrend.xyaxis",
-                           route: .topPlaylist)
+                    // Content → Show your stats playlists.
+                    if ContentPrefs.shared.showStatsPlaylists {
+                        banner(title: "Your Top \(PlayHistory.topSize)", subtitle: "",
+                               thumbs: PlayHistory.top.prefix(4).map(\.thumbnail),
+                               seed: Color(hex: 0xEF6C00), icon: "chart.line.uptrend.xyaxis",
+                               route: .topPlaylist)
+                    }
 
                     HStack(spacing: 12) {
                         BlazePlaylistCard(
