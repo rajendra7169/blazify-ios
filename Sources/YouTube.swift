@@ -37,15 +37,11 @@ enum YouTube {
     private static let loudnessLock = NSLock()
 
     static func loudnessDb(for videoId: String) -> Double? {
-        loudnessLock.lock()
-        defer { loudnessLock.unlock() }
-        return loudnessCache[videoId]
+        loudnessLock.withLock { loudnessCache[videoId] }
     }
 
     static func streamURL(for videoId: String) async -> (url: URL, duration: Double)? {
-        urlCacheLock.lock()
-        let hit = urlCache[videoId]
-        urlCacheLock.unlock()
+        let hit = urlCacheLock.withLock { urlCache[videoId] }
         if let hit, hit.expires > Date() { return (hit.url, hit.duration) }
 
         let visitor = await visitorData()
@@ -63,9 +59,10 @@ enum YouTube {
         for client in clients {
             guard let picked = await resolve(videoId, with: client, visitor: visitor,
                                              wantsLowest: wantsLowest) else { continue }
-            urlCacheLock.lock()
-            urlCache[videoId] = (picked.url, picked.duration, Date().addingTimeInterval(4 * 3600))
-            urlCacheLock.unlock()
+            urlCacheLock.withLock {
+                urlCache[videoId] = (picked.url, picked.duration,
+                                     Date().addingTimeInterval(4 * 3600))
+            }
             return (picked.url, picked.duration)
         }
         return nil
@@ -94,9 +91,7 @@ enum YouTube {
         if let config = json["playerConfig"] as? [String: Any],
            let audio = config["audioConfig"] as? [String: Any],
            let db = audio["loudnessDb"] as? Double {
-            loudnessLock.lock()
-            loudnessCache[videoId] = db
-            loudnessLock.unlock()
+            loudnessLock.withLock { loudnessCache[videoId] = db }
         }
 
         // Audio/mp4 (AAC) with a direct url — iOS can't play Opus/WebM.

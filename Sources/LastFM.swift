@@ -15,7 +15,6 @@ enum LastFMRules {
     static let scrobbleCap: Double = 240
 }
 
-@MainActor
 final class LastFM: ObservableObject {
     static let shared = LastFM()
 
@@ -57,7 +56,7 @@ final class LastFM: ObservableObject {
         guard let apiKey else { return nil }
         guard let json = await call(["method": "auth.getToken"], signed: true),
               let token = json["token"] as? String else {
-            status = "Couldn't get a token — check the key and secret."
+            await MainActor.run { self.status = "Couldn't get a token — check the key and secret." }
             return nil
         }
         pendingToken = token
@@ -69,21 +68,23 @@ final class LastFM: ObservableObject {
     /// Step two, after approving in the browser.
     func completeAuth() async {
         guard let token = pendingToken else {
-            status = "Start the connection first."
+            await MainActor.run { self.status = "Start the connection first." }
             return
         }
         guard let json = await call(["method": "auth.getSession", "token": token], signed: true),
               let session = json["session"] as? [String: Any],
               let key = session["key"] as? String,
               let name = session["name"] as? String else {
-            status = "Not approved yet — approve in the browser, then tap again."
+            await MainActor.run { self.status = "Not approved yet — approve in the browser, then tap again." }
             return
         }
         Keychain.set(key, for: "lastfmSession")
         UserDefaults.standard.set(name, forKey: "lastfmUsername")
-        username = name
         pendingToken = nil
-        status = "Connected as \(name)."
+        await MainActor.run {
+            self.username = name
+            self.status = "Connected as \(name)."
+        }
     }
 
     // MARK: Scrobbling

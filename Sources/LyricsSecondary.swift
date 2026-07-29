@@ -5,7 +5,6 @@ import SwiftUI
 /// Both go through here so the pane measures and draws them one way, which
 /// matters: line positions come from the measured height of each row, so a
 /// second line that isn't accounted for would misplace every lyric below it.
-@MainActor
 final class LyricsSecondary: ObservableObject {
     static let shared = LyricsSecondary()
 
@@ -62,14 +61,17 @@ final class LyricsSecondary: ObservableObject {
             let translated = await AITranslator.translate(
                 lyrics.map(\.text),
                 into: translate.targetLanguage)
-            guard let self else { return }
             var out: [Int: String] = [:]
             for (i, text) in translated.enumerated() where !text.isEmpty {
                 if text != lyrics[safe: i]?.text { out[i] = text }
             }
-            self.lines[videoId] = out
-            self.inFlight.remove(key)
-            self.working = false
+            let result = out
+            await MainActor.run {
+                guard let self else { return }
+                self.lines[videoId] = result
+                self.inFlight.remove(key)
+                self.working = false
+            }
         }
     }
 }
