@@ -147,66 +147,87 @@ struct WavyTrack: View {
     let active: Color
     let squiggly: Bool
     let isPlaying: Bool
+    /// Pickers draw the same slider smaller, the way the Kotlin dialog tiles do.
+    var compact = false
 
-    // Android: WavySlider rolls a broad Material wave (wavelength ~40dp,
-    // 4dp stroke, bar handle); SquigglySlider a tight squiggle (waveLength 80px
-    // ≈ 28dp, 3dp stroke, round thumb).
-    private var amplitude: CGFloat { squiggly ? 4 : 5 }
-    private var wavelength: CGFloat { squiggly ? 28 : 40 }
-    private var stroke: CGFloat { squiggly ? 3 : 4 }
-    private var speed: CGFloat { squiggly ? 34 : 22 }
+    // Straight from the Kotlin. WavySlider: wavelength 40dp, stroke 4dp,
+    // thumbRadius 8dp, gapSize thumbRadius + 4dp, waveSpeed = wavelength.
+    // SquigglySlider: waveLength 80px ≈ 27dp, lineAmplitude 6px ≈ 2.5dp,
+    // strokeWidth 5dp, phaseSpeed 24px ≈ 8dp/s, bar thumb 5dp wide.
+    private var s: CGFloat { compact ? 0.66 : 1 }
+    private var wavelength: CGFloat { (squiggly ? 27 : 40) * s }
+    private var amplitude: CGFloat { (squiggly ? 2.5 : 5) * s }
+    private var stroke: CGFloat { (squiggly ? 5 : 4) * s }
+    private var speed: CGFloat { (squiggly ? 8 : 40) * s }
+    private var gap: CGFloat { 12 * s }
+    private var thumbRadius: CGFloat { 8 * s }
+
+    /// Squiggly tints the unplayed side with the accent at 77/255; wavy leaves
+    /// the flat track in the player's inactive white.
+    private var inactive: Color { squiggly ? active.opacity(0.302) : .white.opacity(0.24) }
+
+    private var lineHeight: CGFloat { (amplitude + stroke) * 2 }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying)) { timeline in
             GeometryReader { geo in
                 let w = geo.size.width
-                let x = w * fraction
-                // Negative phase rolls the crests forward, with playback.
+                let x = w * max(0, min(1, fraction))
+                // Crests roll forward with playback and freeze when paused.
                 let phase = isPlaying
-                    ? -CGFloat(timeline.date.timeIntervalSinceReferenceDate)
+                    ? CGFloat(timeline.date.timeIntervalSinceReferenceDate)
                         .truncatingRemainder(dividingBy: 10_000) * speed
                     : 0
+                let amp = isPlaying ? amplitude : 0
 
                 ZStack(alignment: .leading) {
-                    // Inactive: thin flat track ahead of the thumb, with a small
-                    // gap after it, as Material's wavy slider leaves.
-                    Capsule().fill(Color.white.opacity(0.24))
-                        .frame(width: max(w - x - 8, 0), height: 3)
-                        .offset(x: min(x + 8, w))
-
-                    // Active: the wave, settling flat while paused. The frame is
-                    // tall enough that crests never get clipped vertically.
-                    WavePath(amplitude: isPlaying ? amplitude : 0,
-                             wavelength: wavelength, phase: phase)
-                        .stroke(active, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
-                        .frame(width: max(x - 2, 0), height: amplitude * 2 + stroke + 6)
-                        .clipped()
-
                     if squiggly {
-                        // The classic squiggly slider's round thumb.
-                        Circle().fill(active)
-                            .frame(width: 14, height: 14)
-                            .offset(x: min(max(x - 7, 0), w - 14))
+                        // One continuous line the full width, relaxing to flat
+                        // over 1.5 wavelengths past the thumb, drawn in two
+                        // colours split at the playhead.
+                        let path = WavePath(amplitude: amp, wavelength: wavelength,
+                                            phase: phase, fadeFrom: x,
+                                            fadeLength: wavelength * 1.5)
+                        path.stroke(inactive, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+                            .mask(alignment: .trailing) { Rectangle().frame(width: max(w - x, 0)) }
+                        path.stroke(active, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+                            .mask(alignment: .leading) { Rectangle().frame(width: x) }
+
+                        // Vertical bar thumb, half-height amplitude + stroke.
+                        Capsule().fill(active)
+                            .frame(width: 5 * s, height: lineHeight)
+                            .offset(x: min(max(x - 2.5 * s, 0), max(w - 5 * s, 0)))
                     } else {
-                        // Material's bar handle.
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(active)
-                            .frame(width: 4, height: 18)
-                            .offset(x: min(max(x - 2, 0), w - 4))
+                        // Material's wavy indicator: wave up to the thumb, a
+                        // gap, then the flat track.
+                        WavePath(amplitude: amp, wavelength: wavelength, phase: phase)
+                            .stroke(active, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+                            .mask(alignment: .leading) { Rectangle().frame(width: max(x - gap, 0)) }
+
+                        Capsule().fill(inactive)
+                            .frame(width: max(w - x - gap, 0), height: stroke)
+                            .offset(x: min(x + gap, w))
+
+                        Circle().fill(active)
+                            .frame(width: thumbRadius * 2, height: thumbRadius * 2)
+                            .offset(x: min(max(x - thumbRadius, 0), max(w - thumbRadius * 2, 0)))
                     }
                 }
-                .animation(.easeInOut(duration: 0.3), value: isPlaying)
-                .frame(maxHeight: .infinity, alignment: .center)
+                .animation(.easeInOut(duration: 0.2), value: isPlaying)
+                .frame(width: w, height: geo.size.height, alignment: .leading)
             }
         }
+        .frame(height: max(lineHeight, thumbRadius * 2))
     }
 }
 
-/// A rolling sine — `phase` slides the crests so the wave appears to travel.
 struct WavePath: Shape {
     var amplitude: CGFloat
     var wavelength: CGFloat
     var phase: CGFloat
+    /// Squiggly tapers the wave to flat past the playhead; wavy never fades.
+    var fadeFrom: CGFloat = .infinity
+    var fadeLength: CGFloat = 1
 
     var animatableData: CGFloat {
         get { amplitude }
@@ -215,14 +236,34 @@ struct WavePath: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
+        guard rect.width > 0, wavelength > 0 else { return path }
         let mid = rect.midY
-        guard rect.width > 0 else { return path }
-        path.move(to: CGPoint(x: 0, y: mid + amplitude * sin(phase / wavelength * 2 * .pi)))
-        var x: CGFloat = 1
-        while x <= rect.width {
-            let y = mid + amplitude * sin((x + phase) / wavelength * 2 * .pi)
-            path.addLine(to: CGPoint(x: x, y: y))
-            x += 1
+
+        // Amplitude coefficient, matching the Kotlin's computeAmplitude().
+        func amp(at x: CGFloat, _ sign: CGFloat) -> CGFloat {
+            guard fadeFrom.isFinite else { return sign * amplitude }
+            let coeff = min(max((fadeFrom + fadeLength / 2 - x) / fadeLength, 0), 1)
+            return sign * amplitude * coeff
+        }
+
+        // Half-wavelength cubic segments, alternating sign — the same crest
+        // construction the Kotlin canvas uses.
+        let step = wavelength / 2
+        var x = -phase.truncatingRemainder(dividingBy: wavelength) - step
+        var sign: CGFloat = 1
+        var current = amp(at: x, sign)
+        path.move(to: CGPoint(x: x, y: mid + current))
+
+        while x < rect.width {
+            sign = -sign
+            let nextX = x + step
+            let midX = x + step / 2
+            let next = amp(at: nextX, sign)
+            path.addCurve(to: CGPoint(x: nextX, y: mid + next),
+                          control1: CGPoint(x: midX, y: mid + current),
+                          control2: CGPoint(x: midX, y: mid + next))
+            current = next
+            x = nextX
         }
         return path
     }

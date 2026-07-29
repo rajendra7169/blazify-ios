@@ -135,20 +135,25 @@ struct LookFeelThemePreview: View {
     // MARK: Mood chips — the rail runs off the edge, like the real one
 
     private var moodChips: some View {
-        HStack(spacing: 4) {
-            ForEach(["Energize", "Relax", "Feel good", "Workout", "Party"], id: \.self) { label in
-                Text(label)
-                    .font(.system(size: 5))
-                    .foregroundStyle(palette.onSurfaceVariant)
-                    .padding(.horizontal, 7)
-                    .frame(height: 10)
-                    .background(palette.surfaceHigh)
-                    .clipShape(Capsule())
-                    .fixedSize()
+        // A scroll view is the one container that reports the *proposed* width
+        // instead of its content's: this rail is wider than the mock, and a
+        // plain HStack pushed the whole mock out of the frame.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(["Energize", "Relax", "Feel good", "Workout", "Party"], id: \.self) { label in
+                    Text(label)
+                        .font(.system(size: 5))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                        .padding(.horizontal, 7)
+                        .frame(height: 10)
+                        .background(palette.surfaceHigh)
+                        .clipShape(Capsule())
+                        .fixedSize()
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipped()
+        .scrollDisabled(true)
+        .frame(height: 10)
     }
 
     // MARK: Quick picks

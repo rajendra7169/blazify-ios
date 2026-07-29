@@ -123,7 +123,7 @@ struct LookFeelPhoneFrame<Content: View>: View {
         // proposes, and an interior with a wider ideal width spilled the clip.
         GeometryReader { g in
             content()
-                .frame(width: g.size.width, height: g.size.height)
+                .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
                 .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                 .overlay(alignment: .top) {
                     Capsule()

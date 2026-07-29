@@ -246,7 +246,7 @@ struct SliderStyleSheet: View {
                     look.sliderStyle = .wavy; look.squigglySlider = false
                 } content: {
                     WavyTrack(fraction: 0.5, active: palette.accent,
-                              squiggly: false, isPlaying: true)
+                              squiggly: false, isPlaying: true, compact: true)
                 }
             }
             HStack(spacing: 12) {
@@ -259,7 +259,7 @@ struct SliderStyleSheet: View {
                     look.sliderStyle = .wavy; look.squigglySlider = true
                 } content: {
                     WavyTrack(fraction: 0.5, active: palette.accent,
-                              squiggly: true, isPlaying: true)
+                              squiggly: true, isPlaying: true, compact: true)
                 }
             }
 

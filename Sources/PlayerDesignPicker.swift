@@ -134,7 +134,7 @@ struct PhoneFrame<Content: View>: View {
         // interior to exactly the screen size so nothing spills past the clip.
         GeometryReader { g in
             content()
-                .frame(width: g.size.width, height: g.size.height)
+                .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
                 .clipShape(RoundedRectangle(cornerRadius: 33, style: .continuous))
         }
             .overlay(alignment: .top) {
@@ -249,7 +249,7 @@ private struct PreviewSlider: View {
                                      label: capsuleLabel, compact: true)
                     case .wavy:
                         WavyTrack(fraction: player.progress, active: player.artColor,
-                                  squiggly: look.squigglySlider, isPlaying: player.isPlaying)
+                                  squiggly: look.squigglySlider, isPlaying: player.isPlaying, compact: true)
                     }
                 }
                 .frame(maxHeight: .infinity, alignment: .center)
