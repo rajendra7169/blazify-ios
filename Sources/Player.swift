@@ -51,6 +51,13 @@ final class Player: ObservableObject {
     private var statusObs: NSKeyValueObservation?
     private var rateObs: NSKeyValueObservation?
     private var isSeeking = false
+    /// Crossfade needs a second player: one AVPlayer holds one item, so the
+    /// outgoing song keeps playing on this one while the new song starts.
+    private var fadePlayer: AVPlayer?
+    private var fadeTimer: Timer?
+    /// True while a crossfade is running, so the normal end-of-track handler
+    /// doesn't also try to advance.
+    private var crossfading = false
     private var endHandled = false
     private var artwork: MPMediaItemArtwork?
 
@@ -353,6 +360,7 @@ final class Player: ObservableObject {
     }
 
     func jump(to i: Int) {
+        cancelCrossfade()
         guard queue.indices.contains(i) else { return }
         index = i
         loadCurrent()
@@ -510,7 +518,9 @@ final class Player: ObservableObject {
     /// Advance once per track, whether triggered by the end notification or the
     /// time-observer backup.
     private func trackEnded() {
-        guard !endHandled else { return }
+        // A crossfade is already advancing the queue; the outgoing item hitting
+        // its end must not advance it a second time.
+        guard !crossfading, !endHandled else { return }
         endHandled = true
         if sleepAtEndOfSong {
             sleepAtEndOfSong = false
@@ -581,6 +591,7 @@ final class Player: ObservableObject {
 
     private func loadCurrent() {
         guard let track = current else { return }
+        if !crossfading { cancelCrossfade() }
         // Last.fm: announce the song now, and arm the scrobble for later.
         scrobbleStart = Date()
         scrobbled = false
@@ -712,24 +723,7 @@ final class Player: ObservableObject {
         // The single source of truth for the transport: whatever the player is
         // actually doing. Anything that pauses us — an interruption, a route
         // change, a stall — now moves the icon too.
-        rateObs = p.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                let playing = player.timeControlStatus != .paused
-                if self.isPlaying != playing {
-                    self.isPlaying = playing
-                    self.updateNowPlaying()
-                }
-            }
-        }
-        timeObserver = p.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
-            queue: .main,
-        ) { [weak self] time in
-            guard let self, !self.isSeeking else { return }
-            self.currentTime = time.seconds.isFinite ? time.seconds : 0
-            self.considerScrobble()
-        }
+        attachObservers(to: p)
         // A session restored from disk resumes at its saved position, paused —
         // opening the app should never start music on its own.
         let target = resumePosition
@@ -747,6 +741,155 @@ final class Player: ObservableObject {
         p.rate = Float(PlaybackPrefs.shared.speed)
         isPlaying = true
         updateNowPlaying()
+    }
+
+    // MARK: - Crossfade
+
+    /// Begin blending into the next song once the current one is inside the
+    /// configured window. Only for a real next track — a radio continuation or
+    /// the end of the queue falls through to the normal handler.
+    private func considerCrossfade() {
+        let prefs = PlaybackPrefs.shared
+        guard prefs.crossfade, !crossfading, isPlaying,
+              repeatMode != .one, duration > 0,
+              queue.indices.contains(index + 1)
+        else { return }
+        let window = prefs.crossfadeDuration
+        guard duration - currentTime <= window, duration - currentTime > 0.2 else { return }
+
+        crossfading = true
+        let upcoming = queue[index + 1]
+        Task { @MainActor in
+            guard let url = await self.resolvedURL(for: upcoming) else {
+                self.crossfading = false
+                return
+            }
+            self.startCrossfade(to: url, over: window)
+        }
+    }
+
+    /// The playable URL for a track: a download, then the cache, then the network.
+    private func resolvedURL(for track: Track) async -> URL? {
+        if let local = Downloads.shared.localAudioURL(for: track.videoId) { return local }
+        if let cached = AudioCache.shared.cachedURL(for: track.videoId) { return cached }
+        return await YouTube.streamURL(for: track.videoId)?.url
+    }
+
+    private func startCrossfade(to url: URL, over seconds: Double) {
+        guard let outgoing = avPlayer else { crossfading = false; return }
+
+        let asset = AVURLAsset(url: url, options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
+        let item = AVPlayerItem(asset: asset)
+        let incoming = AVPlayer(playerItem: item)
+        incoming.volume = 0
+        fadePlayer = incoming
+        incoming.play()
+        incoming.rate = Float(PlaybackPrefs.shared.speed)
+
+        let startVolume = outgoing.volume
+        let steps = max(Int(seconds * 20), 1)
+        var step = 0
+        fadeTimer?.invalidate()
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: seconds / Double(steps),
+                                         repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            step += 1
+            let t = Float(min(Double(step) / Double(steps), 1))
+            outgoing.volume = startVolume * (1 - t)
+            incoming.volume = startVolume * t
+            guard step >= steps else { return }
+            timer.invalidate()
+            self.finishCrossfade(volume: startVolume)
+        }
+    }
+
+    /// Hand over to the faded-in player. Deliberately does NOT call
+    /// `loadCurrent()` — that would build a third player and restart the song
+    /// we've just spent the whole fade blending into. Everything except the
+    /// audio is refreshed here instead.
+    private func finishCrossfade(volume: Float) {
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        guard let incoming = fadePlayer, index < queue.count - 1 else {
+            cancelCrossfade()
+            return
+        }
+
+        avPlayer?.pause()
+        removeTimeObserver()
+        statusObs = nil
+        rateObs = nil
+
+        avPlayer = incoming
+        incoming.volume = volume
+        fadePlayer = nil
+        crossfading = false
+
+        index += 1
+        adoptPlayingTrack()
+    }
+
+    /// Refresh everything the UI and the system need for the track that is
+    /// already playing on the adopted player.
+    private func adoptPlayingTrack() {
+        guard let track = current, let player = avPlayer else { return }
+
+        scrobbleStart = Date()
+        scrobbled = false
+        Task { await LastFM.shared.nowPlaying(track) }
+
+        endHandled = false
+        isLoading = false
+        lastError = nil
+        artwork = nil
+        artColor = Blaze.amber
+        loadArtwork(track.thumbnailURL)
+
+        let realDuration = player.currentItem?.duration.seconds ?? track.duration
+        duration = realDuration.isFinite && realDuration > 0 ? realDuration : track.duration
+        currentTime = player.currentTime().seconds
+        isPlaying = true
+
+        countPlay(track)
+        saveQueue()
+        updateNowPlaying()
+        warmLyrics(for: track, duration: duration)
+        prefetchNext()
+        Task { @MainActor in ListenTogether.shared.broadcastTrack(track, position: 0) }
+
+        attachObservers(to: player)
+    }
+
+    /// The time and rate observers, shared by a freshly built player and one
+    /// adopted from a crossfade.
+    private func attachObservers(to player: AVPlayer) {
+        timeObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
+            queue: .main,
+        ) { [weak self] time in
+            guard let self, !self.isSeeking else { return }
+            self.currentTime = time.seconds.isFinite ? time.seconds : 0
+            self.considerScrobble()
+            self.considerCrossfade()
+        }
+        rateObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let playing = player.timeControlStatus != .paused
+                if self.isPlaying != playing {
+                    self.isPlaying = playing
+                    self.updateNowPlaying()
+                }
+            }
+        }
+    }
+
+    private func cancelCrossfade() {
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        fadePlayer?.pause()
+        fadePlayer = nil
+        crossfading = false
     }
 
     /// When the current song started, and whether it's already been scrobbled.
