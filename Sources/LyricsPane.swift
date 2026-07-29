@@ -171,14 +171,15 @@ struct LyricsPane: View {
                         let target = anchorY + (map[i] ?? 0) + manualOffset
                         let distance = abs(i - scrollTo)
 
-                        Text(line.text.isEmpty ? "♪" : line.text)
-                            .font(.system(size: prefs.textSize, weight: .bold))
-                            .tracking(-0.5)
-                            // Android stores line spacing as a multiplier of the
-                            // type size; SwiftUI wants the extra leading in points.
-                            .lineSpacing(prefs.textSize * (prefs.lineSpacing - 1))
-                            .multilineTextAlignment(look.lyricsPosition.textAlignment)
-                            .foregroundStyle(.white.opacity(alpha(distance: distance, isActive: i == highlight)))
+                        // Android stores line spacing as a multiplier of the
+                        // type size; the line view converts it to leading.
+                        LyricsAnimatedLine(
+                            line: line, position: pos, style: prefs.animation,
+                            isActive: i == highlight, size: prefs.textSize,
+                            spacing: prefs.lineSpacing,
+                            alignment: look.lyricsPosition.textAlignment,
+                            frameAlignment: look.lyricsPosition.frameAlignment,
+                            color: .white.opacity(alpha(distance: distance, isActive: i == highlight)))
                             .shadow(color: prefs.glowEffect && i == highlight
                                     ? .white.opacity(0.45) : .clear,
                                     radius: 12)
