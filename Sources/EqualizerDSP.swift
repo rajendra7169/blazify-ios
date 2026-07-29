@@ -1,5 +1,6 @@
 import Accelerate
 import Foundation
+import os
 
 /// A single biquad section, Direct Form II transposed (the stable arrangement
 /// for time-varying coefficients — moving a slider can't make it blow up).

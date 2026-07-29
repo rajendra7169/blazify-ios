@@ -133,7 +133,7 @@ enum EqualizerTap {
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
             clientInfo: nil,
-            init: tapInit,
+            `init`: tapInit,
             finalize: tapFinalize,
             prepare: tapPrepare,
             unprepare: tapUnprepare,
