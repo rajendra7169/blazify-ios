@@ -18,6 +18,8 @@ struct SettingsView: View {
     @State private var showAbout = false
     @State private var showLookFeel = false
     @State private var showTogether = false
+    @State private var showPrivacy = false
+    @State private var showChangelog = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -25,7 +27,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog }
     }
 
     private struct Group: Identifiable {
@@ -62,7 +64,8 @@ struct SettingsView: View {
                     action: .together),
             ]),
             Group(title: "Privacy & data", rows: [
-                Row(icon: "lock", title: "Privacy", subtitle: "History, pauses, listening data"),
+                Row(icon: "lock", title: "Privacy", subtitle: "Pause or clear listen and search history",
+                    action: .privacy),
                 Row(icon: "internaldrive", title: "Storage",
                     subtitle: "Cache, downloads, clear data", action: .storage),
                 Row(icon: "arrow.clockwise", title: "Backup and restore",
@@ -70,7 +73,8 @@ struct SettingsView: View {
             ]),
             Group(title: "About", rows: [
                 Row(icon: "info.circle", title: "About", subtitle: "Version and developer", action: .about),
-                Row(icon: "newspaper", title: "Changelog", subtitle: "What's new in this version"),
+                Row(icon: "newspaper", title: "Changelog", subtitle: "What's new in each release",
+                    action: .changelog),
             ]),
         ]
     }
@@ -152,6 +156,16 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAbout) {
             NavigationStack { AboutView() }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .sheet(isPresented: $showPrivacy) {
+            NavigationStack { PrivacyView() }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .sheet(isPresented: $showChangelog) {
+            ChangelogView()
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
@@ -303,6 +317,8 @@ struct SettingsView: View {
             case .about: showAbout = true
             case .lookFeel: showLookFeel = true
             case .together: showTogether = true
+            case .privacy: showPrivacy = true
+            case .changelog: showChangelog = true
             case .none: break
             }
         } label: {
