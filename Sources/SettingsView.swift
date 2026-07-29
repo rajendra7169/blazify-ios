@@ -20,6 +20,7 @@ struct SettingsView: View {
     @State private var showTogether = false
     @State private var showPrivacy = false
     @State private var showChangelog = false
+    @State private var showLyrics = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -27,7 +28,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics }
     }
 
     private struct Group: Identifiable {
@@ -54,7 +55,8 @@ struct SettingsView: View {
             Group(title: "Content", rows: [
                 Row(icon: "globe", title: "Content", subtitle: "Region, explicit, video songs"),
                 Row(icon: "quote.bubble", title: "Lyrics",
-                    subtitle: "Sources, sync, translation, display"),
+                    subtitle: "Sources, priority, style, display",
+                    action: .lyrics),
             ]),
             Group(title: "Connections", rows: [
                 Row(icon: "link", title: "Integrations",
@@ -173,6 +175,11 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showPrivacy) {
             NavigationStack { PrivacyView() }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .sheet(isPresented: $showLyrics) {
+            NavigationStack { LyricsSettingsView() }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
@@ -331,6 +338,7 @@ struct SettingsView: View {
             case .together: showTogether = true
             case .privacy: showPrivacy = true
             case .changelog: showChangelog = true
+            case .lyrics: showLyrics = true
             case .none: break
             }
         } label: {
