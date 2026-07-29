@@ -10,11 +10,24 @@ final class Downloads: ObservableObject {
     static let shared = Downloads()
 
     @Published private(set) var states: [String: DownloadState] = [:]
+    /// 0…1 while a song is downloading, so rows can draw a ring.
+    @Published private(set) var progress: [String: Double] = [:]
     @Published private(set) var tracks: [Track] = []   // downloaded, newest first
     /// Bytes on disk, published so Settings never has to stat files in a body.
     @Published private(set) var sizeBytes: Int64 = 0
 
     private let dir: URL
+
+    /// Our own session: the shared one allows six connections per host, and
+    /// every range of every song would compete for them. Audio never goes in
+    /// the URL cache — these are megabytes apiece.
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpMaximumConnectionsPerHost = 8
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.timeoutIntervalForRequest = 60
+        return URLSession(configuration: config)
+    }()
 
     /// Recount in the background and publish.
     func refreshSize() {
@@ -86,12 +99,13 @@ final class Downloads: ObservableObject {
     // parallel — thirty-plus requests contending — and some tasks just died.
     private var pending: [Track] = []
     private var activeCount = 0
-    private let maxConcurrent = 2
+    private let maxConcurrent = 3
 
     func download(_ track: Track) {
         let id = track.videoId
         guard !id.isEmpty, state(id) == .none else { return }
         states[id] = .downloading
+        progress[id] = 0
         pending.append(track)
         pump()
     }
@@ -122,6 +136,7 @@ final class Downloads: ObservableObject {
         tracks.removeAll { $0.videoId == id }
         durations[id] = nil
         states[id] = nil
+        progress[id] = nil
         saveMeta()
     }
 
@@ -137,13 +152,10 @@ final class Downloads: ObservableObject {
             await MainActor.run { self.states[id] = DownloadState.none }
             return
         }
-        var req = URLRequest(url: stream.url)
-        req.setValue(YouTube.visionUA, forHTTPHeaderField: "User-Agent")
-
         do {
-            let (tmp, _) = try await URLSession.shared.download(for: req)
+            let data = try await fetchAudio(stream.url, id: id)
             try? FileManager.default.removeItem(at: audioURL(for: id))
-            try FileManager.default.moveItem(at: tmp, to: audioURL(for: id))
+            try data.write(to: audioURL(for: id))
 
             // The song is offline the moment the audio lands — mark it done NOW.
             // Art and lyrics used to run first, which meant a five-provider
@@ -155,13 +167,83 @@ final class Downloads: ObservableObject {
                 self.tracks.removeAll { $0.videoId == id }
                 self.tracks.insert(stored, at: 0)
                 self.states[id] = .done
+                self.progress[id] = nil
                 self.saveMeta()
                 self.refreshSize()
             }
-            await enrich(track, id: id, duration: stream.duration)
+            // Detached, so the queue slot frees immediately. Awaiting this held
+            // a slot through the artwork fetch AND a five-provider lyrics hunt,
+            // which is most of why a batch of songs crawled.
+            Task.detached(priority: .utility) { [weak self] in
+                await self?.enrich(track, id: id, duration: stream.duration)
+            }
         } catch {
-            await MainActor.run { self.states[id] = DownloadState.none }
+            await MainActor.run {
+                self.states[id] = DownloadState.none
+                self.progress[id] = nil
+            }
         }
+    }
+
+    // MARK: Ranged fetch
+
+    /// googlevideo throttles a plain sequential GET to roughly playback speed —
+    /// measured at 0.03 MB/s, where the same file fetched as parallel byte
+    /// ranges came down at 7.35 MB/s. So always range-fetch, which also gives
+    /// us progress for free as each range lands.
+    private func fetchAudio(_ url: URL, id: String) async throws -> Data {
+        let chunkSize = 512 * 1024
+
+        // The first range doubles as the size probe: Content-Range carries the
+        // total, so this costs no extra round trip.
+        let (head, total) = try await Downloads.fetchRange(url, 0, chunkSize - 1)
+        guard total > head.count else { return head }
+
+        var received = head.count
+        await setProgress(id, Double(received) / Double(total))
+
+        var parts: [Int: Data] = [0: head]
+        let chunks = (total + chunkSize - 1) / chunkSize
+        try await withThrowingTaskGroup(of: (Int, Data).self) { group in
+            for index in 1..<chunks {
+                let from = index * chunkSize
+                let to = min(from + chunkSize, total) - 1
+                group.addTask {
+                    let part = try await Downloads.fetchRange(url, from, to).0
+                    return (index, part)
+                }
+            }
+            for try await (index, part) in group {
+                parts[index] = part
+                received += part.count
+                await setProgress(id, Double(received) / Double(total))
+            }
+        }
+
+        var out = Data(capacity: total)
+        for index in 0..<chunks { out.append(parts[index] ?? Data()) }
+        return out
+    }
+
+    /// One byte range. Returns the bytes and the resource's full length, read
+    /// from Content-Range (`bytes 0-524287/3623144`).
+    private static func fetchRange(_ url: URL, _ from: Int, _ to: Int) async throws -> (Data, Int) {
+        var req = URLRequest(url: url)
+        req.setValue(YouTube.visionUA, forHTTPHeaderField: "User-Agent")
+        req.setValue("bytes=\(from)-\(to)", forHTTPHeaderField: "Range")
+        let (data, response) = try await session.data(for: req)
+        var total = data.count
+        if let http = response as? HTTPURLResponse,
+           let header = http.value(forHTTPHeaderField: "Content-Range"),
+           let tail = header.split(separator: "/").last,
+           let parsed = Int(tail) {
+            total = parsed
+        }
+        return (data, total)
+    }
+
+    private func setProgress(_ id: String, _ value: Double) async {
+        await MainActor.run { self.progress[id] = min(max(value, 0), 1) }
     }
 
     /// Best-effort offline extras after the audio is safe: artwork on disk and

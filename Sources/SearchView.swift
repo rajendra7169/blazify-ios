@@ -394,8 +394,38 @@ struct TrackRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+            DownloadRing(videoId: track.videoId)
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+}
+
+/// The ring on a row that's downloading. It observes Downloads on its own so a
+/// progress tick invalidates this 18pt view and not the whole list row.
+struct DownloadRing: View {
+    @Environment(\.palette) private var palette
+    @ObservedObject private var downloads = Downloads.shared
+    let videoId: String
+
+    var body: some View {
+        if downloads.state(videoId) == .downloading {
+            let value = downloads.progress[videoId] ?? 0
+            ZStack {
+                Circle()
+                    .stroke(palette.onSurfaceVariant.opacity(0.25), lineWidth: 2.5)
+                Circle()
+                    // A sliver always shows, so the ring reads as "started"
+                    // rather than empty while the first range is in flight.
+                    .trim(from: 0, to: max(value, 0.03))
+                    .stroke(palette.accent,
+                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeOut(duration: 0.25), value: value)
+            }
+            .frame(width: 18, height: 18)
+            .padding(.leading, 6)
+            .transition(.opacity)
+        }
     }
 }
