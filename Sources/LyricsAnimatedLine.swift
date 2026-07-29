@@ -18,6 +18,8 @@ struct LyricsAnimatedLine: View {
     let alignment: TextAlignment
     let frameAlignment: Alignment
     let color: Color
+    /// Romanisation or translation, drawn under the line. Nil when neither is on.
+    var secondary: String?
 
     private var font: Font { .system(size: size, weight: .bold) }
     private var leading: CGFloat { size * (spacing - 1) }
@@ -27,6 +29,19 @@ struct LyricsAnimatedLine: View {
     private var animating: Bool { isActive && line.hasWordTimings && style != .none }
 
     var body: some View {
+        VStack(alignment: frameAlignment.horizontal, spacing: 4) {
+            primary
+            if let secondary, !secondary.isEmpty {
+                Text(secondary)
+                    .font(.system(size: size * 0.6, weight: .medium))
+                    .multilineTextAlignment(alignment)
+                    .foregroundStyle(color.opacity(0.65))
+                    .frame(maxWidth: .infinity, alignment: frameAlignment)
+            }
+        }
+    }
+
+    @ViewBuilder private var primary: some View {
         if !animating {
             plain
         } else {

@@ -11,6 +11,7 @@ struct LyricsPane: View {
     @ObservedObject var player: Player
     @ObservedObject private var look = LookFeel.shared
     @ObservedObject private var prefs = LyricsPrefs.shared
+    @ObservedObject private var secondary = LyricsSecondary.shared
     /// The 4 Hz position drives the sync anchor, so observe it directly rather
     /// than trusting the parent to re-render us.
     @ObservedObject private var clock: PlaybackClock
@@ -56,6 +57,7 @@ struct LyricsPane: View {
         .sheet(isPresented: $showVersions) {
             LyricsVersionPicker(candidates: candidates, current: result) { pick in
                 result = pick.result
+                prepareSecondary(result)
                 provider = pick.provider
                 if let id = player.current?.videoId { LyricsStore.save(pick, for: id) }
                 showVersions = false
@@ -140,6 +142,15 @@ struct LyricsPane: View {
 
     // MARK: The absolutely-positioned lyric stage
 
+    /// Kick off the second line for these lyrics. Cached per song inside
+    /// `LyricsSecondary`, so this is safe to call whenever a result arrives and
+    /// never fires a paid translation twice for the same track.
+    private func prepareSecondary(_ result: LyricsResult?) {
+        guard let result, !result.lines.isEmpty,
+              let id = player.current?.videoId else { return }
+        LyricsSecondary.shared.prepare(videoId: id, lyrics: result.lines)
+    }
+
     private func syncedStage(_ lines: [LyricLine]) -> some View {
         GeometryReader { geo in
             let anchorY = geo.size.height * anchorRatio
@@ -151,7 +162,9 @@ struct LyricsPane: View {
             let secondary = secondaryAgent(lines)
             let hs = items.map { item -> CGFloat in
                 switch item {
-                case .line(_, let line): return lineHeight(line.text, width: textWidth)
+                case .line(let i, let line):
+                    return lineHeight(line.text, width: textWidth,
+                                      secondary: secondaryText(i))
                 case .gap: return Self.gapHeight
                 }
             }
@@ -195,7 +208,8 @@ struct LyricsPane: View {
                                     spacing: effectiveSpacing,
                                     alignment: side.textAlignment,
                                     frameAlignment: side.frameAlignment,
-                                    color: .white.opacity(alpha(distance: distance, isActive: active)))
+                                    color: .white.opacity(alpha(distance: distance, isActive: active)),
+                                    secondary: secondaryText(itemLineIndex(item)))
                                     .shadow(color: effectiveGlow && active
                                             ? .white.opacity(0.45) : .clear,
                                             radius: 12)
@@ -314,21 +328,44 @@ struct LyricsPane: View {
         return idx
     }
 
+    /// The romanisation or translation for a line, if one has been prepared.
+    private func secondaryText(_ lineIndex: Int?) -> String? {
+        guard let lineIndex, let id = player.current?.videoId else { return nil }
+        return secondary.text(for: id, line: lineIndex)
+    }
+
+    private func itemLineIndex(_ item: StageItem) -> Int? {
+        if case .line(let i, _) = item { return i }
+        return nil
+    }
+
     /// Wrapped height of a line plus its 12pt vertical padding, measured with
     /// the very type it's drawn with — size and spacing both come from Settings,
     /// so a stale constant here would misplace every line.
-    private func lineHeight(_ text: String, width: CGFloat) -> CGFloat {
+    private func lineHeight(_ text: String, width: CGFloat,
+                            secondary: String? = nil) -> CGFloat {
         guard width > 0 else { return fallbackHeight }
         let body = text.isEmpty ? "♪" : text
-        let font = UIFont.systemFont(ofSize: effectiveSize, weight: .bold)
         let leading = effectiveSize * (effectiveSpacing - 1)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = leading
-        let rect = (body as NSString).boundingRect(
-            with: CGSize(width: width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: font, .paragraphStyle: paragraph], context: nil)
-        return ceil(rect.height) + 24
+
+        func measure(_ string: String, size: CGFloat, weight: UIFont.Weight) -> CGFloat {
+            let font = UIFont.systemFont(ofSize: size, weight: weight)
+            return (string as NSString).boundingRect(
+                with: CGSize(width: width, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: font, .paragraphStyle: paragraph], context: nil).height
+        }
+
+        var height = measure(body, size: effectiveSize, weight: .bold)
+        // The romanisation / translation sits under the line at 0.6× with a 4pt
+        // gap — the same numbers the line view draws it with, so the measured
+        // height and the drawn height can't drift apart.
+        if let secondary, !secondary.isEmpty {
+            height += 4 + measure(secondary, size: effectiveSize * 0.6, weight: .medium)
+        }
+        return ceil(height) + 24
     }
 
     /// Linear alpha ramp over the top 130pt and the bottom 160pt.
@@ -436,6 +473,7 @@ struct LyricsPane: View {
         // A downloaded song carries its lyrics on disk — use them offline.
         if let cached = Downloads.shared.cachedLyrics(for: track.videoId) {
             result = cached
+            prepareSecondary(result)
             loading = false
             ready = true
             return
@@ -445,6 +483,7 @@ struct LyricsPane: View {
         if let saved = LyricsStore.load(for: track.videoId) {
             provider = saved.provider
             result = saved.result
+            prepareSecondary(result)
             loading = false
             ready = true
             // Still offer the alternatives; the player has usually warmed these
@@ -462,6 +501,7 @@ struct LyricsPane: View {
         await MainActor.run {
             candidates = found
             result = Lyrics.best(found)
+            prepareSecondary(result)
             provider = found.first(where: { $0.result == Lyrics.best(found) })?.provider ?? Lyrics.sourceName
             loading = false
         }
