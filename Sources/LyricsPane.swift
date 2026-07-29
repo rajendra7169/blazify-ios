@@ -144,15 +144,22 @@ struct LyricsPane: View {
         GeometryReader { geo in
             let anchorY = geo.size.height * anchorRatio
             let textWidth = geo.size.width - 48
-            // Heights are measured deterministically from the text metrics, so the
-            // stack positions correctly on the very first frame (no measure pass).
-            let hs = lines.map { lineHeight($0.text, width: textWidth) }
+            // Lines, plus the instrumental gaps between them when the Blazify
+            // style is on. Heights are measured deterministically from the text
+            // metrics, so the stack positions correctly on the very first frame.
+            let items = stageItems(lines)
+            let hs = items.map { item -> CGFloat in
+                switch item {
+                case .line(_, let line): return lineHeight(line.text, width: textWidth)
+                case .gap: return Self.gapHeight
+                }
+            }
 
             TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !player.isPlaying)) { timeline in
                 let pos = smoothedPosition(at: timeline.date)
-                let highlight = index(in: lines, at: pos)             // no lead
+                let highlight = itemIndex(in: items, at: pos)          // no lead
                 let scrollTo = prefs.autoScroll
-                    ? max(index(in: lines, at: pos + 0.25), 0)   // +250ms scroll lead
+                    ? max(itemIndex(in: items, at: pos + 0.25), 0)     // +250ms scroll lead
                     : 0
                 let map = positions(active: scrollTo, heights: hs)
 
@@ -167,31 +174,42 @@ struct LyricsPane: View {
                             .animation(lineAnimation(distance: scrollTo), value: map[0])
                     }
 
-                    ForEach(Array(lines.enumerated()), id: \.element.id) { i, line in
+                    ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
                         let target = anchorY + (map[i] ?? 0) + manualOffset
                         let distance = abs(i - scrollTo)
+                        let active = i == highlight
 
-                        // Android stores line spacing as a multiplier of the
-                        // type size; the line view converts it to leading.
-                        LyricsAnimatedLine(
-                            line: line, position: pos, style: prefs.animation,
-                            isActive: i == highlight, size: prefs.textSize,
-                            spacing: prefs.lineSpacing,
-                            alignment: look.lyricsPosition.textAlignment,
-                            frameAlignment: look.lyricsPosition.frameAlignment,
-                            color: .white.opacity(alpha(distance: distance, isActive: i == highlight)))
-                            .shadow(color: prefs.glowEffect && i == highlight
-                                    ? .white.opacity(0.45) : .clear,
-                                    radius: 12)
-                            .scaleEffect(prefs.glowEffect && i == highlight ? 1.03 : 1,
-                                         anchor: look.lyricsPosition.scaleAnchor)
+                        Group {
+                            switch item {
+                            case .gap(let start, let end):
+                                IntervalIndicator(start: start, end: end, position: pos,
+                                                  active: active, tint: .white)
+                            case .line(_, let line):
+                                // Android stores line spacing as a multiplier of
+                                // the type size; the line view converts it to leading.
+                                LyricsAnimatedLine(
+                                    line: line, position: pos, style: effectiveAnimation,
+                                    isActive: active, size: effectiveSize,
+                                    spacing: effectiveSpacing,
+                                    alignment: look.lyricsPosition.textAlignment,
+                                    frameAlignment: look.lyricsPosition.frameAlignment,
+                                    color: .white.opacity(alpha(distance: distance, isActive: active)))
+                                    .shadow(color: effectiveGlow && active
+                                            ? .white.opacity(0.45) : .clear,
+                                            radius: 12)
+                                    .scaleEffect(effectiveGlow && active ? 1.03 : 1,
+                                                 anchor: look.lyricsPosition.scaleAnchor)
+                            }
+                        }
                             .frame(maxWidth: .infinity, alignment: look.lyricsPosition.frameAlignment)
                             .padding(.vertical, 12)
                             .offset(y: target)
                             .animation(lineAnimation(distance: distance), value: target)
                             .animation(.easeInOut(duration: 0.25), value: highlight)
                             .contentShape(Rectangle())
-                            .onTapGesture { if prefs.clickToSeek { seek(to: line) } }
+                            .onTapGesture {
+                                if prefs.clickToSeek, case .line(_, let line) = item { seek(to: line) }
+                            }
                     }
                 }
                 // Must fill the stage: offsets don't affect layout, so without an
@@ -206,14 +224,77 @@ struct LyricsPane: View {
         }
     }
 
+    // MARK: Blazify style
+
+    /// The Blazify renderer sets its own type and always highlights word by
+    /// word — which is why Settings hides size, spacing, glow and animation
+    /// while it's on, exactly as Android hides them behind experimental lyrics.
+    private var effectiveSize: Double { prefs.blazifyStyle ? 34 : prefs.textSize }
+    private var effectiveSpacing: Double { prefs.blazifyStyle ? 1.3 : prefs.lineSpacing }
+    private var effectiveAnimation: LyricsAnimation { prefs.blazifyStyle ? .apple : prefs.animation }
+    private var effectiveGlow: Bool { prefs.blazifyStyle ? true : prefs.glowEffect }
+
+    /// Instrumental breaks shorter than this aren't worth marking.
+    private static let minGap: Double = 5
+    private static let gapHeight: CGFloat = 46
+
+    /// A line, or the instrumental gap before one.
+    enum StageItem: Identifiable {
+        case line(Int, LyricLine)
+        case gap(Double, Double)
+
+        var id: String {
+            switch self {
+            case .line(let i, _): return "line-\(i)"
+            case .gap(let start, let end): return "gap-\(start)-\(end)"
+            }
+        }
+    }
+
+    /// The display list. Only the Blazify style inserts gap markers; the classic
+    /// renderer gets the lines untouched, so its layout is unchanged.
+    private func stageItems(_ lines: [LyricLine]) -> [StageItem] {
+        guard prefs.blazifyStyle else {
+            return lines.enumerated().map { .line($0.offset, $0.element) }
+        }
+        var out: [StageItem] = []
+        var previousEnd: Double = 0
+        for (i, line) in lines.enumerated() {
+            // A line ends at its last syllable when we have word stamps, and at
+            // the next line's start when we don't.
+            if line.time - previousEnd >= Self.minGap {
+                out.append(.gap(previousEnd, line.time))
+            }
+            out.append(.line(i, line))
+            previousEnd = line.words.last?.end
+                ?? (i + 1 < lines.count ? min(lines[i + 1].time, line.time + 6) : line.time)
+        }
+        return out
+    }
+
+    /// Last item whose window has started — a gap counts as current until the
+    /// line after it begins.
+    private func itemIndex(in items: [StageItem], at pos: Double) -> Int {
+        var idx = -1
+        for (i, item) in items.enumerated() {
+            let start: Double
+            switch item {
+            case .line(_, let line): start = line.time
+            case .gap(let gapStart, _): start = gapStart
+            }
+            if start <= pos { idx = i } else { break }
+        }
+        return idx
+    }
+
     /// Wrapped height of a line plus its 12pt vertical padding, measured with
     /// the very type it's drawn with — size and spacing both come from Settings,
     /// so a stale constant here would misplace every line.
     private func lineHeight(_ text: String, width: CGFloat) -> CGFloat {
         guard width > 0 else { return fallbackHeight }
         let body = text.isEmpty ? "♪" : text
-        let font = UIFont.systemFont(ofSize: prefs.textSize, weight: .bold)
-        let leading = prefs.textSize * (prefs.lineSpacing - 1)
+        let font = UIFont.systemFont(ofSize: effectiveSize, weight: .bold)
+        let leading = effectiveSize * (effectiveSpacing - 1)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = leading
         let rect = (body as NSString).boundingRect(

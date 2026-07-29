@@ -180,3 +180,41 @@ struct WordFlow: Layout {
         return rows
     }
 }
+
+/// The instrumental-break marker, ported from `IntervalIndicator` in
+/// ExperimentalLyrics.kt: three dots that swell in while the break runs and fill
+/// left-to-right as it elapses, then collapse as the next line arrives.
+struct IntervalIndicator: View {
+    let start: Double
+    let end: Double
+    let position: Double
+    /// True while this break is the current item.
+    let active: Bool
+    let tint: Color
+
+    /// Android stops the indicator 650ms before the next line, so it's gone by
+    /// the time the singing starts.
+    private var progress: Double {
+        let span = end - 0.65 - start
+        guard span > 0 else { return 0 }
+        return min(max((position - start) / span, 0), 1)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(0..<3, id: \.self) { i in
+                // Each dot lights as its third of the break goes by, and gives a
+                // small pulse on the way.
+                let share = min(max(progress * 3 - Double(i), 0), 1)
+                Circle()
+                    .fill(tint.opacity(0.25 + 0.75 * share))
+                    .frame(width: 10, height: 10)
+                    .scaleEffect(active ? 1 + 0.35 * sin(share * .pi) : 0.6)
+            }
+        }
+        .opacity(active ? 1 : 0.25)
+        .animation(.easeInOut(duration: 0.35), value: active)
+        .animation(.linear(duration: 0.12), value: progress)
+        .frame(height: 22)
+    }
+}
