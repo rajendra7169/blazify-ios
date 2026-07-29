@@ -198,6 +198,16 @@ final class Player: ObservableObject {
         loadCurrent()
     }
 
+    /// Slot a song in right after the current one — Android's "Play next".
+    func playNext(_ track: Track) {
+        guard hasTrack else {
+            play([track], startAt: 0)
+            return
+        }
+        queue.insert(track, at: min(index + 1, queue.count))
+        originalQueue.insert(track, at: min(index + 1, originalQueue.count))
+    }
+
     /// Append songs to the end of the queue, starting playback if idle.
     func addToQueue(_ tracks: [Track]) {
         let fresh = tracks.filter { track in

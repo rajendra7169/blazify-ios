@@ -49,6 +49,11 @@ struct SongListScreen: View {
     @State private var searching = false
     @State private var query = ""
     @State private var showMenu = false
+    /// The song whose ⋮ menu asked for Add to playlist.
+    @State private var playlistTrack: Track?
+    /// Artist opened from a song's ⋮ menu.
+    @State private var artistId: String?
+    @State private var showArtist = false
 
     /// The active filter's songs, or the plain list when there are no filters.
     private var source: [Track] {
@@ -96,15 +101,22 @@ struct SongListScreen: View {
                 sortHeader
 
                 ForEach(Array(shown.enumerated()), id: \.element.id) { index, track in
-                    Button {
-                        player.play(shown, startAt: index)
-                        player.showFullPlayer = true
-                    } label: {
-                        TrackRow(track: track)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 6)
+                    HStack(spacing: 0) {
+                        Button {
+                            player.play(shown, startAt: index)
+                            player.showFullPlayer = true
+                        } label: {
+                            TrackRow(track: track)
+                                .padding(.leading, 16)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+
+                        SongRowMenu(track: track, player: player,
+                                    onAddToPlaylist: { playlistTrack = track },
+                                    onOpenArtist: { openArtist(track) })
+                            .padding(.trailing, 8)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 if shown.isEmpty {
@@ -135,9 +147,18 @@ struct SongListScreen: View {
         }
         .confirmationDialog(title, isPresented: $showMenu, titleVisibility: .visible) {
             Button("Add to queue") { player.addToQueue(source) }
-            Button("Download all") { Downloads.shared.downloadAll(source) }
+            // Pointless on a list that's already offline (the Downloaded list).
+            if !source.allSatisfy({ Downloads.shared.isDownloaded($0.videoId) }) {
+                Button("Download all") { Downloads.shared.downloadAll(source) }
+            }
             Button("Export playlist") { export() }
             Button("Cancel", role: .cancel) {}
+        }
+        .sheet(item: $playlistTrack) { AddToPlaylistSheet(track: $0) }
+        .fullScreenCover(isPresented: $showArtist) {
+            if let artistId {
+                ArtistView(browseId: artistId, player: player)
+            }
         }
     }
 
@@ -274,6 +295,22 @@ struct SongListScreen: View {
         .background(palette.scaffold)
     }
 
+    /// Resolve the channel when the row didn't carry one (downloads often don't).
+    private func openArtist(_ track: Track) {
+        if let id = track.artistId {
+            artistId = id
+            showArtist = true
+            return
+        }
+        Task {
+            let id = await YouTube.resolveArtistId(name: track.artist)
+            await MainActor.run {
+                artistId = id
+                if id != nil { showArtist = true }
+            }
+        }
+    }
+
     /// Writes the list out as M3U so it can be shared or re-imported.
     private func export() {
         var text = "#EXTM3U\n"
@@ -296,5 +333,70 @@ struct SongListScreen: View {
 extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
+    }
+}
+
+
+/// The ⋮ menu on every song row — the same options as Android's SongMenu.
+struct SongRowMenu: View {
+    @Environment(\.palette) private var palette
+    let track: Track
+    @ObservedObject var player: Player
+    let onAddToPlaylist: () -> Void
+    let onOpenArtist: () -> Void
+    @ObservedObject private var downloads = Downloads.shared
+
+    private var isFavorite: Bool { player.favorites.contains(track.videoId) }
+    private var isDownloaded: Bool { downloads.isDownloaded(track.videoId) }
+
+    var body: some View {
+        Menu {
+            Button { player.playNext(track) } label: {
+                Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+            Button { player.addToQueue([track]) } label: {
+                Label("Add to queue", systemImage: "text.badge.plus")
+            }
+            Button { player.setFavorite(track, liked: !isFavorite) } label: {
+                Label(isFavorite ? "Remove from favourites" : "Add to favourites",
+                      systemImage: isFavorite ? "heart.slash" : "heart")
+            }
+            Button(action: onAddToPlaylist) {
+                Label("Add to playlist", systemImage: "plus.circle")
+            }
+
+            Divider()
+
+            if isDownloaded {
+                Button(role: .destructive) { downloads.remove(track.videoId) } label: {
+                    Label("Remove download", systemImage: "trash")
+                }
+            } else {
+                Button { downloads.download(track) } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+            }
+            Button(action: onOpenArtist) {
+                Label("View artist", systemImage: "person")
+            }
+            Button { share() } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .frame(width: 40, height: 44)
+                .contentShape(Rectangle())
+        }
+    }
+
+    private func share() {
+        guard let url = URL(string: "https://music.youtube.com/watch?v=\(track.videoId)") else { return }
+        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first?.rootViewController?
+            .present(sheet, animated: true)
     }
 }
