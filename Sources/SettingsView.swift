@@ -22,6 +22,7 @@ struct SettingsView: View {
     @State private var showChangelog = false
     @State private var showLyrics = false
     @State private var showPlayerSettings = false
+    @State private var showStreams = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -29,7 +30,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams }
     }
 
     private struct Group: Identifiable {
@@ -52,7 +53,8 @@ struct SettingsView: View {
                     subtitle: "Quality, crossfade, sleep timer, queue",
                     action: .player),
                 Row(icon: "antenna.radiowaves.left.and.right", title: "Stream sources",
-                    subtitle: "Where audio is fetched from"),
+                    subtitle: "Which clients resolve a song, and in what order",
+                    action: .streams),
             ]),
             Group(title: "Content", rows: [
                 Row(icon: "globe", title: "Content", subtitle: "Region, explicit, video songs"),
@@ -191,6 +193,11 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showPlayerSettings) {
             NavigationStack { PlayerSettingsView().settingsMiniPlayer(player) }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .sheet(isPresented: $showStreams) {
+            NavigationStack { StreamSourcesView().settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
@@ -353,6 +360,7 @@ struct SettingsView: View {
             case .changelog: showChangelog = true
             case .lyrics: showLyrics = true
             case .player: showPlayerSettings = true
+            case .streams: showStreams = true
             case .none: break
             }
         } label: {

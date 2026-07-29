@@ -47,26 +47,50 @@ enum YouTube {
         let hit = urlCache[videoId]
         urlCacheLock.unlock()
         if let hit, hit.expires > Date() { return (hit.url, hit.duration) }
+
         let visitor = await visitorData()
-        var client: [String: Any] = [
-            "clientName": "VISIONOS", "clientVersion": visionVersion,
-            "deviceMake": "Apple", "deviceModel": "RealityDevice14,1",
-            "osName": "visionOS", "osVersion": "1.3.21O771",
-            "hl": "en", "gl": "US",
-        ]
-        if let visitor { client["visitorData"] = visitor }
+        // Settings → Stream sources: walk the chosen order until one client
+        // answers. Any single client can start being refused; the chain is what
+        // keeps playback working when that happens.
+        let clients = await MainActor.run { StreamPrefs.shared.order }
+        // Highest bitrate, lowest, or whatever the connection can carry.
+        let wantsLowest = await MainActor.run {
+            let quality = PlaybackPrefs.shared.quality
+            return quality == .low
+                || (quality == .auto && !Reachability.shared.isUnmetered)
+        }
+
+        for client in clients {
+            guard let picked = await resolve(videoId, with: client, visitor: visitor,
+                                             wantsLowest: wantsLowest) else { continue }
+            urlCacheLock.lock()
+            urlCache[videoId] = (picked.url, picked.duration, Date().addingTimeInterval(4 * 3600))
+            urlCacheLock.unlock()
+            return (picked.url, picked.duration)
+        }
+        return nil
+    }
+
+    /// One client's attempt at a playable audio URL.
+    private static func resolve(_ videoId: String, with client: StreamClient,
+                                visitor: String?,
+                                wantsLowest: Bool) async -> (url: URL, duration: Double)? {
+        var context = client.context
+        if let visitor { context["visitorData"] = visitor }
         let body: [String: Any] = [
-            "context": ["client": client],
+            "context": ["client": context],
             "videoId": videoId,
             "contentCheckOk": true, "racyCheckOk": true,
         ]
-        guard let json = await post(musicPlayer, name: "101", version: visionVersion,
-                                    userAgent: visionUA, visitor: visitor, body: body),
+        guard let json = await post(musicPlayer, name: client.number, version: client.version,
+                                    userAgent: client.userAgent, visitor: visitor, body: body),
+              (json["playabilityStatus"] as? [String: Any])?["status"] as? String == "OK",
               let streaming = json["streamingData"] as? [String: Any],
               let formats = streaming["adaptiveFormats"] as? [[String: Any]]
         else { return nil }
 
-        // Track loudness, so the player can even out volume between songs.
+        // Track loudness for volume normalisation. In testing only ANDROID_VR
+        // reports it, so this quietly stays empty on the other clients.
         if let config = json["playerConfig"] as? [String: Any],
            let audio = config["audioConfig"] as? [String: Any],
            let db = audio["loudnessDb"] as? Double {
@@ -75,15 +99,7 @@ enum YouTube {
             loudnessLock.unlock()
         }
 
-        // Audio/mp4 (AAC) with a direct url — iOS can't play Opus/WebM. Which
-        // one depends on Settings → Player: highest bitrate, lowest, or the
-        // best the connection can carry.
-        let wantsLowest = await MainActor.run {
-            let quality = PlaybackPrefs.shared.quality
-            return quality == .low
-                || (quality == .auto && !Reachability.shared.isUnmetered)
-        }
-
+        // Audio/mp4 (AAC) with a direct url — iOS can't play Opus/WebM.
         var best: [String: Any]?
         var bestRate = wantsLowest ? Int.max : -1
         for f in formats {
@@ -98,9 +114,6 @@ enum YouTube {
         if dur <= 0, let ls = (json["videoDetails"] as? [String: Any])?["lengthSeconds"] as? String {
             dur = Double(ls) ?? 0
         }
-        urlCacheLock.lock()
-        urlCache[videoId] = (url, dur, Date().addingTimeInterval(4 * 3600))
-        urlCacheLock.unlock()
         return (url, dur)
     }
 
