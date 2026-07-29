@@ -215,6 +215,9 @@ struct IntervalIndicator: View {
         .opacity(active ? 1 : 0.25)
         .animation(.easeInOut(duration: 0.35), value: active)
         .animation(.linear(duration: 0.12), value: progress)
+        // Centred regardless of the chosen text position, as Android's
+        // wrapContentWidth(CenterHorizontally) puts it.
+        .frame(maxWidth: .infinity, alignment: .center)
         .frame(height: 22)
     }
 }
