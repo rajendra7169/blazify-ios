@@ -43,30 +43,40 @@ struct PlayerView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [player.artColor, player.artColor.opacity(0.45), .black],
-                startPoint: .top, endPoint: .bottom,
-            )
-            .overlay(Color.black.opacity(0.2))
-            .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.6), value: player.artColor)
+            // The cover's presentation background is CLEAR (set in RootView), so
+            // the real app sits behind this. A dim that fades with the drag makes
+            // the app show through progressively as the sheet comes down —
+            // Android's bottom-sheet reveal — instead of a white void.
+            Color.black.opacity(0.5 * sheetProgress)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
 
-            if design == .fullArt, !lyricsMode {
-                fullArtBackground
+            ZStack {
+                LinearGradient(
+                    colors: [player.artColor, player.artColor.opacity(0.45), .black],
+                    startPoint: .top, endPoint: .bottom,
+                )
+                .overlay(Color.black.opacity(0.2))
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.6), value: player.artColor)
+
+                if design == .fullArt, !lyricsMode {
+                    fullArtBackground
+                }
+
+                content
+                    .padding(.bottom, 16)
+                    .foregroundStyle(.white)
+                    // Full-player content fades over progress 0.15…0.40, as in BottomSheet.kt.
+                    .opacity(min(max((sheetProgress - 0.15) * 4, 0), 1))
+                    .animation(.easeInOut(duration: 0.25), value: lyricsMode)
+                    .animation(.easeInOut(duration: 0.25), value: immersive)
             }
-
-            content
-                .padding(.bottom, 16)
-                .foregroundStyle(.white)
-                // Full-player content fades over progress 0.15…0.40, as in BottomSheet.kt.
-                .opacity(min(max((sheetProgress - 0.15) * 4, 0), 1))
-                .animation(.easeInOut(duration: 0.25), value: lyricsMode)
-                .animation(.easeInOut(duration: 0.25), value: immersive)
+            // NB: no clipShape here — clipping happens at the safe-area bounds,
+            // which cropped the background's ignoresSafeArea and put a black band
+            // under the status bar. Full-bleed matters more than the drag corners.
+            .offset(y: dragOffset)
         }
-        // NB: no clipShape here — clipping happens at the safe-area bounds, which
-        // cropped the background's ignoresSafeArea and put a black band under the
-        // status bar. Full-bleed matters more than the 16pt drag corners.
-        .offset(y: dragOffset)
         .gesture(sheetDrag)
         .onAppear { dragOffset = 0 }
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }

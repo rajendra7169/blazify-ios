@@ -125,6 +125,9 @@ struct RootView: View {
         .fullScreenCover(isPresented: $player.showFullPlayer) {
             PlayerView(player: player)
                 .environment(\.palette, palette)
+                // Clear, so dragging the player down reveals the app behind it
+                // rather than a white sheet backdrop.
+                .presentationBackground(.clear)
         }
     }
 }
