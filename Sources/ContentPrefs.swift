@@ -64,6 +64,17 @@ final class ContentPrefs: ObservableObject {
         showStatsPlaylists = flag("showMostStatsPlaylists", true)
     }
 
+    /// Applies the Hide-explicit and Hide-video-songs filters. Read straight
+    /// from defaults so the concurrent parsers can call it off the main actor.
+    static func allows(_ track: Track) -> Bool {
+        let d = UserDefaults.standard
+        if d.bool(forKey: "hideExplicit"), track.isExplicit { return false }
+        if d.bool(forKey: "hideVideoSongs"), track.isVideo { return false }
+        return true
+    }
+
+    static func filtered(_ tracks: [Track]) -> [Track] { tracks.filter(allows) }
+
     /// Read off the main actor by the request builders, which run concurrently.
     static var locale: (hl: String, gl: String) {
         let d = UserDefaults.standard

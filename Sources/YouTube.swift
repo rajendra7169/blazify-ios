@@ -651,6 +651,34 @@ enum YouTube {
 
     /// Playlist/album responses vary in shape (single vs two column), so walk the
     /// whole tree and pull every song row, de-duping by videoId.
+    /// First value found for `key` anywhere below `node`.
+    private static func deepString(_ node: Any, key: String) -> String? {
+        if let dict = node as? [String: Any] {
+            if let hit = dict[key] as? String { return hit }
+            for (_, v) in dict {
+                if let hit = deepString(v, key: key) { return hit }
+            }
+        } else if let arr = node as? [Any] {
+            for v in arr {
+                if let hit = deepString(v, key: key) { return hit }
+            }
+        }
+        return nil
+    }
+
+    /// Whether `needle` appears as any string value below `node`.
+    private static func deepContains(_ node: Any?, _ needle: String) -> Bool {
+        guard let node else { return false }
+        if let text = node as? String { return text == needle }
+        if let dict = node as? [String: Any] {
+            return dict.values.contains { deepContains($0, needle) }
+        }
+        if let arr = node as? [Any] {
+            return arr.contains { deepContains($0, needle) }
+        }
+        return false
+    }
+
     private static func collectTracks(_ node: Any, into out: inout [Track], seen: inout Set<String>) {
         if let dict = node as? [String: Any] {
             if let r = dict["musicResponsiveListItemRenderer"] as? [String: Any] {
@@ -658,9 +686,20 @@ enum YouTube {
                     ?? overlayVideoId(r["overlay"])
                 if let v = vid, !v.isEmpty, seen.insert(v).inserted {
                     let cols = r["flexColumns"] as? [[String: Any]] ?? []
-                    out.append(Track(videoId: v, title: flexText(cols, 0), artist: flexArtist(cols),
-                                     thumbnail: musicThumb(r["thumbnail"]), duration: 0,
-                                     artistId: flexArtistId(cols)))
+                    // Content filters need these: the explicit badge sits on the
+                    // row, and musicVideoType is buried in the watch endpoint —
+                    // ATV means the audio track, anything else a music video.
+                    let explicit = deepContains(r["badges"], "MUSIC_EXPLICIT_BADGE")
+                    let videoType = deepString(r, key: "musicVideoType")
+                    let track = Track(videoId: v, title: flexText(cols, 0),
+                                      artist: flexArtist(cols),
+                                      thumbnail: musicThumb(r["thumbnail"]), duration: 0,
+                                      artistId: flexArtistId(cols),
+                                      explicit: explicit,
+                                      video: videoType.map { $0 != "MUSIC_VIDEO_TYPE_ATV" })
+                    // Every song list in the app is built here, so the Content
+                    // filters only need applying at this one point.
+                    if ContentPrefs.allows(track) { out.append(track) }
                 }
                 return
             }

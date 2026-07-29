@@ -9,18 +9,32 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
     let duration: Double
     /// The artist's channel browseId (UC…), when the row carried one.
     let artistId: String?
+    /// From the row's `MUSIC_EXPLICIT_BADGE`. Optional on purpose: `Track` is
+    /// decoded from saved favourites, history and queues, and Swift's
+    /// synthesised decoder throws on a missing key rather than using a default —
+    /// a non-optional field here would wipe every existing install's library.
+    var explicit: Bool?
+    /// From `watchEndpointMusicConfig.musicVideoType`: ATV is the audio track,
+    /// anything else is an actual music video.
+    var video: Bool?
+
+    var isExplicit: Bool { explicit ?? false }
+    var isVideo: Bool { video ?? false }
 
     var id: String { videoId }
     var thumbnailURL: URL? { URL(string: thumbnail) }
 
     init(videoId: String, title: String, artist: String, thumbnail: String,
-         duration: Double, artistId: String? = nil) {
+         duration: Double, artistId: String? = nil,
+         explicit: Bool? = nil, video: Bool? = nil) {
         self.videoId = videoId
         self.title = title
         self.artist = artist
         self.thumbnail = thumbnail
         self.duration = duration
         self.artistId = artistId
+        self.explicit = explicit
+        self.video = video
     }
 
     /// Thumbnail upscaled to a requested square size (googleusercontent resize).
