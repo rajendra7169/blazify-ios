@@ -81,39 +81,39 @@ struct LookFeelThemePreview: View {
     }
 
     private var greetingCard: some View {
-        ZStack(alignment: .bottomTrailing) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LinearGradient(
-                    colors: [palette.accent,
-                             palette.accent.mixed(with: .black, palette.dark ? 0.30 : 0.20)],
-                    startPoint: .leading, endPoint: .trailing))
-                .frame(height: 68)
-
-            // Taller than the card and shifted up, so only the top spills out —
-            // an un-clipped sibling, the same trick the real home uses.
-            Image(bundleImage: palette.dark ? "blaze_home_dark" : "blaze_home_light")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 78, height: 92)
-                .offset(y: -12)
-                .allowsHitTesting(false)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(greeting)
-                    .font(.system(size: 8.5, weight: .bold))
-                    .lineSpacing(0)
-                Text("Music Lover")
-                    .font(.system(size: 7.5, weight: .bold))
-                    .opacity(0.95)
-                Text("Enjoy the music 🎵")
-                    .font(.system(size: 5.5, weight: .medium))
-                    .opacity(0.85)
+        // The card alone sets the height. The hero is an OVERLAY, not a ZStack
+        // sibling: at 92 tall it made the stack 92 too, and framing that back to
+        // 68 centred it — which dropped the card 12pt onto the search field.
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(LinearGradient(
+                colors: [palette.accent,
+                         palette.accent.mixed(with: .black, palette.dark ? 0.30 : 0.20)],
+                startPoint: .leading, endPoint: .trailing))
+            .frame(height: 68)
+            .overlay(alignment: .bottomTrailing) {
+                // Taller than the card, so it spills out of the top the way the
+                // real home's hero does — an overlay never resizes its parent.
+                Image(bundleImage: palette.dark ? "blaze_home_dark" : "blaze_home_light")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 78, height: 92)
+                    .allowsHitTesting(false)
             }
-            .foregroundStyle(.white)
-            .padding(.leading, 11)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        }
-        .frame(height: 68)
+            .overlay(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(greeting)
+                        .font(.system(size: 8.5, weight: .bold))
+                        .lineSpacing(0)
+                    Text("Music Lover")
+                        .font(.system(size: 7.5, weight: .bold))
+                        .opacity(0.95)
+                    Text("Enjoy the music 🎵")
+                        .font(.system(size: 5.5, weight: .medium))
+                        .opacity(0.85)
+                }
+                .foregroundStyle(.white)
+                .padding(.leading, 11)
+            }
     }
 
     // MARK: Search pill — icon · placeholder · mic
@@ -229,52 +229,53 @@ struct LookFeelThemePreview: View {
         }()
 
         return HStack(spacing: 0) {
-            RemoteImage(url: player.current?.artURL(size: 120), size: 23) {
+            RemoteImage(url: player.current?.artURL(size: 120), size: 18) {
                 onMini.opacity(0.85)
             }
-            .frame(width: 23, height: 23)
+            .frame(width: 18, height: 18)
             .clipShape(isFlat || isFloating
-                       ? AnyShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                       ? AnyShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                        : AnyShape(Circle()))
 
-            Spacer().frame(width: 7)
-            VStack(alignment: .leading, spacing: 1) {
+            Spacer().frame(width: 5)
+            VStack(alignment: .leading, spacing: 0.5) {
                 Text(player.current?.title ?? "Song title")
-                    .font(.system(size: 7, weight: .bold)).lineLimit(1)
+                    .font(.system(size: 6, weight: .bold)).lineLimit(1)
                 Text(player.current?.artist ?? "Artist")
-                    .font(.system(size: 5.5)).opacity(0.7).lineLimit(1)
+                    .font(.system(size: 4.5)).opacity(0.7).lineLimit(1)
             }
             .foregroundStyle(onMini)
             Spacer(minLength: 5)
 
             switch design {
             case .rounded:
-                HStack(spacing: 2) {
-                    Image(systemName: "backward.end.fill").font(.system(size: 8))
+                HStack(spacing: 1.5) {
+                    Image(systemName: "backward.end.fill").font(.system(size: 6))
                         .foregroundStyle(onMini)
                     Circle().fill(onMini)
-                        .frame(width: 15, height: 15)
+                        .frame(width: 11, height: 11)
                         .overlay(Image(systemName: "play.fill")
-                            .font(.system(size: 7))
+                            .font(.system(size: 5))
                             .foregroundStyle(bg == .gradient ? palette.accent : palette.surface))
-                    Image(systemName: "forward.end.fill").font(.system(size: 8))
+                    Image(systemName: "forward.end.fill").font(.system(size: 6))
                         .foregroundStyle(onMini)
                 }
             case .flat:
-                Image(systemName: "heart").font(.system(size: 9)).foregroundStyle(onMini)
+                Image(systemName: "heart").font(.system(size: 7)).foregroundStyle(onMini)
             default:
-                HStack(spacing: 5) {
-                    Image(systemName: "text.badge.plus").font(.system(size: 9))
-                    Image(systemName: "heart").font(.system(size: 9))
+                HStack(spacing: 4) {
+                    Image(systemName: "text.badge.plus").font(.system(size: 7))
+                    Image(systemName: "heart").font(.system(size: 7))
                 }
                 .foregroundStyle(onMini.opacity(0.9))
             }
         }
-        .padding(.horizontal, 6)
-        .frame(height: 34)
+        .padding(.horizontal, 5)
+        // 64pt on a 393pt phone scales to ~25pt on this ~149pt-wide mock.
+        .frame(height: 25)
         .frame(maxWidth: .infinity)
         .background(miniBackground)
-        .clipShape(RoundedRectangle(cornerRadius: isFlat ? 6 : (isFloating ? 12 : 17),
+        .clipShape(RoundedRectangle(cornerRadius: isFlat ? 5 : (isFloating ? 9 : 12.5),
                                     style: .continuous))
         .shadow(color: isFloating ? .black.opacity(0.3) : .clear, radius: 4, y: 2)
         .padding(.horizontal, isFloating ? 8 : 0)

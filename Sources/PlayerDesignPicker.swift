@@ -134,7 +134,9 @@ struct PhoneFrame<Content: View>: View {
         // interior to exactly the screen size so nothing spills past the clip.
         GeometryReader { g in
             content()
-                .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
+                // Centred, deliberately: the five designs are laid out against a
+                // centred frame, and pinning them top-leading shifted Cassette.
+                .frame(width: g.size.width, height: g.size.height)
                 .clipShape(RoundedRectangle(cornerRadius: 33, style: .continuous))
         }
             .overlay(alignment: .top) {
