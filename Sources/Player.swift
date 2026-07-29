@@ -138,6 +138,10 @@ final class Player: ObservableObject {
     /// (and reverted if the call fails). The whole track is kept so the
     /// Favorites tab works offline and signed out.
     func setFavorite(_ track: Track, liked: Bool) {
+        // Settings → Player: save it offline the moment it's favourited.
+        if liked, PlaybackPrefs.shared.autoDownloadOnLike {
+            Downloads.shared.download(track)
+        }
         let id = track.videoId
         apply(track, liked: liked)
         guard Auth.shared.isLoggedIn else { return }
@@ -211,15 +215,24 @@ final class Player: ObservableObject {
             play([track], startAt: 0)
             return
         }
+        guard !admissible([track]).isEmpty else { return }
         queue.insert(track, at: min(index + 1, queue.count))
         originalQueue.insert(track, at: min(index + 1, originalQueue.count))
     }
 
     /// Append songs to the end of the queue, starting playback if idle.
-    func addToQueue(_ tracks: [Track]) {
-        let fresh = tracks.filter { track in
-            !queue.contains { $0.videoId == track.videoId }
+    /// Drops anything already queued when "No duplicates" is on.
+    private func admissible(_ tracks: [Track]) -> [Track] {
+        guard PlaybackPrefs.shared.preventDuplicates else { return tracks }
+        let known = Set(queue.map(\.videoId))
+        var seen = Set<String>()
+        return tracks.filter {
+            !known.contains($0.videoId) && seen.insert($0.videoId).inserted
         }
+    }
+
+    func addToQueue(_ tracks: [Track]) {
+        let fresh = admissible(tracks)
         guard !fresh.isEmpty else { return }
         if queue.isEmpty {
             play(fresh, startAt: 0)
@@ -354,12 +367,39 @@ final class Player: ObservableObject {
             return
         }
         if !next() {
-            // Nothing left to play — settle on paused at the end of the track
-            // instead of leaving the transport showing "playing" forever.
+            // Queue's empty. Autoplay keeps going with songs related to the last
+            // one — Android's auto radio queue — otherwise settle on paused at
+            // the end instead of showing "playing" forever.
+            if PlaybackPrefs.shared.autoplay, PlaybackPrefs.shared.autoRadioQueue,
+               let last = current, !last.videoId.isEmpty {
+                extendWithRadio(from: last)
+                return
+            }
             avPlayer?.pause()
             isPlaying = false
             currentTime = duration
             updateNowPlaying()
+        }
+    }
+
+    /// Pull the last song's related tracks in and carry on playing.
+    private func extendWithRadio(from track: Track) {
+        isLoading = true
+        Task { @MainActor in
+            let related = await YouTube.related(videoId: track.videoId)
+            let known = Set(self.queue.map(\.videoId))
+            let fresh = related.filter { !$0.videoId.isEmpty && !known.contains($0.videoId) }
+            guard !fresh.isEmpty else {
+                self.isLoading = false
+                self.avPlayer?.pause()
+                self.isPlaying = false
+                self.currentTime = self.duration
+                self.updateNowPlaying()
+                return
+            }
+            self.queue.append(contentsOf: fresh)
+            self.endHandled = false
+            _ = self.next()
         }
     }
 
@@ -464,13 +504,21 @@ final class Player: ObservableObject {
                 case .failed:
                     self.isLoading = false
                     self.lastError = item.error?.localizedDescription ?? "Playback failed"
+                    // Don't strand the queue on one bad stream.
+                    if PlaybackPrefs.shared.autoSkipOnError { _ = self.next() }
                 default: break
                 }
             }
         }
 
+        // Playback speed keeps pitch by default (spectral is the good algorithm;
+        // varispeed is the chipmunk one Android calls "varispeed").
+        item.audioTimePitchAlgorithm = PlaybackPrefs.shared.preservePitch
+            ? .timeDomain : .varispeed
+
         let p = AVPlayer(playerItem: item)
         avPlayer = p
+        applyAudioPrefs()
         timeObserver = p.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
             queue: .main,
@@ -479,13 +527,43 @@ final class Player: ObservableObject {
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
         }
         p.play()
+        // Rate has to be set after play(), which resets it to 1.
+        p.rate = Float(PlaybackPrefs.shared.speed)
         isPlaying = true
         updateNowPlaying()
     }
 
+    /// The playing song's loudness, if YouTube told us when resolving the stream.
+    private var currentLoudnessDb: Double? {
+        current.flatMap { YouTube.loudnessDb(for: $0.videoId) }
+    }
+
+    /// Speed, pitch handling and per-song volume, re-applied whenever the
+    /// settings change or a new item starts.
+    func applyAudioPrefs() {
+        let prefs = PlaybackPrefs.shared
+        avPlayer?.currentItem?.audioTimePitchAlgorithm =
+            prefs.preservePitch ? .timeDomain : .varispeed
+        if isPlaying { avPlayer?.rate = Float(prefs.speed) }
+        // Volume normalisation: YouTube hands us the track's loudness, so trim
+        // the player's gain toward the target instead of leaving loud masters
+        // twice as loud as quiet ones.
+        if prefs.normalizeVolume, let loudness = currentLoudnessDb {
+            let trim = prefs.loudnessTarget - loudness
+            avPlayer?.volume = Float(pow(10, min(trim, 0) / 20))
+        } else {
+            avPlayer?.volume = 1
+        }
+    }
+
     func toggle() {
         guard let avPlayer else { return }
-        if isPlaying { avPlayer.pause() } else { avPlayer.play() }
+        if isPlaying {
+            avPlayer.pause()
+        } else {
+            avPlayer.play()
+            avPlayer.rate = Float(PlaybackPrefs.shared.speed)
+        }
         isPlaying.toggle()
         updateNowPlaying()
         let position = currentTime

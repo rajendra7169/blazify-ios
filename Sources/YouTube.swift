@@ -31,6 +31,17 @@ enum YouTube {
     /// Returns the playable URL and the REAL duration (seconds) from the format —
     /// AVPlayer misreads this fragmented MP4's own duration (~2×), so we carry the
     /// true value from `approxDurationMs`/`lengthSeconds`.
+    /// Per-song loudness from `playerConfig.audioConfig.loudnessDb`, kept beside
+    /// the URL cache so volume normalisation needs no extra request.
+    private static var loudnessCache: [String: Double] = [:]
+    private static let loudnessLock = NSLock()
+
+    static func loudnessDb(for videoId: String) -> Double? {
+        loudnessLock.lock()
+        defer { loudnessLock.unlock() }
+        return loudnessCache[videoId]
+    }
+
     static func streamURL(for videoId: String) async -> (url: URL, duration: Double)? {
         urlCacheLock.lock()
         let hit = urlCache[videoId]
@@ -55,14 +66,31 @@ enum YouTube {
               let formats = streaming["adaptiveFormats"] as? [[String: Any]]
         else { return nil }
 
-        // Best audio/mp4 (AAC) with a direct url — iOS can't play Opus/WebM.
+        // Track loudness, so the player can even out volume between songs.
+        if let config = json["playerConfig"] as? [String: Any],
+           let audio = config["audioConfig"] as? [String: Any],
+           let db = audio["loudnessDb"] as? Double {
+            loudnessLock.lock()
+            loudnessCache[videoId] = db
+            loudnessLock.unlock()
+        }
+
+        // Audio/mp4 (AAC) with a direct url — iOS can't play Opus/WebM. Which
+        // one depends on Settings → Player: highest bitrate, lowest, or the
+        // best the connection can carry.
+        let wantsLowest = await MainActor.run {
+            let quality = PlaybackPrefs.shared.quality
+            return quality == .low
+                || (quality == .auto && !Reachability.shared.isUnmetered)
+        }
+
         var best: [String: Any]?
-        var bestRate = -1
+        var bestRate = wantsLowest ? Int.max : -1
         for f in formats {
             let mime = f["mimeType"] as? String ?? ""
             guard mime.hasPrefix("audio/mp4"), let u = f["url"] as? String, !u.isEmpty else { continue }
             let rate = (f["bitrate"] as? Int) ?? (f["averageBitrate"] as? Int) ?? 0
-            if rate > bestRate { bestRate = rate; best = f }
+            if wantsLowest ? (rate < bestRate) : (rate > bestRate) { bestRate = rate; best = f }
         }
         guard let best, let u = best["url"] as? String, let url = URL(string: u) else { return nil }
 
