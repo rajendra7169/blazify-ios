@@ -67,8 +67,19 @@ struct LookAndFeelView: View {
     @ViewBuilder private var preview: some View {
         switch tab {
         case .player:
-            DesignLivePreview(design: PlayerDesign(rawValue: playerDesignRaw) ?? .classic,
-                              player: player)
+            // These layouts are authored for the design gallery's frame, which
+            // is much wider than the hub's. Lay one out at the gallery's size
+            // and scale the whole thing down, rather than cramming a fixed-size
+            // layout into a narrower box and watching it spill past the bezel.
+            GeometryReader { g in
+                let reference: CGFloat = 238
+                let scale = g.size.width / reference
+                DesignLivePreview(design: PlayerDesign(rawValue: playerDesignRaw) ?? .classic,
+                                  player: player)
+                    .frame(width: reference, height: g.size.height / max(scale, 0.01))
+                    .scaleEffect(scale, anchor: .topLeading)
+                    .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
+            }
         case .lyrics:
             LookFeelLyricsPreview(player: player, position: look.lyricsPosition)
         default:
