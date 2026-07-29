@@ -21,6 +21,7 @@ struct SettingsView: View {
     @State private var showPrivacy = false
     @State private var showChangelog = false
     @State private var showLyrics = false
+    @State private var showPlayerSettings = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -28,7 +29,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player }
     }
 
     private struct Group: Identifiable {
@@ -48,7 +49,8 @@ struct SettingsView: View {
             ]),
             Group(title: "Playback", rows: [
                 Row(icon: "play.circle", title: "Player and audio",
-                    subtitle: "Quality, crossfade, sleep timer, queue"),
+                    subtitle: "Quality, crossfade, sleep timer, queue",
+                    action: .player),
                 Row(icon: "antenna.radiowaves.left.and.right", title: "Stream sources",
                     subtitle: "Where audio is fetched from"),
             ]),
@@ -184,6 +186,11 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showLyrics) {
             NavigationStack { LyricsSettingsView().settingsMiniPlayer(player) }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .sheet(isPresented: $showPlayerSettings) {
+            NavigationStack { PlayerSettingsView().settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
@@ -345,6 +352,7 @@ struct SettingsView: View {
             case .privacy: showPrivacy = true
             case .changelog: showChangelog = true
             case .lyrics: showLyrics = true
+            case .player: showPlayerSettings = true
             case .none: break
             }
         } label: {
