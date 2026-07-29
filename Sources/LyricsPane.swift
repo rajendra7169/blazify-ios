@@ -163,8 +163,10 @@ struct LyricsPane: View {
             let hs = items.map { item -> CGFloat in
                 switch item {
                 case .line(let i, let line):
-                    return lineHeight(line.text, width: textWidth,
-                                      secondary: secondaryText(i))
+                    // As-main replaces the text rather than adding a row, so it
+                    // must not also add the second line's height.
+                    let extra = RomanizePrefs.shared.asMain ? nil : secondaryText(i)
+                    return lineHeight(line.text, width: textWidth, secondary: extra)
                 case .gap: return Self.gapHeight
                 }
             }
@@ -209,7 +211,9 @@ struct LyricsPane: View {
                                     alignment: side.textAlignment,
                                     frameAlignment: side.frameAlignment,
                                     color: .white.opacity(alpha(distance: distance, isActive: active)),
-                                    secondary: secondaryText(itemLineIndex(item)))
+                                    secondary: secondaryText(itemLineIndex(item)),
+                                    secondaryAsMain: RomanizePrefs.shared.enabled
+                                        && RomanizePrefs.shared.asMain)
                                     .shadow(color: effectiveGlow && active
                                             ? .white.opacity(0.45) : .clear,
                                             radius: 12)

@@ -20,18 +20,28 @@ struct LyricsAnimatedLine: View {
     let color: Color
     /// Romanisation or translation, drawn under the line. Nil when neither is on.
     var secondary: String?
+    /// Romanization → "Use it as the main line": the romanisation takes the
+    /// original's place instead of sitting under it.
+    var secondaryAsMain = false
 
     private var font: Font { .system(size: size, weight: .bold) }
     private var leading: CGFloat { size * (spacing - 1) }
-    private var displayText: String { line.text.isEmpty ? "♪" : line.text }
+    private var displayText: String {
+        if secondaryAsMain, let secondary, !secondary.isEmpty { return secondary }
+        return line.text.isEmpty ? "♪" : line.text
+    }
 
     /// Word effects only make sense on the line being sung right now.
-    private var animating: Bool { isActive && line.hasWordTimings && style != .none }
+    private var animating: Bool {
+        // Word stamps line up with the original text, so a swapped-in
+        // romanisation animates as a whole line rather than per word.
+        isActive && line.hasWordTimings && style != .none && !secondaryAsMain
+    }
 
     var body: some View {
         VStack(alignment: frameAlignment.horizontal, spacing: 4) {
             primary
-            if let secondary, !secondary.isEmpty {
+            if let secondary, !secondary.isEmpty, !secondaryAsMain {
                 Text(secondary)
                     .font(.system(size: size * 0.6, weight: .medium))
                     .multilineTextAlignment(alignment)
