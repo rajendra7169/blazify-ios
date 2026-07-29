@@ -133,21 +133,20 @@ enum EqualizerTap {
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
             clientInfo: nil,
-            `init`: tapInit,
+            init: tapInit,
             finalize: tapFinalize,
             prepare: tapPrepare,
             unprepare: tapUnprepare,
             process: tapProcess)
 
-        var tap: Unmanaged<MTAudioProcessingTap>?
+        var tap: MTAudioProcessingTap?
         let status = MTAudioProcessingTapCreate(
             kCFAllocatorDefault, &callbacks,
             kMTAudioProcessingTapCreationFlag_PreEffects, &tap)
         guard status == noErr, let tap else { return nil }
 
         let parameters = AVMutableAudioMixInputParameters(track: track)
-        parameters.audioTapProcessor = tap.takeUnretainedValue()
-        tap.release()
+        parameters.audioTapProcessor = tap
 
         let mix = AVMutableAudioMix()
         mix.inputParameters = [parameters]

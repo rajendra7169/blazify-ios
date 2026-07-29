@@ -582,9 +582,9 @@ final class Player: ObservableObject {
         // installed for every track whether or not the EQ is on — the DSP
         // simply passes audio through when it's off — so toggling it never
         // rebuilds the audio graph mid-song.
-        Task { [weak item] in
+        Task { @MainActor [weak item] in
             guard let mix = await EqualizerTap.audioMix(for: asset) else { return }
-            await MainActor.run { item?.audioMix = mix }
+            item?.audioMix = mix
         }
         if realDuration > 0 {
             item.forwardPlaybackEndTime = CMTime(seconds: realDuration, preferredTimescale: 600)
