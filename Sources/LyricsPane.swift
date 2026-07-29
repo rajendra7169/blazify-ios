@@ -148,6 +148,7 @@ struct LyricsPane: View {
             // style is on. Heights are measured deterministically from the text
             // metrics, so the stack positions correctly on the very first frame.
             let items = stageItems(lines)
+            let secondary = secondaryAgent(lines)
             let hs = items.map { item -> CGFloat in
                 switch item {
                 case .line(_, let line): return lineHeight(line.text, width: textWidth)
@@ -185,14 +186,15 @@ struct LyricsPane: View {
                                 IntervalIndicator(start: start, end: end, position: pos,
                                                   active: active, tint: .white)
                             case .line(_, let line):
+                                let side = alignment(for: line, secondary: secondary)
                                 // Android stores line spacing as a multiplier of
                                 // the type size; the line view converts it to leading.
                                 LyricsAnimatedLine(
                                     line: line, position: pos, style: effectiveAnimation,
                                     isActive: active, size: effectiveSize,
                                     spacing: effectiveSpacing,
-                                    alignment: look.lyricsPosition.textAlignment,
-                                    frameAlignment: look.lyricsPosition.frameAlignment,
+                                    alignment: side.textAlignment,
+                                    frameAlignment: side.frameAlignment,
                                     color: .white.opacity(alpha(distance: distance, isActive: active)))
                                     .shadow(color: effectiveGlow && active
                                             ? .white.opacity(0.45) : .clear,
@@ -233,6 +235,31 @@ struct LyricsPane: View {
     private var effectiveSpacing: Double { prefs.blazifyStyle ? 1.3 : prefs.lineSpacing }
     private var effectiveAnimation: LyricsAnimation { prefs.blazifyStyle ? .apple : prefs.animation }
     private var effectiveGlow: Bool { prefs.blazifyStyle ? true : prefs.glowEffect }
+
+    /// A duet's second voice, if the lyrics name more than one agent. Only
+    /// meaningful when the provider gives TTML — LRC has no such notion.
+    private func secondaryAgent(_ lines: [LyricLine]) -> String? {
+        guard prefs.respectAgentPositioning else { return nil }
+        var seen: [String] = []
+        for line in lines {
+            guard let agent = line.agent, !seen.contains(agent) else { continue }
+            seen.append(agent)
+            if seen.count > 1 { break }
+        }
+        return seen.count > 1 ? seen[1] : nil
+    }
+
+    /// Where a line sits. Background/second-voice lines mirror to the opposite
+    /// side, which is what Android's respect-agent-positioning does; everything
+    /// else follows the chosen text position.
+    private func alignment(for line: LyricLine, secondary: String?) -> LyricsPosition {
+        guard let secondary, line.agent == secondary else { return look.lyricsPosition }
+        switch look.lyricsPosition {
+        case .left: return .right
+        case .right: return .left
+        case .center: return .right
+        }
+    }
 
     /// Instrumental breaks shorter than this aren't worth marking.
     private static let minGap: Double = 5

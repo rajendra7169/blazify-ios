@@ -36,6 +36,7 @@ enum TTML {
         private var skipping = 0
         /// Per-word stamps for the paragraph being read, and the span currently open.
         private var words: [LyricWord] = []
+        private var agent: String?
         private var spanStart: Double?
         private var spanEnd: Double?
         private var spanText = ""
@@ -59,6 +60,7 @@ enum TTML {
                 inParagraph = true
                 buffer = ""
                 words = []
+                agent = attrs["ttm:agent"] ?? attrs["agent"]
                 start = attrs["begin"].flatMap(TTML.seconds)
             case "span" where inParagraph:
                 // Background vocals, translations and romanisations are separate
@@ -120,11 +122,12 @@ enum TTML {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if let start, !text.isEmpty {
                 lines.append(LyricLine(time: start + offset, text: text,
-                                       words: TTML.sealed(words)))
+                                       words: TTML.sealed(words), agent: agent))
             }
             start = nil
             buffer = ""
             words = []
+            agent = nil
         }
     }
 

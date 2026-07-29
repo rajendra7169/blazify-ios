@@ -16,6 +16,9 @@ struct LyricLine: Identifiable, Equatable {
     let text: String
     /// Empty unless the provider gave per-word stamps.
     var words: [LyricWord] = []
+    /// TTML `ttm:agent` — who sings the line. Duets carry two, which is what
+    /// "respect agent positioning" aligns to opposite sides.
+    var agent: String? = nil
 
     var hasWordTimings: Bool { words.count > 1 }
 
