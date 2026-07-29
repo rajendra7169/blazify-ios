@@ -134,6 +134,12 @@ final class LyricsPrefs: ObservableObject {
         return names.firstIndex(of: providerName.lowercased()) ?? names.count
     }
 
+    /// A value copy for the lyrics fan-out, which runs off the main actor.
+    @MainActor
+    func snapshot() -> Lyrics.ProviderPrefs {
+        Lyrics.ProviderPrefs(active: activeOrder.map(\.rawValue))
+    }
+
     func resetDisplay() {
         textSize = Self.defaultTextSize
         lineSpacing = Self.defaultLineSpacing

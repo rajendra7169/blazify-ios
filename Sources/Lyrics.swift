@@ -58,19 +58,29 @@ enum Lyrics {
     /// `videoId` unlocks YouTube's own lyrics when known.
     static func search(title: String, artist: String, videoId: String = "",
                        duration: Double = 0) async -> [LyricsCandidate] {
-        async let lrc = lrcLib(title: title, artist: artist, duration: duration)
-        async let kugou = kuGou(title: title, artist: artist, duration: duration)
-        async let apple = appleMusic(title: title, artist: artist, duration: duration)
-        async let yt = youTube(videoId: videoId, title: title, artist: artist)
-        async let better = betterLyrics(title: title, artist: artist,
-                                        videoId: videoId, duration: duration)
+        // Settings → Lyrics → Providers decides who gets asked at all. Reading
+        // the flags up front keeps the fan-out itself unconditional.
+        let prefs = await MainActor.run { LyricsPrefs.shared.snapshot() }
+
+        async let lrc = prefs.contains(.lrcLib)
+            ? lrcLib(title: title, artist: artist, duration: duration) : [LyricsCandidate]()
+        async let kugou = prefs.contains(.kuGou)
+            ? kuGou(title: title, artist: artist, duration: duration) : [LyricsCandidate]()
+        async let apple = prefs.contains(.appleMusic)
+            ? appleMusic(title: title, artist: artist, duration: duration) : [LyricsCandidate]()
+        async let yt = prefs.contains(.youTube)
+            ? youTube(videoId: videoId, title: title, artist: artist) : [LyricsCandidate]()
+        async let better = prefs.contains(.betterLyrics)
+            ? betterLyrics(title: title, artist: artist,
+                           videoId: videoId, duration: duration)
+            : [LyricsCandidate]()
         let all = await apple + better + lrc + kugou + yt
         // Match quality first — that's what stops a confident-but-wrong result
         // from a preferred provider winning. Then synced, then provider rank.
         return all.enumerated().sorted { a, b in
             if a.element.score != b.element.score { return a.element.score > b.element.score }
             if a.element.synced != b.element.synced { return a.element.synced }
-            let ra = rank(a.element.provider), rb = rank(b.element.provider)
+            let ra = prefs.rank(a.element.provider), rb = prefs.rank(b.element.provider)
             if ra != rb { return ra < rb }
             return a.offset < b.offset
         }.map(\.element)
@@ -132,13 +142,19 @@ enum Lyrics {
     /// match, below a duration-confirmed hit and above a contradicted one.
     private static let unverifiedScore: Double = 45
 
-    private static func rank(_ provider: String) -> Int {
-        switch provider.lowercased() {
-        case "apple music": return 0
-        case "betterlyrics": return 1
-        case "lrclib": return 2
-        case "kugou": return 3
-        default: return 4   // YouTube / Musixmatch — plain only
+    /// The provider set and priority as chosen in Settings, captured so the
+    /// concurrent fan-out never touches main-actor state.
+    struct ProviderPrefs: Sendable {
+        let active: [String]
+
+        func contains(_ provider: LyricsProvider) -> Bool {
+            active.contains(provider.rawValue)
+        }
+
+        /// Lower is better; anything not in the list sorts last.
+        func rank(_ provider: String) -> Int {
+            active.firstIndex { $0.caseInsensitiveCompare(provider) == .orderedSame }
+                ?? active.count
         }
     }
 
