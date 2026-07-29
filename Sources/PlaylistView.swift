@@ -49,7 +49,13 @@ struct PlaylistView: View {
 
                 if !tracks.isEmpty {
                     HStack(spacing: 10) {
-                        actionButton("Play", "play.fill") { player.play(tracks, startAt: 0); player.showFullPlayer = true }
+                        actionButton("Play", "play.fill") {
+                            // Settings → Player → Shuffle playlists on open.
+                            let order = PlaybackPrefs.shared.shufflePlaylistFirst
+                                ? tracks.shuffled() : tracks
+                            player.play(order, startAt: 0)
+                            player.showFullPlayer = true
+                        }
                         actionButton("Shuffle", "shuffle") {
                             player.play(tracks.shuffled(), startAt: 0); player.showFullPlayer = true
                         }

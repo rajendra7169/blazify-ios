@@ -166,6 +166,7 @@ struct HomeView: View {
 
     /// Append the next page of YouTube shelves.
     private func loadMore() {
+        guard PlaybackPrefs.shared.autoLoadMore else { return }
         guard let token = feed.continuation, !loadingMore else { return }
         loadingMore = true
         Task {
