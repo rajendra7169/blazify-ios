@@ -24,6 +24,7 @@ struct SettingsView: View {
     @State private var showPlayerSettings = false
     @State private var showStreams = false
     @State private var showContent = false
+    @State private var showBackup = false
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -31,7 +32,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content, backup }
     }
 
     private struct Group: Identifiable {
@@ -78,7 +79,8 @@ struct SettingsView: View {
                 Row(icon: "internaldrive", title: "Storage",
                     subtitle: "Cache, downloads, clear data", action: .storage),
                 Row(icon: "arrow.clockwise", title: "Backup and restore",
-                    subtitle: "Export or import your library"),
+                    subtitle: "Export or import your library",
+                    action: .backup),
             ]),
             Group(title: "About", rows: [
                 Row(icon: "info.circle", title: "About", subtitle: "Version and developer", action: .about),
@@ -206,6 +208,11 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showContent) {
             NavigationStack { ContentSettingsView().settingsMiniPlayer(player) }
+                .preferredColorScheme(theme.preferredColorScheme)
+                .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .sheet(isPresented: $showBackup) {
+            NavigationStack { BackupRestoreView().settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
@@ -370,6 +377,7 @@ struct SettingsView: View {
             case .player: showPlayerSettings = true
             case .streams: showStreams = true
             case .content: showContent = true
+            case .backup: showBackup = true
             case .none: break
             }
         } label: {
