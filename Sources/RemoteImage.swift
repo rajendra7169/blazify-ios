@@ -47,6 +47,9 @@ struct RemoteImage<Placeholder: View>: View {
     /// The side length this will be drawn at, in points. Supply it wherever the
     /// size is known — without it we fetch whatever size the URL already names.
     var size: CGFloat?
+    /// Crop to fill, or letterbox the whole image in. Appearance → Fill the
+    /// artwork frame flips this on the player.
+    var fill = true
     @ViewBuilder var placeholder: () -> Placeholder
 
     @State private var image: UIImage?
@@ -58,7 +61,7 @@ struct RemoteImage<Placeholder: View>: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: fill ? .fill : .fit)
             } else {
                 placeholder()
             }
