@@ -11,7 +11,7 @@ struct LyricsPane: View {
     @ObservedObject var player: Player
     @ObservedObject private var look = LookFeel.shared
     @ObservedObject private var prefs = LyricsPrefs.shared
-    @ObservedObject private var secondary = LyricsSecondary.shared
+    @ObservedObject private var extraLines = LyricsSecondary.shared
     /// The 4 Hz position drives the sync anchor, so observe it directly rather
     /// than trusting the parent to re-render us.
     @ObservedObject private var clock: PlaybackClock
@@ -335,7 +335,7 @@ struct LyricsPane: View {
     /// The romanisation or translation for a line, if one has been prepared.
     private func secondaryText(_ lineIndex: Int?) -> String? {
         guard let lineIndex, let id = player.current?.videoId else { return nil }
-        return secondary.text(for: id, line: lineIndex)
+        return extraLines.text(for: id, line: lineIndex)
     }
 
     private func itemLineIndex(_ item: StageItem) -> Int? {

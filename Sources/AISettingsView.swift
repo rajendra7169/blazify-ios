@@ -100,7 +100,7 @@ struct AISettingsView: View {
     private var keySheet: some View {
         NavigationStack {
             Form {
-                Section(prefs.provider.title) {
+                Section {
                     SecureField("API key", text: $keyDraft)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -110,6 +110,8 @@ struct AISettingsView: View {
                             showKey = false
                         }
                     }
+                } header: {
+                    Text(prefs.provider.title)
                 } footer: {
                     Text("Create one at \(prefs.provider.keyPage)")
                 }
