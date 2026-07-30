@@ -49,6 +49,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rajendra.blazifyplayer
+        CODE_SIGN_ENTITLEMENTS: Blazify.entitlements
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"   # iPhone only
@@ -78,6 +79,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rajendra.blazifyplayer.widget
+        CODE_SIGN_ENTITLEMENTS: BlazifyWidget.entitlements
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
