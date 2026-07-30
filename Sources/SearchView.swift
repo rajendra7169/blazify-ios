@@ -97,6 +97,7 @@ struct SearchView: View {
                 }
             } else {
                 Image(systemName: "magnifyingglass")
+                    .accessibilityLabel("Search")
                     .font(.system(size: 18))
                     .foregroundStyle(palette.onSurfaceVariant)
             }
@@ -122,6 +123,7 @@ struct SearchView: View {
                     didSearch = false
                 } label: {
                     Image(systemName: "xmark.circle.fill")
+                        .accessibilityLabel("Clear search")
                         .font(.system(size: 18))
                         .foregroundStyle(palette.onSurfaceVariant)
                 }

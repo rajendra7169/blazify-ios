@@ -371,6 +371,7 @@ struct HomeView: View {
             Spacer()
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape")
+                    .accessibilityLabel("Settings")
                     .font(.system(size: 24))
                     // Accent, so it follows the palette and the album-art
                     // colour like the rest of the app's action icons.

@@ -155,6 +155,22 @@ struct MiniPlayerView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Self.label(for: icon))
+    }
+
+    /// VoiceOver reads an SF Symbol name as gibberish; name the action instead.
+    static func label(for icon: String) -> String {
+        switch icon {
+        case "play.fill": return "Play"
+        case "pause.fill": return "Pause"
+        case "forward.end.fill", "forward.fill": return "Next song"
+        case "backward.end.fill", "backward.fill": return "Previous song"
+        case "heart", "heart.fill": return "Favourite"
+        case "text.badge.plus": return "Add to queue"
+        case "person": return "View artist"
+        case "plus": return "Add to playlist"
+        default: return ""
+        }
     }
 
     @ViewBuilder private var background: some View {
@@ -245,5 +261,6 @@ struct MiniPlayerView: View {
                 .overlay(Circle().stroke(ink.opacity(0.18), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Self.label(for: icon))
     }
 }

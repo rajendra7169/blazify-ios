@@ -361,8 +361,11 @@ struct PlayerView: View {
 
     private var transport: some View {
         HStack(spacing: 0) {
-            sideButton("shuffle", active: player.isShuffled) { player.toggleShuffle() }
-            sideButton("backward.end.fill") { player.prev() }
+            sideButton("shuffle", active: player.isShuffled,
+                       label: player.isShuffled ? "Shuffle on" : "Shuffle off") {
+                player.toggleShuffle()
+            }
+            sideButton("backward.end.fill", label: "Previous song") { player.prev() }
 
             Button { player.toggle() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
@@ -374,21 +377,33 @@ struct PlayerView: View {
                     .animation(.linear(duration: 0.09), value: player.isPlaying)
             }
             .padding(.horizontal, 8)
+            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
 
-            sideButton("forward.end.fill") { player.next() }
+            sideButton("forward.end.fill", label: "Next song") { _ = player.next() }
             sideButton(player.repeatMode == .one ? "repeat.1" : "repeat",
-                       active: player.repeatMode != .off) { player.cycleRepeat() }
+                       active: player.repeatMode != .off,
+                       label: repeatLabel) { player.cycleRepeat() }
         }
         .padding(.horizontal, 32)
     }
 
-    private func sideButton(_ icon: String, active: Bool = false, action: @escaping () -> Void) -> some View {
+    private var repeatLabel: String {
+        switch player.repeatMode {
+        case .off: return "Repeat off"
+        case .all: return "Repeat all"
+        case .one: return "Repeat one"
+        }
+    }
+
+    private func sideButton(_ icon: String, active: Bool = false, label: String = "",
+                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 26))
                 .foregroundStyle(active ? Blaze.amber : .white)
                 .frame(maxWidth: .infinity)
         }
+        .accessibilityLabel(label)
     }
 
     // MARK: Bottom row
