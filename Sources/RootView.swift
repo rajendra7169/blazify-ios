@@ -72,13 +72,21 @@ struct RootView: View {
             player.showFullPlayer = true
         case .favourites:
             let songs = player.favoriteTracks.shuffled()
-            guard !songs.isEmpty else { return }
+            guard !songs.isEmpty else {
+                // Doing nothing here is indistinguishable from "it just carried
+                // on playing", which is what made this look broken.
+                tab = .library
+                return
+            }
             player.isShuffled = true
             player.play(songs, startAt: 0)
             player.showFullPlayer = true
         case .downloads:
             let songs = Downloads.shared.tracks.shuffled()
-            guard !songs.isEmpty else { return }
+            guard !songs.isEmpty else {
+                tab = .library
+                return
+            }
             player.isShuffled = true
             player.play(songs, startAt: 0)
             player.showFullPlayer = true

@@ -123,9 +123,9 @@ struct PlaySongIntent: AppIntent {
     @Parameter(title: "Song", requestValueDialog: "What would you like to hear?")
     var song: SongEntity
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         BlazifyRequest.play(song.id).store()
-        return .result()
+        return .result(dialog: "Playing \(song.title).")
     }
 }
 
@@ -146,9 +146,9 @@ struct PlayFavouritesIntent: AppIntent {
     static var description = IntentDescription("Shuffle the songs you've hearted.")
     static var openAppWhenRun = true
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         BlazifyRequest.favourites.store()
-        return .result()
+        return .result(dialog: "Shuffling your favourites.")
     }
 }
 
@@ -157,9 +157,9 @@ struct PlayDownloadsIntent: AppIntent {
     static var description = IntentDescription("Shuffle everything saved on this device — works with no signal.")
     static var openAppWhenRun = true
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         BlazifyRequest.downloads.store()
-        return .result()
+        return .result(dialog: "Shuffling your downloads.")
     }
 }
 
@@ -184,10 +184,9 @@ struct BlazifyShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: ResumeBlazifyIntent(),
             phrases: [
-                "Play \(.applicationName)",
                 "Resume \(.applicationName)",
-                "Start \(.applicationName)",
-                "Play music on \(.applicationName)",
+                "Continue \(.applicationName)",
+                "Play \(.applicationName)",
             ],
             shortTitle: "Play",
             systemImageName: "play.fill")
@@ -195,9 +194,9 @@ struct BlazifyShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: PlaySongIntent(),
             phrases: [
-                "Play \(\.$song) on \(.applicationName)",
-                "Play \(\.$song) with \(.applicationName)",
-                "Listen to \(\.$song) on \(.applicationName)",
+                "Play a song on \(.applicationName)",
+                "Find a song on \(.applicationName)",
+                "Search \(.applicationName)",
             ],
             shortTitle: "Play a song",
             systemImageName: "music.note")
@@ -205,8 +204,8 @@ struct BlazifyShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: PlayFavouritesIntent(),
             phrases: [
-                "Play my favourites on \(.applicationName)",
-                "Play liked songs on \(.applicationName)",
+                "Shuffle favourites on \(.applicationName)",
+                "Shuffle liked songs on \(.applicationName)",
             ],
             shortTitle: "Favourites",
             systemImageName: "heart.fill")
@@ -214,8 +213,8 @@ struct BlazifyShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: PlayDownloadsIntent(),
             phrases: [
-                "Play my downloads on \(.applicationName)",
-                "Play offline music on \(.applicationName)",
+                "Shuffle downloads on \(.applicationName)",
+                "Shuffle offline music on \(.applicationName)",
             ],
             shortTitle: "Downloads",
             systemImageName: "arrow.down.circle.fill")
