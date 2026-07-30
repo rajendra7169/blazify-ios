@@ -25,6 +25,10 @@ struct LyricsPane: View {
     @State private var result: LyricsResult?
     @State private var loading = true
     @State private var showVersions = false
+    @State private var showTiming = false
+    /// Seconds to shift the lyrics by, per song. Positive means the words come
+    /// later — the fix when lyrics run ahead of the singing.
+    @State private var offset: Double = 0
     @State private var provider = Lyrics.sourceName
 
     // Position smoothing anchors (see the withFrameNanos loop in Kotlin).
@@ -53,6 +57,9 @@ struct LyricsPane: View {
             // Re-anchor whenever the player reports a new position.
             anchorPos = player.currentTime
             anchorWall = Date()
+        }
+        .sheet(isPresented: $showTiming) {
+            LyricsTimingSheet(offset: $offset) { LyricsOffsets.save(offset, for: songId) }
         }
         .sheet(isPresented: $showVersions) {
             LyricsVersionPicker(candidates: candidates, current: result) { pick in
@@ -86,6 +93,17 @@ struct LyricsPane: View {
                         .background(.white)
                         .clipShape(Capsule())
                 }
+            }
+            Button { showTiming = true } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "metronome")
+                    Text(offset == 0 ? "Timing" : String(format: "%+.1fs", offset))
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Color.white.opacity(offset == 0 ? 0.15 : 0.3))
+                .clipShape(Capsule())
             }
             Button { showVersions = true } label: {
                 HStack(spacing: 5) {
@@ -145,10 +163,14 @@ struct LyricsPane: View {
     /// Kick off the second line for these lyrics. Cached per song inside
     /// `LyricsSecondary`, so this is safe to call whenever a result arrives and
     /// never fires a paid translation twice for the same track.
+    /// Per-song, so fixing one badly-timed track doesn't skew every other.
+    private func loadOffset() { offset = LyricsOffsets.load(for: songId) }
+
     private func prepareSecondary(_ result: LyricsResult?) {
         guard let result, !result.lines.isEmpty,
               let id = player.current?.videoId else { return }
         LyricsSecondary.shared.prepare(videoId: id, lyrics: result.lines)
+        loadOffset()
     }
 
     private func syncedStage(_ lines: [LyricLine]) -> some View {
@@ -386,8 +408,13 @@ struct LyricsPane: View {
 
     /// Extrapolate from the last player sample using wall clock, only while playing.
     private func smoothedPosition(at date: Date) -> Double {
-        player.isPlaying ? anchorPos + date.timeIntervalSince(anchorWall) : anchorPos
+        let raw = player.isPlaying ? anchorPos + date.timeIntervalSince(anchorWall) : anchorPos
+        // A positive offset means "show these words later", i.e. look further
+        // back in the lyrics than the playhead.
+        return raw - offset
     }
+
+    private var songId: String { player.current?.videoId ?? "" }
 
     /// Last line whose start has passed (a line runs until the next one starts).
     private func index(in lines: [LyricLine], at pos: Double) -> Int {
@@ -578,5 +605,95 @@ struct LyricsVersionPicker: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+/// Per-song lyric timing offsets, in seconds. Kept out of the main preference
+/// store because these are per-track corrections, not a setting.
+enum LyricsOffsets {
+    private static func key(_ videoId: String) -> String { "lyricsOffset_\(videoId)" }
+
+    static func load(for videoId: String) -> Double {
+        guard !videoId.isEmpty else { return 0 }
+        return UserDefaults.standard.double(forKey: key(videoId))
+    }
+
+    static func save(_ offset: Double, for videoId: String) {
+        guard !videoId.isEmpty else { return }
+        if offset == 0 {
+            UserDefaults.standard.removeObject(forKey: key(videoId))
+        } else {
+            UserDefaults.standard.set(offset, forKey: key(videoId))
+        }
+    }
+}
+
+/// Nudge the lyrics earlier or later when a provider's timings are off.
+struct LyricsTimingSheet: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+    @Binding var offset: Double
+    let onCommit: () -> Void
+
+    private let range: ClosedRange<Double> = -5...5
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("Lyrics timing")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(palette.onSurface)
+
+            Text(offset == 0 ? "In sync" : String(format: "%+.1f s", offset))
+                .font(.system(size: 32, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(palette.accent)
+
+            Text(offset > 0 ? "Words appear later"
+                 : offset < 0 ? "Words appear earlier"
+                 : "Drag if the words run ahead of or behind the singing")
+                .font(.system(size: 12))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 14) {
+                nudge("−0.1", -0.1)
+                Slider(value: $offset, in: range, step: 0.1).tint(palette.accent)
+                nudge("+0.1", 0.1)
+            }
+
+            HStack {
+                Button("Reset") { offset = 0; onCommit() }
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(palette.onSurfaceVariant)
+                Spacer()
+                Button("Done") { onCommit(); dismiss() }
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(palette.onAccent)
+                    .padding(.horizontal, 22).padding(.vertical, 10)
+                    .background(palette.accent)
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(palette.surface)
+        .presentationBackground(palette.surface)
+        .presentationDetents([.height(320)])
+        .onChange(of: offset) { onCommit() }
+    }
+
+    private func nudge(_ label: String, _ delta: Double) -> some View {
+        Button {
+            offset = min(max(offset + delta, range.lowerBound), range.upperBound)
+        } label: {
+            Text(label)
+                .font(.system(size: 13, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(palette.onSurface)
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .background(palette.surfaceHigh)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
