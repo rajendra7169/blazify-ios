@@ -17,11 +17,11 @@ struct LookAndFeelView: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .theme: "Theme"
-            case .player: "Player"
-            case .mini: "Mini player"
-            case .lyrics: "Lyrics"
-            case .home: "Home"
+            case .theme: String(localized: "Theme")
+            case .player: String(localized: "Player")
+            case .mini: String(localized: "Mini player")
+            case .lyrics: String(localized: "Lyrics")
+            case .home: String(localized: "Home")
             }
         }
     }

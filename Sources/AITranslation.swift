@@ -10,14 +10,14 @@ enum AIProvider: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .openAI: return "OpenAI"
-        case .claude: return "Claude"
-        case .gemini: return "Gemini"
-        case .deepL: return "DeepL"
-        case .mistral: return "Mistral"
-        case .openRouter: return "OpenRouter"
-        case .perplexity: return "Perplexity"
-        case .xAI: return "xAI"
+        case .openAI: return String(localized: "OpenAI")
+        case .claude: return String(localized: "Claude")
+        case .gemini: return String(localized: "Gemini")
+        case .deepL: return String(localized: "DeepL")
+        case .mistral: return String(localized: "Mistral")
+        case .openRouter: return String(localized: "OpenRouter")
+        case .perplexity: return String(localized: "Perplexity")
+        case .xAI: return String(localized: "xAI")
         }
     }
 
@@ -70,14 +70,14 @@ enum TranslationMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .literal: return "Literal"
-        case .transcribed: return "Transcribed"
+        case .literal: return String(localized: "Literal")
+        case .transcribed: return String(localized: "Transcribed")
         }
     }
     var blurb: String {
         switch self {
-        case .literal: return "Translate the meaning of each line"
-        case .transcribed: return "Write the sounds in your own script instead"
+        case .literal: return String(localized: "Translate the meaning of each line")
+        case .transcribed: return String(localized: "Write the sounds in your own script instead")
         }
     }
 }
@@ -87,9 +87,9 @@ enum DeepLFormality: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .default: return "Default"
-        case .less: return "Less formal"
-        case .more: return "More formal"
+        case .default: return String(localized: "Default")
+        case .less: return String(localized: "Less formal")
+        case .more: return String(localized: "More formal")
         }
     }
 }

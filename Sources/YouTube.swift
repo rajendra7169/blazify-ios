@@ -28,18 +28,18 @@ enum YouTube {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .songs: return "Songs"
-            case .albums: return "Albums"
-            case .artists: return "Artists"
-            case .playlists: return "Playlists"
+            case .songs: return String(localized: "Songs")
+            case .albums: return String(localized: "Albums")
+            case .artists: return String(localized: "Artists")
+            case .playlists: return String(localized: "Playlists")
             }
         }
         var params: String {
             switch self {
-            case .songs: return "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
-            case .albums: return "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D"
-            case .artists: return "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
-            case .playlists: return "EgWKAQIoAWoKEAkQChAFEAMQBA%3D%3D"
+            case .songs: return String(localized: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D")
+            case .albums: return String(localized: "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D")
+            case .artists: return String(localized: "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D")
+            case .playlists: return String(localized: "EgWKAQIoAWoKEAkQChAFEAMQBA%3D%3D")
             }
         }
         /// Artists render as circles, everything else as squares.

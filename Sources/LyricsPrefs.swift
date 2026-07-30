@@ -10,12 +10,12 @@ enum LyricsAnimation: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .none: return "None"
-        case .fade: return "Fade"
-        case .glow: return "Glow"
-        case .slide: return "Slide"
-        case .karaoke: return "Karaoke"
-        case .apple: return "Apple Music Style"
+        case .none: return String(localized: "None")
+        case .fade: return String(localized: "Fade")
+        case .glow: return String(localized: "Glow")
+        case .slide: return String(localized: "Slide")
+        case .karaoke: return String(localized: "Karaoke")
+        case .apple: return String(localized: "Apple Music Style")
         }
     }
 }
@@ -32,21 +32,21 @@ enum LyricsProvider: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .appleMusic: return "Apple Music"
-        case .betterLyrics: return "Better Lyrics"
-        case .lrcLib: return "LrcLib"
-        case .kuGou: return "KuGou"
-        case .youTube: return "YouTube Music"
+        case .appleMusic: return String(localized: "Apple Music")
+        case .betterLyrics: return String(localized: "Better Lyrics")
+        case .lrcLib: return String(localized: "LrcLib")
+        case .kuGou: return String(localized: "KuGou")
+        case .youTube: return String(localized: "YouTube Music")
         }
     }
 
     var blurb: String {
         switch self {
-        case .appleMusic: return "Word-by-word synced lyrics, the widest catalogue"
-        case .betterLyrics: return "Community aggregator, often word-level"
-        case .lrcLib: return "Open synced-lyrics database"
-        case .kuGou: return "Strong on Mandarin and Cantonese tracks"
-        case .youTube: return "Plain lyrics straight from the track page"
+        case .appleMusic: return String(localized: "Word-by-word synced lyrics, the widest catalogue")
+        case .betterLyrics: return String(localized: "Community aggregator, often word-level")
+        case .lrcLib: return String(localized: "Open synced-lyrics database")
+        case .kuGou: return String(localized: "Strong on Mandarin and Cantonese tracks")
+        case .youTube: return String(localized: "Plain lyrics straight from the track page")
         }
     }
 }

@@ -20,13 +20,13 @@ enum StatPeriod: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .day: "Today"
-        case .week1: "1 week"
-        case .month1: "1 month"
-        case .month3: "3 months"
-        case .month6: "6 months"
-        case .year1: "1 year"
-        case .all: "All time"
+        case .day: String(localized: "Today")
+        case .week1: String(localized: "1 week")
+        case .month1: String(localized: "1 month")
+        case .month3: String(localized: "3 months")
+        case .month6: String(localized: "6 months")
+        case .year1: String(localized: "1 year")
+        case .all: String(localized: "All time")
         }
     }
 
@@ -56,10 +56,10 @@ enum DateAgo: Hashable {
         // Explicit returns throughout: the `.other` case needs a body, which
         // turns off implicit returns for every branch.
         switch self {
-        case .today: return "Today"
-        case .yesterday: return "Yesterday"
-        case .thisWeek: return "This week"
-        case .lastWeek: return "Last week"
+        case .today: return String(localized: "Today")
+        case .yesterday: return String(localized: "Yesterday")
+        case .thisWeek: return String(localized: "This week")
+        case .lastWeek: return String(localized: "Last week")
         case .other(let date):
             let f = DateFormatter()
             f.dateFormat = "yyyy/MM"

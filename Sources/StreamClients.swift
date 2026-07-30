@@ -14,17 +14,17 @@ enum StreamClient: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .androidVR: return "Android VR"
-        case .visionOS: return "visionOS"
-        case .ios: return "iOS"
+        case .androidVR: return String(localized: "Android VR")
+        case .visionOS: return String(localized: "visionOS")
+        case .ios: return String(localized: "iOS")
         }
     }
 
     var blurb: String {
         switch self {
-        case .androidVR: return "Needs no token, and the only one that reports track loudness"
-        case .visionOS: return "Uncapped streams, no loudness data"
-        case .ios: return "Fallback when the other two are refused"
+        case .androidVR: return String(localized: "Needs no token, and the only one that reports track loudness")
+        case .visionOS: return String(localized: "Uncapped streams, no loudness data")
+        case .ios: return String(localized: "Fallback when the other two are refused")
         }
     }
 

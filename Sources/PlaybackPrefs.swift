@@ -7,16 +7,16 @@ enum AudioQuality: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .auto: return "Auto"
-        case .high: return "High"
-        case .low: return "Low"
+        case .auto: return String(localized: "Auto")
+        case .high: return String(localized: "High")
+        case .low: return String(localized: "Low")
         }
     }
     var blurb: String {
         switch self {
-        case .auto: return "Best available on Wi-Fi, lighter on cellular"
-        case .high: return "Always the highest bitrate"
-        case .low: return "Always the smallest stream"
+        case .auto: return String(localized: "Best available on Wi-Fi, lighter on cellular")
+        case .high: return String(localized: "Always the highest bitrate")
+        case .low: return String(localized: "Always the smallest stream")
         }
     }
 }

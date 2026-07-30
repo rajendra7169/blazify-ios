@@ -8,11 +8,11 @@ enum PlayerDesign: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .classic: "Classic"
-        case .ring: "Ring"
-        case .fullArt: "Full Art"
-        case .record: "Record"
-        case .cassette: "Cassette"
+        case .classic: String(localized: "Classic")
+        case .ring: String(localized: "Ring")
+        case .fullArt: String(localized: "Full Art")
+        case .record: String(localized: "Record")
+        case .cassette: String(localized: "Cassette")
         }
     }
 

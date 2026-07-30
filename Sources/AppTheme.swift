@@ -6,9 +6,9 @@ enum DarkMode: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .auto: "Auto"
-        case .on: "Dark"
-        case .off: "Light"
+        case .auto: String(localized: "Auto")
+        case .on: String(localized: "Dark")
+        case .off: String(localized: "Light")
         }
     }
 }

@@ -14,6 +14,14 @@ targets:
     platform: iOS
     sources:
       - Sources
+      # The .lproj folders must go in as folder references, or Xcode flattens
+      # them and every language resolves to the same file.
+      - path: Sources/en.lproj
+        type: folder
+      - path: Sources/ne.lproj
+        type: folder
+      - path: Sources/hi.lproj
+        type: folder
     dependencies:
       - target: BlazifyWidget
         embed: true
@@ -23,6 +31,8 @@ targets:
         CFBundleDisplayName: Blazify
         CFBundleShortVersionString: "0.1"
         CFBundleVersion: "1"
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, ne, hi]
         # The one line that lets a music player keep going with the screen locked.
         UIBackgroundModes:
           - audio

@@ -9,10 +9,10 @@ enum SongSort: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .createDate: "Date added"
-        case .name: "Name"
-        case .artist: "Artist"
-        case .playTime: "Play time"
+        case .createDate: String(localized: "Date added")
+        case .name: String(localized: "Name")
+        case .artist: String(localized: "Artist")
+        case .playTime: String(localized: "Play time")
         }
     }
 }

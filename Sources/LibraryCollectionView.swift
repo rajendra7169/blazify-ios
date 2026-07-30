@@ -9,18 +9,18 @@ struct LibraryCollectionView: View {
 
         var title: String {
             switch self {
-            case .albums: "Albums"
-            case .artists: "Artists"
-            case .playlists: "Playlists"
+            case .albums: String(localized: "Albums")
+            case .artists: String(localized: "Artists")
+            case .playlists: String(localized: "Playlists")
             }
         }
 
         /// Android browses these same three library corpora.
         var browseId: String {
             switch self {
-            case .albums: "FEmusic_liked_albums"
-            case .artists: "FEmusic_library_corpus_artists"
-            case .playlists: "FEmusic_liked_playlists"
+            case .albums: String(localized: "FEmusic_liked_albums")
+            case .artists: String(localized: "FEmusic_library_corpus_artists")
+            case .playlists: String(localized: "FEmusic_liked_playlists")
             }
         }
     }

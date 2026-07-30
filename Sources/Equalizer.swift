@@ -12,15 +12,15 @@ enum EQPreset: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .flat: return "Flat"
-        case .bass: return "Bass"
-        case .vocal: return "Vocal"
-        case .treble: return "Treble"
-        case .rock: return "Rock"
-        case .jazz: return "Jazz"
-        case .electronic: return "Electronic"
-        case .acoustic: return "Acoustic"
-        case .custom: return "Custom"
+        case .flat: return String(localized: "Flat")
+        case .bass: return String(localized: "Bass")
+        case .vocal: return String(localized: "Vocal")
+        case .treble: return String(localized: "Treble")
+        case .rock: return String(localized: "Rock")
+        case .jazz: return String(localized: "Jazz")
+        case .electronic: return String(localized: "Electronic")
+        case .acoustic: return String(localized: "Acoustic")
+        case .custom: return String(localized: "Custom")
         }
     }
 

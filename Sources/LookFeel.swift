@@ -9,9 +9,9 @@ enum LyricsPosition: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .left: "Left"
-        case .center: "Center"
-        case .right: "Right"
+        case .left: String(localized: "Left")
+        case .center: String(localized: "Center")
+        case .right: String(localized: "Right")
         }
     }
     /// Anchor for the glow's slight scale-up, so the line grows away from its
@@ -67,10 +67,10 @@ enum NavBarStyle: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .pill: "Pill"
-        case .gradient: "Gradient"
-        case .underline: "Underline"
-        case .outlined: "Outlined"
+        case .pill: String(localized: "Pill")
+        case .gradient: String(localized: "Gradient")
+        case .underline: String(localized: "Underline")
+        case .outlined: String(localized: "Outlined")
         }
     }
 }
@@ -91,10 +91,10 @@ enum MiniPlayerDesign: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .flat: "Flat"
-        case .modern: "Modern"
-        case .rounded: "Rounded"
-        case .floating: "Floating"
+        case .flat: String(localized: "Flat")
+        case .modern: String(localized: "Modern")
+        case .rounded: String(localized: "Rounded")
+        case .floating: String(localized: "Floating")
         }
     }
     var subtitle: String {
@@ -115,11 +115,11 @@ enum MiniPlayerBackground: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .followTheme: "Follow theme"
-        case .transparent: "Transparent"
-        case .blur: "Blur"
-        case .gradient: "Gradient"
-        case .pureBlack: "Pure black"
+        case .followTheme: String(localized: "Follow theme")
+        case .transparent: String(localized: "Transparent")
+        case .blur: String(localized: "Blur")
+        case .gradient: String(localized: "Gradient")
+        case .pureBlack: String(localized: "Pure black")
         }
     }
 }
@@ -130,10 +130,10 @@ enum DefaultTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .home: "Home"
-        case .explore: "Explore"
-        case .yours: "Yours"
-        case .library: "Library"
+        case .home: String(localized: "Home")
+        case .explore: String(localized: "Explore")
+        case .yours: String(localized: "Yours")
+        case .library: String(localized: "Library")
         }
     }
     var tab: BlazeTab {
