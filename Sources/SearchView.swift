@@ -16,6 +16,11 @@ struct SearchView: View {
 
     @State private var query = ""
     @State private var results: [Track] = []
+    /// Albums, artists and playlists — the non-song tabs, which open a page.
+    @State private var cards: [HomeItem] = []
+    @State private var scope: YouTube.SearchScope = .songs
+    @State private var cardRoute: HomeItem?
+    @State private var artistRoute: ArtistRoute?
     @State private var suggestions: [String] = []
     @State private var suggestedSongs: [Track] = []
     @State private var moods: [MoodItem] = []
@@ -37,10 +42,21 @@ struct SearchView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    if didSearch, !trimmed.isEmpty {
+                        scopePicker
+                    }
                     if searching {
                         SkeletonTrackList(rows: 8).padding(.top, 8)
-                    } else if !results.isEmpty {
+                    } else if scope == .songs, !results.isEmpty {
                         resultRows
+                    } else if scope != .songs, !cards.isEmpty {
+                        cardRows
+                    } else if didSearch, !trimmed.isEmpty {
+                        Text("No results")
+                            .font(.system(size: 14))
+                            .foregroundStyle(palette.onSurfaceVariant)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
                     } else if !trimmed.isEmpty {
                         suggestionList
                     } else {
@@ -55,6 +71,10 @@ struct SearchView: View {
         .background(palette.scaffold.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(item: $moodRoute) { MoodDetailView(mood: $0, player: player) }
+        .navigationDestination(item: $cardRoute) { PlaylistView(item: $0, player: player) }
+        .navigationDestination(item: $artistRoute) {
+            ArtistView(browseId: $0.browseId, player: player)
+        }
         .task { if moods.isEmpty { moods = await YouTube.moods() } }
     }
 
@@ -294,11 +314,102 @@ struct SearchView: View {
         fieldFocused = false
         searching = true
         didSearch = true
+        scope = .songs
+        cards = []
         Task {
             let found = await YouTube.search(q)
             await MainActor.run {
                 results = found
                 searching = false
+            }
+        }
+    }
+}
+
+// MARK: - Scope
+
+extension SearchView {
+    /// The four YouTube Music search tabs. Songs play; the rest open a page.
+    private var scopePicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(YouTube.SearchScope.allCases) { option in
+                    let active = option == scope
+                    Text(option.title)
+                        .font(.system(size: 13, weight: active ? .bold : .medium))
+                        .foregroundStyle(active ? palette.onAccent : palette.onSurfaceVariant)
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .background(active ? AnyShapeStyle(palette.accent)
+                                           : AnyShapeStyle(palette.surfaceHigh))
+                        .clipShape(Capsule())
+                        .contentShape(Capsule())
+                        .onTapGesture {
+                            guard option != scope else { return }
+                            scope = option
+                            runScopeSearch()
+                        }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.vertical, 10)
+    }
+
+    private var cardRows: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(cards) { card in
+                Button {
+                    // An artist opens their channel; an album or playlist opens
+                    // its track list.
+                    if scope == .artists, let id = card.browseId {
+                        artistRoute = ArtistRoute(browseId: id)
+                    } else {
+                        cardRoute = card
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        RemoteImage(url: card.thumbnailURL, size: 52) {
+                            palette.onSurface.opacity(0.10)
+                        }
+                        .frame(width: 52, height: 52)
+                        .clipShape(card.isCircular
+                                   ? AnyShape(Circle())
+                                   : AnyShape(RoundedRectangle(cornerRadius: 8)))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(card.title)
+                                .font(.subheadline).foregroundStyle(palette.onSurface)
+                                .lineLimit(1)
+                            if !card.subtitle.isEmpty {
+                                Text(card.subtitle)
+                                    .font(.caption).foregroundStyle(palette.onSurfaceVariant)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(palette.onSurfaceVariant.opacity(0.6))
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Re-run the current query against the selected tab.
+    private func runScopeSearch() {
+        let q = trimmed
+        guard !q.isEmpty else { return }
+        searching = true
+        Task {
+            if scope == .songs {
+                let found = await YouTube.search(q)
+                await MainActor.run { results = found; cards = []; searching = false }
+            } else {
+                let found = await YouTube.searchCards(q, scope: scope)
+                await MainActor.run { cards = found; results = []; searching = false }
             }
         }
     }
@@ -443,4 +554,12 @@ struct SongRow: View {
                 .padding(.trailing, trailingPadding)
         }
     }
+}
+
+
+/// `navigationDestination(item:)` needs something Identifiable, and a bare
+/// browseId String isn't.
+struct ArtistRoute: Identifiable, Hashable {
+    let browseId: String
+    var id: String { browseId }
 }

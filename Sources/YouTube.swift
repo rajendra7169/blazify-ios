@@ -19,6 +19,81 @@ enum YouTube {
     /// YouTube Music "Songs" search filter.
     private static let songsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
 
+    /// The other three search tabs. Verified live: each returns
+    /// `musicResponsiveListItemRenderer` rows carrying a browseId rather than a
+    /// videoId, so they open a page instead of playing.
+    enum SearchScope: String, CaseIterable, Identifiable {
+        case songs, albums, artists, playlists
+
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .songs: return "Songs"
+            case .albums: return "Albums"
+            case .artists: return "Artists"
+            case .playlists: return "Playlists"
+            }
+        }
+        var params: String {
+            switch self {
+            case .songs: return "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+            case .albums: return "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D"
+            case .artists: return "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
+            case .playlists: return "EgWKAQIoAWoKEAkQChAFEAMQBA%3D%3D"
+            }
+        }
+        /// Artists render as circles, everything else as squares.
+        var isCircular: Bool { self == .artists }
+    }
+
+    /// Albums, artists and playlists — the tabs that aren't songs. Returns cards
+    /// that open a page; use `search(_:)` for playable songs.
+    static func searchCards(_ query: String, scope: SearchScope) async -> [HomeItem] {
+        guard scope != .songs else { return [] }
+        let visitor = await visitorData()
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "query": query,
+            "params": scope.params,
+        ]
+        guard let json = await post(musicSearch, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body)
+        else { return [] }
+
+        var out: [HomeItem] = []
+        var seen = Set<String>()
+        collectSearchCards(json, circular: scope.isCircular, into: &out, seen: &seen)
+        return out
+    }
+
+    /// Rows whose navigation is a browse endpoint — an album, artist or playlist.
+    private static func collectSearchCards(_ node: Any, circular: Bool,
+                                           into out: inout [HomeItem], seen: inout Set<String>) {
+        if let dict = node as? [String: Any] {
+            if let r = dict["musicResponsiveListItemRenderer"] as? [String: Any] {
+                let nav = r["navigationEndpoint"] as? [String: Any]
+                let browse = nav?["browseEndpoint"] as? [String: Any]
+                if let id = browse?["browseId"] as? String, !id.isEmpty, seen.insert(id).inserted {
+                    let cols = r["flexColumns"] as? [[String: Any]] ?? []
+                    out.append(HomeItem(title: flexText(cols, 0),
+                                        subtitle: flexText(cols, 1),
+                                        thumbnail: musicThumb(r["thumbnail"]),
+                                        videoId: nil, browseId: id,
+                                        isCircular: circular))
+                }
+                return
+            }
+            for (_, v) in dict {
+                collectSearchCards(v, circular: circular, into: &out, seen: &seen)
+            }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectSearchCards(v, circular: circular, into: &out, seen: &seen) }
+        }
+    }
+
     private static var cachedVisitor: String?
     /// Resolved streams cached until near their expiry (lets us prefetch).
     private static var urlCache: [String: (url: URL, duration: Double, expires: Date)] = [:]
