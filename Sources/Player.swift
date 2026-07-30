@@ -58,6 +58,10 @@ final class Player: ObservableObject {
     /// True while a crossfade is running, so the normal end-of-track handler
     /// doesn't also try to advance.
     private var crossfading = false
+    /// The next track, already built and buffered but paused. Swapping to this
+    /// on end is what removes the gap — loading from scratch is the gap.
+    private var preparedPlayer: AVPlayer?
+    private var preparedIndex: Int?
     private var endHandled = false
     private var artwork: MPMediaItemArtwork?
 
@@ -370,6 +374,7 @@ final class Player: ObservableObject {
 
     func jump(to i: Int) {
         cancelCrossfade()
+        discardPrepared()
         guard queue.indices.contains(i) else { return }
         index = i
         loadCurrent()
@@ -553,6 +558,10 @@ final class Player: ObservableObject {
             updateNowPlaying()
             return
         }
+        // Gapless: the next track is already built and buffered, so hand over
+        // rather than loading, which is where the silence comes from.
+        if adoptPreparedPlayer() { return }
+
         if !next() {
             // Queue's empty. Autoplay keeps going with songs related to the last
             // one — Android's auto radio queue — otherwise settle on paused at
@@ -601,6 +610,7 @@ final class Player: ObservableObject {
     private func loadCurrent() {
         guard let track = current else { return }
         if !crossfading { cancelCrossfade() }
+        discardPrepared()
         // Last.fm: announce the song now, and arm the scrobble for later.
         scrobbleStart = Date()
         scrobbled = false
@@ -759,6 +769,69 @@ final class Player: ObservableObject {
         updateNowPlaying()
     }
 
+    // MARK: - Gapless
+
+    /// Build the next track's player early so it can start the instant this one
+    /// ends. Crossfade already overlaps the two, so it takes precedence.
+    private func considerGapless() {
+        let prefs = PlaybackPrefs.shared
+        guard prefs.gapless, !prefs.crossfade, !crossfading, isPlaying,
+              repeatMode != .one, duration > 0
+        else { return }
+        let next = index + 1
+        guard queue.indices.contains(next), preparedIndex != next else { return }
+        // Ten seconds is enough to resolve and buffer without holding a second
+        // stream open for most of the song.
+        guard duration - currentTime <= 10 else { return }
+
+        preparedIndex = next
+        let track = queue[next]
+        Task { @MainActor in
+            guard let url = await self.resolvedURL(for: track),
+                  self.preparedIndex == next else { return }
+            let asset = AVURLAsset(url: url,
+                                   options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
+            let item = AVPlayerItem(asset: asset)
+            item.audioTimePitchAlgorithm = PlaybackPrefs.shared.preservePitch
+                ? .timeDomain : .varispeed
+            let player = AVPlayer(playerItem: item)
+            player.volume = self.avPlayer?.volume ?? 1
+            // Buffer without making a sound.
+            player.pause()
+            self.preparedPlayer = player
+        }
+    }
+
+    /// Swap to the pre-built player. Returns false when nothing was ready, so
+    /// the caller falls back to a normal load.
+    private func adoptPreparedPlayer() -> Bool {
+        guard PlaybackPrefs.shared.gapless,
+              let prepared = preparedPlayer,
+              let target = preparedIndex,
+              target == index + 1, queue.indices.contains(target)
+        else { return false }
+
+        avPlayer?.pause()
+        removeTimeObserver()
+        statusObs = nil
+        rateObs = nil
+
+        preparedPlayer = nil
+        preparedIndex = nil
+        avPlayer = prepared
+        index = target
+        prepared.play()
+        prepared.rate = Float(PlaybackPrefs.shared.speed)
+        adoptPlayingTrack()
+        return true
+    }
+
+    private func discardPrepared() {
+        preparedPlayer?.pause()
+        preparedPlayer = nil
+        preparedIndex = nil
+    }
+
     // MARK: - Crossfade
 
     /// Begin blending into the next song once the current one is inside the
@@ -887,6 +960,7 @@ final class Player: ObservableObject {
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
             self.considerScrobble()
             self.considerCrossfade()
+            self.considerGapless()
         }
         rateObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             DispatchQueue.main.async {

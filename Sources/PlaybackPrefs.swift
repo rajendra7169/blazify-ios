@@ -33,6 +33,7 @@ final class PlaybackPrefs: ObservableObject {
     @Published var loudnessTarget: Double { didSet { save(loudnessTarget, "loudnessLevel"); audioChanged() } }
     @Published var speed: Double { didSet { save(speed, "playbackSpeed"); audioChanged() } }
     @Published var preservePitch: Bool { didSet { save(preservePitch, "preservePitch"); audioChanged() } }
+    @Published var gapless: Bool { didSet { save(gapless, "gaplessPlayback") } }
     @Published var crossfade: Bool { didSet { save(crossfade, "crossfadeEnabled") } }
     @Published var crossfadeDuration: Double { didSet { save(crossfadeDuration, "crossfadeDuration") } }
 
@@ -72,6 +73,7 @@ final class PlaybackPrefs: ObservableObject {
         loudnessTarget = number("loudnessLevel", -14)   // Android's default LUFS target
         speed = number("playbackSpeed", 1)
         preservePitch = flag("preservePitch", true)
+        gapless = flag("gaplessPlayback", true)
         crossfade = flag("crossfadeEnabled", false)
         crossfadeDuration = number("crossfadeDuration", 4)
 

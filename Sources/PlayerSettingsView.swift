@@ -38,6 +38,10 @@ struct PlayerSettingsView: View {
                                subtitle: "Stop voices rising as the speed goes up",
                                isOn: $prefs.preservePitch)
                 SettingsDivider()
+                SettingsToggle(symbol: "arrow.triangle.merge", title: "Gapless",
+                               subtitle: "No silence between tracks on a live album or a mix",
+                               isOn: $prefs.gapless)
+                SettingsDivider()
                 SettingsToggle(symbol: "arrow.left.arrow.right", title: "Crossfade",
                                subtitle: "Blend the end of one song into the next",
                                isOn: $prefs.crossfade)
