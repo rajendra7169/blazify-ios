@@ -1,6 +1,22 @@
 import AppIntents
 import Foundation
 
+extension BlazifyLink {
+    /// The request a widget link stands for. Lives here rather than beside the
+    /// URLs because `BlazifyRequest` is app-only — the widget target compiles
+    /// the link definitions and must not need it.
+    static func request(for url: URL) -> BlazifyRequest? {
+        guard url.scheme == scheme else { return nil }
+        switch url.host {
+        case "resume": return .resume
+        case "favourites": return .favourites
+        case "downloads": return .downloads
+        case "recognise": return .recognise
+        default: return nil
+        }
+    }
+}
+
 /// What a Siri phrase or Shortcut asked us to do. The intents run outside the
 /// app's view tree — the player is a `@StateObject` owned by `RootView`, so an
 /// intent can't touch it directly. It leaves a request here and opens the app,

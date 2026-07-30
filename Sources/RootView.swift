@@ -164,6 +164,12 @@ struct RootView: View {
             for: UIApplication.willEnterForegroundNotification)) { _ in
             performPendingRequest()
         }
+        // Home Screen widget tiles arrive as blazify:// URLs.
+        .onOpenURL { url in
+            guard let request = BlazifyLink.request(for: url) else { return }
+            request.store()
+            performPendingRequest()
+        }
         .environment(\.palette, palette)
         .environment(\.playerBottomInset, bottomInset)
         .preferredColorScheme(theme.preferredColorScheme)

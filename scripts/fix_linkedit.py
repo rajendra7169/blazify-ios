@@ -55,6 +55,10 @@ def patch(path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        sys.exit("usage: fix_linkedit.py <macho>")
-    patch(sys.argv[1])
+    if len(sys.argv) < 2:
+        sys.exit("usage: fix_linkedit.py <macho> [<macho> ...]")
+    # Every Mach-O in the bundle needs this, not just the app's own binary:
+    # an app extension (a widget) is a separate binary inside PlugIns/, and an
+    # unpatched one crashes the same way at launch.
+    for path in sys.argv[1:]:
+        patch(path)

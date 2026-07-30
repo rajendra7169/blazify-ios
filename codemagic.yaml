@@ -33,8 +33,17 @@ workflows:
 
       - name: Fix __LINKEDIT so third-party signing survives (iOS dyld launch fix)
         script: |
-          python3 scripts/fix_linkedit.py \
-            build/Build/Products/Release-iphoneos/BlazifyPlayer.app/BlazifyPlayer
+          APP=build/Build/Products/Release-iphoneos/BlazifyPlayer.app
+          # The app binary AND every extension inside it. A widget's .appex is
+          # its own Mach-O — leaving it unpatched crashes the app at launch with
+          # the same __LINKEDIT error, and it is not obvious where from.
+          BINARIES="$APP/BlazifyPlayer"
+          for ext in "$APP"/PlugIns/*.appex; do
+            [ -d "$ext" ] || continue
+            BINARIES="$BINARIES $ext/$(basename "$ext" .appex)"
+          done
+          echo "Patching: $BINARIES"
+          python3 scripts/fix_linkedit.py $BINARIES
 
       - name: Package into an .ipa
         script: |

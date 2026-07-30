@@ -14,6 +14,9 @@ targets:
     platform: iOS
     sources:
       - Sources
+    dependencies:
+      - target: BlazifyWidget
+        embed: true
     info:
       path: Sources/Generated-Info.plist
       properties:
@@ -26,6 +29,10 @@ targets:
         # Song recognition listens on the mic (ShazamKit). iOS kills the app on
         # the spot if it records without this string.
         NSMicrophoneUsageDescription: Blazify uses the microphone to recognise the song playing around you.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.rajendra.blazifyplayer
+            CFBundleURLSchemes:
+              - blazify
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -37,3 +44,29 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"   # iPhone only
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  BlazifyWidget:
+    type: app-extension
+    platform: iOS
+    # Only the link definitions are shared, so the widget and the app can't
+    # drift on URLs. The intents themselves stay in the app — compiling them
+    # here too would register every App Intent twice.
+    sources:
+      - Widget
+      - path: Sources/BlazifyLink.swift
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: Blazify
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rajendra.blazifyplayer.widget
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
