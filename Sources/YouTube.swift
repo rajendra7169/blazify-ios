@@ -752,8 +752,8 @@ enum YouTube {
     private static func collectTracks(_ node: Any, into out: inout [Track], seen: inout Set<String>) {
         if let dict = node as? [String: Any] {
             if let r = dict["musicResponsiveListItemRenderer"] as? [String: Any] {
-                let vid = (r["playlistItemData"] as? [String: Any])?["videoId"] as? String
-                    ?? overlayVideoId(r["overlay"])
+                let itemData = r["playlistItemData"] as? [String: Any]
+                let vid = itemData?["videoId"] as? String ?? overlayVideoId(r["overlay"])
                 if let v = vid, !v.isEmpty, seen.insert(v).inserted {
                     let cols = r["flexColumns"] as? [[String: Any]] ?? []
                     // Content filters need these: the explicit badge sits on the
@@ -766,7 +766,8 @@ enum YouTube {
                                       thumbnail: musicThumb(r["thumbnail"]), duration: 0,
                                       artistId: flexArtistId(cols),
                                       explicit: explicit,
-                                      video: videoType.map { $0 != "MUSIC_VIDEO_TYPE_ATV" })
+                                      video: videoType.map { $0 != "MUSIC_VIDEO_TYPE_ATV" },
+                                      setVideoId: itemData?["playlistSetVideoId"] as? String)
                     // Every song list in the app is built here, so the Content
                     // filters only need applying at this one point.
                     if ContentPrefs.allows(track) { out.append(track) }
@@ -988,11 +989,93 @@ enum YouTube {
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
-        let id = playlistId.hasPrefix("VL") ? String(playlistId.dropFirst(2)) : playlistId
+        let id = barePlaylistId(playlistId)
         let body: [String: Any] = [
             "context": ["client": client],
             "playlistId": id,
             "actions": [["action": "ACTION_ADD_VIDEO", "addedVideoId": videoId]],
+        ]
+        let endpoint = "https://music.youtube.com/youtubei/v1/browse/edit_playlist?prettyPrint=false"
+        guard let json = await post(endpoint, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return false }
+        if let status = json["status"] as? String { return status == "STATUS_SUCCEEDED" }
+        return json["error"] == nil
+    }
+
+    /// Remove a track. YouTube identifies a row inside a playlist by BOTH the
+    /// video id and the row's own `setVideoId` — the same song can appear twice,
+    /// so the video id alone is ambiguous.
+    static func removeFromPlaylist(playlistId: String, videoId: String,
+                                   setVideoId: String) async -> Bool {
+        await editPlaylist(playlistId: playlistId, actions: [[
+            "action": "ACTION_REMOVE_VIDEO",
+            "removedVideoId": videoId,
+            "setVideoId": setVideoId,
+        ]])
+    }
+
+    /// Move a track. `movedSetVideoIdPredecessor` is the row it should land
+    /// after; omitting it moves the track to the top.
+    static func moveInPlaylist(playlistId: String, setVideoId: String,
+                               afterSetVideoId: String?) async -> Bool {
+        var action: [String: Any] = [
+            "action": "ACTION_MOVE_VIDEO_BEFORE",
+            "setVideoId": setVideoId,
+        ]
+        if let afterSetVideoId {
+            action["movedSetVideoIdPredecessor"] = afterSetVideoId
+        }
+        return await editPlaylist(playlistId: playlistId, actions: [action])
+    }
+
+    static func renamePlaylist(playlistId: String, title: String) async -> Bool {
+        await editPlaylist(playlistId: playlistId, actions: [[
+            "action": "ACTION_SET_PLAYLIST_NAME",
+            "playlistName": title,
+        ]])
+    }
+
+    static func deletePlaylist(playlistId: String) async -> Bool {
+        guard Auth.shared.isLoggedIn else { return false }
+        let id = barePlaylistId(playlistId)
+        guard !id.isEmpty else { return false }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = ["context": ["client": client], "playlistId": id]
+        let endpoint = "https://music.youtube.com/youtubei/v1/playlist/delete?prettyPrint=false"
+        guard let json = await post(endpoint, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return false }
+        if let status = json["status"] as? String { return status == "STATUS_SUCCEEDED" }
+        return json["error"] == nil
+    }
+
+    /// A playlist id as the edit endpoint wants it — without the "VL" browse
+    /// prefix that library rows carry.
+    private static func barePlaylistId(_ id: String) -> String {
+        id.hasPrefix("VL") ? String(id.dropFirst(2)) : id
+    }
+
+    /// One edit_playlist call. Every mutation above is the same request with a
+    /// different action, so they share this.
+    private static func editPlaylist(playlistId: String,
+                                     actions: [[String: Any]]) async -> Bool {
+        guard Auth.shared.isLoggedIn else { return false }
+        let id = barePlaylistId(playlistId)
+        guard !id.isEmpty, !actions.isEmpty else { return false }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "playlistId": id,
+            "actions": actions,
         ]
         let endpoint = "https://music.youtube.com/youtubei/v1/browse/edit_playlist?prettyPrint=false"
         guard let json = await post(endpoint, name: "67", version: remixVersion,

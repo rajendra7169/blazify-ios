@@ -17,6 +17,9 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
     /// From `watchEndpointMusicConfig.musicVideoType`: ATV is the audio track,
     /// anything else is an actual music video.
     var video: Bool?
+    /// A row's identity WITHIN a playlist. The same song can appear twice, so
+    /// removing or moving one needs this rather than the video id.
+    var setVideoId: String?
 
     var isExplicit: Bool { explicit ?? false }
     var isVideo: Bool { video ?? false }
@@ -26,7 +29,7 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
 
     init(videoId: String, title: String, artist: String, thumbnail: String,
          duration: Double, artistId: String? = nil,
-         explicit: Bool? = nil, video: Bool? = nil) {
+         explicit: Bool? = nil, video: Bool? = nil, setVideoId: String? = nil) {
         self.videoId = videoId
         self.title = title
         self.artist = artist
@@ -35,6 +38,7 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
         self.artistId = artistId
         self.explicit = explicit
         self.video = video
+        self.setVideoId = setVideoId
     }
 
     /// Thumbnail upscaled to a requested square size (googleusercontent resize).
