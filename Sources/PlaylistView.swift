@@ -8,8 +8,23 @@ struct PlaylistView: View {
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
 
+    @ObservedObject private var auth = Auth.shared
     @State private var tracks: [Track] = []
     @State private var loading = true
+    @State private var editing = false
+    @State private var renaming = false
+    @State private var newTitle = ""
+    @State private var confirmDelete = false
+    @State private var notice: String?
+    @Environment(\.dismiss) private var dismiss
+
+    /// Only your own playlists can be edited — an album or someone else's
+    /// playlist has no edit endpoint, so the controls stay hidden.
+    private var isEditable: Bool {
+        guard auth.isLoggedIn, let id = item.browseId else { return false }
+        // Library playlists browse as VL<playlistId>; albums browse as MPREb…
+        return id.hasPrefix("VL") && !tracks.isEmpty
+    }
 
     private var downloadLabel: String {
         guard !tracks.isEmpty else { return "Download" }
@@ -72,6 +87,27 @@ struct PlaylistView: View {
                     Text("Nothing to play here")
                         .foregroundStyle(palette.onSurfaceVariant)
                         .padding(.top, 40)
+                } else if editing {
+                    // A List is the only thing that gives drag handles and
+                    // swipe-to-delete, so editing swaps to one.
+                    List {
+                        ForEach(tracks) { track in
+                            TrackRow(track: track)
+                                .listRowBackground(palette.scaffold)
+                                .listRowSeparator(.hidden)
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) { remove(track) } label: {
+                                        Label("Remove", systemImage: "trash")
+                                    }
+                                }
+                        }
+                        .onMove { from, to in move(from: from, to: to) }
+                    }
+                    .environment(\.editMode, .constant(.active))
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .scrollDisabled(true)
+                    .frame(height: CGFloat(tracks.count) * 68)
                 } else {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(tracks.enumerated()), id: \.element.id) { pair in
@@ -90,6 +126,27 @@ struct PlaylistView: View {
         }
         .background(palette.scaffold.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { editMenu }
+        }
+        .alert("Rename playlist", isPresented: $renaming) {
+            TextField("Name", text: $newTitle)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") { rename() }
+        }
+        .alert("Delete this playlist?", isPresented: $confirmDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { deletePlaylist() }
+        } message: {
+            Text("It will be removed from your YouTube Music account too.")
+        }
+        .alert("Couldn't do that",
+               isPresented: Binding(get: { notice != nil },
+                                    set: { if !$0 { notice = nil } })) {
+            Button("OK", role: .cancel) { notice = nil }
+        } message: {
+            Text(notice ?? "")
+        }
         .task { await load() }
     }
 
@@ -106,6 +163,103 @@ struct PlaylistView: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    /// The edit menu, shown only for playlists you own.
+    @ViewBuilder private var editMenu: some View {
+        if isEditable {
+            Menu {
+                Button {
+                    withAnimation { editing.toggle() }
+                } label: {
+                    Label(editing ? "Done" : "Reorder or remove",
+                          systemImage: editing ? "checkmark" : "arrow.up.arrow.down")
+                }
+                Button {
+                    newTitle = item.title
+                    renaming = true
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+                Divider()
+                Button(role: .destructive) { confirmDelete = true } label: {
+                    Label("Delete playlist", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(palette.accent)
+            }
+        }
+    }
+
+    private func remove(_ track: Track) {
+        guard let playlistId = item.browseId, let setId = track.setVideoId else {
+            notice = "This row can't be removed."
+            return
+        }
+        let previous = tracks
+        withAnimation { tracks.removeAll { $0.setVideoId == setId } }
+        Task {
+            let ok = await YouTube.removeFromPlaylist(playlistId: playlistId,
+                                                      videoId: track.videoId,
+                                                      setVideoId: setId)
+            if !ok {
+                // Put it back rather than leaving the screen disagreeing with
+                // the account.
+                await MainActor.run {
+                    tracks = previous
+                    notice = "Couldn't remove that song."
+                }
+            }
+        }
+    }
+
+    private func move(from offsets: IndexSet, to destination: Int) {
+        guard let playlistId = item.browseId,
+              let source = offsets.first,
+              tracks.indices.contains(source) else { return }
+        let moved = tracks[source]
+        guard let setId = moved.setVideoId else {
+            notice = "This row can't be moved."
+            return
+        }
+        let previous = tracks
+        withAnimation { tracks.move(fromOffsets: offsets, toOffset: destination) }
+
+        // YouTube positions a row AFTER another row, so send the new neighbour.
+        let landed = tracks.firstIndex { $0.setVideoId == setId }
+        let predecessor = landed.flatMap { $0 > 0 ? tracks[$0 - 1].setVideoId : nil }
+        Task {
+            let ok = await YouTube.moveInPlaylist(playlistId: playlistId,
+                                                  setVideoId: setId,
+                                                  afterSetVideoId: predecessor)
+            if !ok {
+                await MainActor.run {
+                    tracks = previous
+                    notice = "Couldn't reorder that song."
+                }
+            }
+        }
+    }
+
+    private func rename() {
+        let title = newTitle.trimmingCharacters(in: .whitespaces)
+        guard let playlistId = item.browseId, !title.isEmpty else { return }
+        Task {
+            let ok = await YouTube.renamePlaylist(playlistId: playlistId, title: title)
+            if !ok { await MainActor.run { notice = "Couldn't rename the playlist." } }
+        }
+    }
+
+    private func deletePlaylist() {
+        guard let playlistId = item.browseId else { return }
+        Task {
+            let ok = await YouTube.deletePlaylist(playlistId: playlistId)
+            await MainActor.run {
+                if ok { dismiss() } else { notice = "Couldn't delete the playlist." }
+            }
+        }
     }
 
     private func load() async {
