@@ -5,18 +5,68 @@ import Foundation
 /// app's view tree — the player is a `@StateObject` owned by `RootView`, so an
 /// intent can't touch it directly. It leaves a request here and opens the app,
 /// which performs it on the next foreground.
-enum BlazifyRequest: String {
+enum BlazifyRequest: Equatable {
     case resume, favourites, downloads, recognise
+    /// "Play <something> on Blazify" — the words Siri heard, to search for.
+    case search(String)
 
     private static let key = "pendingIntentRequest"
+    private static let queryKey = "pendingIntentQuery"
 
-    func store() { UserDefaults.standard.set(rawValue, forKey: Self.key) }
+    private var name: String {
+        switch self {
+        case .resume: return "resume"
+        case .favourites: return "favourites"
+        case .downloads: return "downloads"
+        case .recognise: return "recognise"
+        case .search: return "search"
+        }
+    }
+
+    func store() {
+        let d = UserDefaults.standard
+        d.set(name, forKey: Self.key)
+        if case .search(let query) = self {
+            d.set(query, forKey: Self.queryKey)
+        } else {
+            d.removeObject(forKey: Self.queryKey)
+        }
+    }
 
     /// Reads and clears in one go, so a request is never performed twice.
     static func take() -> BlazifyRequest? {
-        guard let raw = UserDefaults.standard.string(forKey: key) else { return nil }
-        UserDefaults.standard.removeObject(forKey: key)
-        return BlazifyRequest(rawValue: raw)
+        let d = UserDefaults.standard
+        guard let raw = d.string(forKey: key) else { return nil }
+        let query = d.string(forKey: queryKey)
+        d.removeObject(forKey: key)
+        d.removeObject(forKey: queryKey)
+        switch raw {
+        case "resume": return .resume
+        case "favourites": return .favourites
+        case "downloads": return .downloads
+        case "recognise": return .recognise
+        case "search":
+            guard let query, !query.isEmpty else { return nil }
+            return .search(query)
+        default: return nil
+        }
+    }
+}
+
+/// "Play <song> on Blazify". The parameter is what Siri transcribes, handed
+/// straight to search — the first playable result wins, which is what you'd
+/// expect from a spoken request.
+struct PlaySongIntent: AppIntent {
+    static var title: LocalizedStringResource = "Play a song"
+    static var description = IntentDescription("Search Blazify and play the best match.")
+    static var openAppWhenRun = true
+
+    @Parameter(title: "Song", requestValueDialog: "What would you like to hear?")
+    var song: String
+
+    func perform() async throws -> some IntentResult {
+        BlazifyRequest.search(song).store()
+        return .result()
     }
 }
 
@@ -82,6 +132,16 @@ struct BlazifyShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Play",
             systemImageName: "play.fill")
+
+        AppShortcut(
+            intent: PlaySongIntent(),
+            phrases: [
+                "Play \(\.$song) on \(.applicationName)",
+                "Play \(\.$song) with \(.applicationName)",
+                "Listen to \(\.$song) on \(.applicationName)",
+            ],
+            shortTitle: "Play a song",
+            systemImageName: "music.note")
 
         AppShortcut(
             intent: PlayFavouritesIntent(),

@@ -84,6 +84,18 @@ struct RootView: View {
             player.showFullPlayer = true
         case .recognise:
             showRecognition = true
+        case .search(let query):
+            // Spoken request: search, then play the best match. Falls back to
+            // the Explore tab with nothing playing rather than failing silently.
+            Task { @MainActor in
+                let results = await YouTube.search(query)
+                guard !results.isEmpty else {
+                    tab = .explore
+                    return
+                }
+                player.play(results, startAt: 0)
+                player.showFullPlayer = true
+            }
         }
     }
 
