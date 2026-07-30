@@ -40,7 +40,7 @@ struct SettingsGroup<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased())
-                .font(.system(size: 12, weight: .semibold))
+                .font(.blaze(12, .semibold))
                 .tracking(0.6)
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.leading, 6)
@@ -71,17 +71,17 @@ struct SettingsLink: View {
             HStack(spacing: 14) {
                 SettingsIcon(symbol)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 15, weight: .medium))
+                    Text(title).font(.blaze(15, .medium))
                         .foregroundStyle(palette.onSurface)
                     if !subtitle.isEmpty {
-                        Text(subtitle).font(.system(size: 12))
+                        Text(subtitle).font(.blaze(12))
                             .foregroundStyle(palette.onSurfaceVariant)
                             .multilineTextAlignment(.leading)
                     }
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.blaze(12, .semibold))
                     .foregroundStyle(palette.onSurfaceVariant.opacity(0.7))
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
@@ -102,10 +102,10 @@ struct SettingsToggle: View {
         HStack(spacing: 14) {
             SettingsIcon(symbol)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 15, weight: .medium))
+                Text(title).font(.blaze(15, .medium))
                     .foregroundStyle(palette.onSurface)
                 if !subtitle.isEmpty {
-                    Text(subtitle).font(.system(size: 12))
+                    Text(subtitle).font(.blaze(12))
                         .foregroundStyle(palette.onSurfaceVariant)
                         .multilineTextAlignment(.leading)
                 }
@@ -132,11 +132,11 @@ struct SettingsSlider: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 14) {
                 SettingsIcon(symbol)
-                Text(title).font(.system(size: 15, weight: .medium))
+                Text(title).font(.blaze(15, .medium))
                     .foregroundStyle(palette.onSurface)
                 Spacer(minLength: 8)
                 Text(readout(value))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.blaze(13, .semibold))
                     .monospacedDigit()
                     .foregroundStyle(palette.accent)
             }
@@ -161,7 +161,7 @@ struct SettingsIcon: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 15))
+            .font(.blaze(15))
             .foregroundStyle(palette.accent)
             .frame(width: 26)
     }

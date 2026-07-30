@@ -32,13 +32,13 @@ struct BackupRestoreView: View {
                  + "here is what only exists on this phone. Downloaded audio isn't "
                  + "included either — it would make the file enormous, and the songs "
                  + "re-download.")
-                .font(.system(size: 12))
+                .font(.blaze(12))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.horizontal, 6)
 
             if let message {
                 Text(message)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.blaze(13, .medium))
                     .foregroundStyle(palette.accent)
                     .padding(.horizontal, 6)
             }

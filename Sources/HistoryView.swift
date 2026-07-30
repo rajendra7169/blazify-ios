@@ -52,7 +52,7 @@ struct HistoryView: View {
                     Text(source == .local
                          ? "Nothing played yet — your history will appear here."
                          : "No history on your YouTube Music account.")
-                        .font(.system(size: 14))
+                        .font(.blaze(14))
                         .foregroundStyle(palette.onSurfaceVariant)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
@@ -62,7 +62,7 @@ struct HistoryView: View {
 
                 ForEach(sections, id: \.title) { section in
                     Text(section.title)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.blaze(18, .bold))
                         .foregroundStyle(palette.onSurface)
                         .padding(.horizontal, 16)
                         .padding(.top, 18)
@@ -135,7 +135,7 @@ struct HistoryView: View {
             ForEach(Source.allCases) { option in
                 let active = option == source
                 Text(option.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.blaze(13, .semibold))
                     .foregroundStyle(active ? palette.onAccent : palette.onSurface)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)

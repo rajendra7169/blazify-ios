@@ -40,7 +40,7 @@ struct PlaylistView: View {
                 RemoteImage(url: item.thumbnailURL, size: 220) {
                     palette.onSurface.opacity(0.06)
                         .overlay(Image(systemName: "music.note.list")
-                            .font(.system(size: 48))
+                            .font(.blaze(48))
                             .foregroundStyle(palette.onSurface.opacity(0.35)))
                 }
                 .frame(width: 200, height: 200)
@@ -50,12 +50,12 @@ struct PlaylistView: View {
 
                 VStack(spacing: 4) {
                     Text(item.title)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.blaze(22, .bold))
                         .foregroundStyle(palette.onSurface)
                         .multilineTextAlignment(.center)
                     if !item.subtitle.isEmpty {
                         Text(item.subtitle)
-                            .font(.system(size: 14))
+                            .font(.blaze(14))
                             .foregroundStyle(palette.onSurfaceVariant)
                             .multilineTextAlignment(.center)
                     }
@@ -154,7 +154,7 @@ struct PlaylistView: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                Text(title).font(.system(size: 15, weight: .semibold))
+                Text(title).font(.blaze(15, .semibold))
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
@@ -187,7 +187,7 @@ struct PlaylistView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.blaze(17, .semibold))
                     .foregroundStyle(palette.accent)
             }
         }

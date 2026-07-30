@@ -60,7 +60,7 @@ struct SearchView: View {
                         cardRows
                     } else if didSearch, !trimmed.isEmpty {
                         Text("No results")
-                            .font(.system(size: 14))
+                            .font(.blaze(14))
                             .foregroundStyle(palette.onSurfaceVariant)
                             .frame(maxWidth: .infinity)
                             .padding(.top, 40)
@@ -92,18 +92,18 @@ struct SearchView: View {
             if pushed {
                 Button { dismiss() } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.blaze(17, .semibold))
                         .foregroundStyle(palette.onSurface)
                 }
             } else {
                 Image(systemName: "magnifyingglass")
                     .accessibilityLabel("Search")
-                    .font(.system(size: 18))
+                    .font(.blaze(18))
                     .foregroundStyle(palette.onSurfaceVariant)
             }
 
             TextField("Songs, artists, albums…", text: $query)
-                .font(.system(size: 16))
+                .font(.blaze(16))
                 .foregroundStyle(palette.onSurface)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -124,7 +124,7 @@ struct SearchView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .accessibilityLabel("Clear search")
-                        .font(.system(size: 18))
+                        .font(.blaze(18))
                         .foregroundStyle(palette.onSurfaceVariant)
                 }
             }
@@ -144,11 +144,11 @@ struct SearchView: View {
         if !history.queries.isEmpty {
             HStack {
                 Text("Recent searches")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.blaze(18, .bold))
                     .foregroundStyle(palette.onSurface)
                 Spacer()
                 Button("Clear") { history.clear() }
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.blaze(13, .semibold))
                     .foregroundStyle(palette.accent)
             }
             .padding(.horizontal, 16)
@@ -166,7 +166,7 @@ struct SearchView: View {
 
         if !moods.isEmpty {
             Text("Browse")
-                .font(.system(size: 18, weight: .bold))
+                .font(.blaze(18, .bold))
                 .foregroundStyle(palette.onSurface)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
@@ -180,7 +180,7 @@ struct SearchView: View {
             .padding(.horizontal, 16)
         } else if history.queries.isEmpty {
             Text("Search for a song, artist or album")
-                .font(.system(size: 14))
+                .font(.blaze(14))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 80)
@@ -192,7 +192,7 @@ struct SearchView: View {
         let seed = Color(hex: mood.colorARGB & 0xFFFFFF)
         return Button { moodRoute = mood } label: {
             Text(mood.title)
-                .font(.system(size: 14, weight: .bold))
+                .font(.blaze(14, .bold))
                 .foregroundStyle(seed.isLight ? .black : .white)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
@@ -240,7 +240,7 @@ struct SearchView: View {
 
         if suggestedSongs.isEmpty, suggestions.isEmpty, didSearch {
             Text("No results")
-                .font(.system(size: 14))
+                .font(.blaze(14))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 60)
@@ -251,11 +251,11 @@ struct SearchView: View {
                                action: @escaping () -> Void) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 17))
+                .font(.blaze(17))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .frame(width: 24)
             Text(text)
-                .font(.system(size: 15))
+                .font(.blaze(15))
                 .foregroundStyle(palette.onSurface)
                 .lineLimit(1)
             Spacer(minLength: 0)
@@ -265,7 +265,7 @@ struct SearchView: View {
                 suggest()
             } label: {
                 Image(systemName: "arrow.up.left")
-                    .font(.system(size: 14))
+                    .font(.blaze(14))
                     .foregroundStyle(palette.onSurfaceVariant)
             }
             .buttonStyle(.plain)
@@ -347,22 +347,22 @@ extension SearchView {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "link")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.blaze(18, .semibold))
                     .foregroundStyle(palette.onAccent)
                     .frame(width: 44, height: 44)
                     .background(palette.accent)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(link.browseId == nil ? "Open this song" : "Open this playlist")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.blaze(15, .semibold))
                         .foregroundStyle(palette.onSurface)
                     Text("From the link you pasted")
-                        .font(.system(size: 12))
+                        .font(.blaze(12))
                         .foregroundStyle(palette.onSurfaceVariant)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.blaze(12, .semibold))
                     .foregroundStyle(palette.onSurfaceVariant.opacity(0.6))
             }
             .padding(.horizontal, 16).padding(.vertical, 10)
@@ -463,7 +463,7 @@ extension SearchView {
                         }
                         Spacer(minLength: 0)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.blaze(12, .semibold))
                             .foregroundStyle(palette.onSurfaceVariant.opacity(0.6))
                     }
                     .padding(.horizontal, 16).padding(.vertical, 6)
@@ -515,12 +515,12 @@ struct FlowChips: View {
     private func chip(for entry: String) -> some View {
         HStack(spacing: 6) {
             Text(entry)
-                .font(.system(size: 13, weight: .medium))
+                .font(.blaze(13, .medium))
                 .foregroundStyle(palette.onSurface)
                 .lineLimit(1)
             Button { onDelete(entry) } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.blaze(10, .bold))
                     .foregroundStyle(palette.onSurfaceVariant)
             }
             .buttonStyle(.plain)

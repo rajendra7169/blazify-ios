@@ -66,7 +66,7 @@ struct PrivacyView: View {
 
     private func groupTitle(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(.system(size: 12, weight: .bold))
+            .font(.blaze(12, .bold))
             .tracking(1.2)
             .foregroundStyle(palette.onSurfaceVariant)
             .padding(.leading, 6)
@@ -88,10 +88,10 @@ struct PrivacyView: View {
             iconChip(icon)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.blaze(15, .semibold))
                     .foregroundStyle(palette.onSurface)
                 Text(subtitle)
-                    .font(.system(size: 12.5))
+                    .font(.blaze(12.5))
                     .foregroundStyle(palette.onSurfaceVariant)
             }
             Spacer(minLength: 8)
@@ -108,15 +108,15 @@ struct PrivacyView: View {
                 iconChip(icon)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.blaze(15, .semibold))
                         .foregroundStyle(palette.onSurface)
                     Text(subtitle)
-                        .font(.system(size: 12.5))
+                        .font(.blaze(12.5))
                         .foregroundStyle(palette.onSurfaceVariant)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13))
+                    .font(.blaze(13))
                     .foregroundStyle(palette.onSurface.opacity(0.35))
             }
             .padding(.horizontal, 14)
@@ -128,7 +128,7 @@ struct PrivacyView: View {
 
     private func iconChip(_ icon: String) -> some View {
         Image(systemName: icon)
-            .font(.system(size: 18))
+            .font(.blaze(18))
             .foregroundStyle(palette.accent)
             .frame(width: 38, height: 38)
             .background(palette.accent.opacity(0.14))

@@ -16,16 +16,16 @@ struct StreamSourcesView: View {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(client.title)
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.blaze(15, .medium))
                                     .foregroundStyle(palette.onSurface)
                                 Text(client.blurb)
-                                    .font(.system(size: 12))
+                                    .font(.blaze(12))
                                     .foregroundStyle(palette.onSurfaceVariant)
                             }
                             Spacer(minLength: 8)
                             if client == prefs.order.first {
                                 Text("FIRST")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.blaze(9, .bold))
                                     .foregroundStyle(palette.onAccent)
                                     .padding(.horizontal, 6).padding(.vertical, 2)
                                     .background(palette.accent)

@@ -162,12 +162,12 @@ struct ValuePickerSheet<Value: Hashable>: View {
                         } label: {
                             HStack {
                                 Text(label(option))
-                                    .font(.system(size: 15))
+                                    .font(.blaze(15))
                                     .foregroundStyle(palette.onSurface)
                                 Spacer()
                                 if option == selection {
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 13, weight: .bold))
+                                        .font(.blaze(13, .bold))
                                         .foregroundStyle(palette.accent)
                                 }
                             }

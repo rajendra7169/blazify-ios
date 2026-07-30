@@ -125,7 +125,7 @@ struct SettingsView: View {
                         Spacer().frame(height: 18)
                         HStack {
                             Text(group.title.uppercased())
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.blaze(12, .bold))
                                 .tracking(1.2)
                                 .foregroundStyle(palette.onSurfaceVariant)
                                 .padding(.leading, 6)
@@ -274,18 +274,18 @@ struct SettingsView: View {
                 Circle().fill(palette.accent)
                     .frame(width: 46, height: 46)
                     .overlay(Image(systemName: "person.fill")
-                        .font(.system(size: 22)).foregroundStyle(.black))
+                        .font(.blaze(22)).foregroundStyle(.black))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(auth.accountName ?? "Guest")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.blaze(16, .bold))
                         .foregroundStyle(palette.onSurface).lineLimit(1)
                     Text(auth.isLoggedIn ? "Manage your account" : "Tap to sign in")
-                        .font(.system(size: 12.5))
+                        .font(.blaze(12.5))
                         .foregroundStyle(palette.onSurfaceVariant)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14)).foregroundStyle(palette.onSurfaceVariant)
+                    .font(.blaze(14)).foregroundStyle(palette.onSurfaceVariant)
             }
             .padding(14)
             .background(
@@ -300,9 +300,9 @@ struct SettingsView: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16)).foregroundStyle(palette.onSurfaceVariant)
+                .font(.blaze(16)).foregroundStyle(palette.onSurfaceVariant)
             TextField("Search settings", text: $query)
-                .font(.system(size: 15))
+                .font(.blaze(15))
                 .foregroundStyle(palette.onSurface)
                 .tint(palette.accent)
                 .autocorrectionDisabled()
@@ -355,7 +355,7 @@ struct SettingsView: View {
                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 20))
+                Image(systemName: icon).font(.blaze(20))
                 Text(label).font(.system(size: 11, weight: active ? .semibold : .regular))
                     .lineLimit(1)
             }
@@ -409,7 +409,7 @@ struct SettingsView: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: row.icon)
-                    .font(.system(size: 19))
+                    .font(.blaze(19))
                     .foregroundStyle(tint)
                     .frame(width: 40, height: 40)
                     .background(tint.opacity(0.14))
@@ -417,15 +417,15 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.blaze(15, .semibold))
                         .foregroundStyle(palette.onSurface).lineLimit(1)
                     Text(live ? row.subtitle : row.subtitle + " · coming soon")
-                        .font(.system(size: 12.5))
+                        .font(.blaze(12.5))
                         .foregroundStyle(palette.onSurfaceVariant).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13)).foregroundStyle(palette.onSurface.opacity(0.35))
+                    .font(.blaze(13)).foregroundStyle(palette.onSurface.opacity(0.35))
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .contentShape(Rectangle())

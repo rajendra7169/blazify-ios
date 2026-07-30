@@ -53,7 +53,7 @@ struct LibraryCollectionView: View {
                     Text(auth.isLoggedIn
                          ? "Nothing in your \(kind.title.lowercased()) yet."
                          : "Sign in to see your \(kind.title.lowercased()).")
-                        .font(.system(size: 14))
+                        .font(.blaze(14))
                         .foregroundStyle(palette.onSurfaceVariant)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
@@ -150,19 +150,19 @@ struct LibraryCollectionView: View {
                         RemoteImage(url: item.thumbnailURL, size: 180) {
                             palette.onSurface.opacity(0.06)
                                 .overlay(Image(systemName: kind == .artists ? "person.fill" : "square.stack")
-                                    .font(.system(size: 36))
+                                    .font(.blaze(36))
                                     .foregroundStyle(palette.onSurface.opacity(0.35)))
                         }
                         .aspectRatio(1, contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: kind == .artists ? 999 : 12))
 
                         Text(item.title)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.blaze(14, .semibold))
                             .foregroundStyle(palette.onSurface)
                             .lineLimit(1)
                         if !item.subtitle.isEmpty {
                             Text(item.subtitle)
-                                .font(.system(size: 12))
+                                .font(.blaze(12))
                                 .foregroundStyle(palette.onSurfaceVariant)
                                 .lineLimit(1)
                         }

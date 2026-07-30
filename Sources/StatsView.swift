@@ -19,7 +19,7 @@ struct StatsView: View {
 
                 if songs.isEmpty {
                     Text("Nothing played in this period yet.")
-                        .font(.system(size: 14))
+                        .font(.blaze(14))
                         .foregroundStyle(palette.onSurfaceVariant)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
@@ -83,7 +83,7 @@ struct StatsView: View {
                 ForEach(StatPeriod.allCases) { option in
                     let active = option == period
                     Text(option.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.blaze(13, .semibold))
                         .foregroundStyle(active ? palette.onAccent : palette.onSurface)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -102,12 +102,12 @@ struct StatsView: View {
     private func rankedRow(index: Int, track: Track) -> some View {
         HStack(spacing: 12) {
             Text("\(index + 1)")
-                .font(.system(size: 14, weight: .bold))
+                .font(.blaze(14, .bold))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .frame(width: 24, alignment: .trailing)
             TrackRow(track: track)
             Text("\(PlayHistory.playCount(track.videoId, in: period))×")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.blaze(12, .semibold))
                 .foregroundStyle(palette.accent)
             SongRowMenu(track: track, player: player)
         }

@@ -13,7 +13,7 @@ struct DownloadsView: View {
                 if downloads.tracks.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 44)).foregroundStyle(palette.accent)
+                            .font(.blaze(44)).foregroundStyle(palette.accent)
                         Text("No downloads yet").foregroundStyle(palette.onSurfaceVariant)
                         Text("Tap ⋮ → Download on a song, or Download on a playlist.")
                             .font(.caption).foregroundStyle(palette.onSurfaceVariant)

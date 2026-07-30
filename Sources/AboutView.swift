@@ -31,7 +31,7 @@ struct AboutView: View {
                 Spacer().frame(height: 40)
 
                 Text("Made with ❤️ by Rajendra Pandey")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.blaze(14, .bold))
                     .foregroundStyle(palette.onSurfaceVariant)
                     .multilineTextAlignment(.center)
 
@@ -67,7 +67,7 @@ struct AboutView: View {
                 .foregroundStyle(ink)
 
             Text("Blazify")
-                .font(.system(size: 34, weight: .black))
+                .font(.blaze(34, .black))
                 .tracking(-0.5)
                 .foregroundStyle(ink)
 
@@ -86,7 +86,7 @@ struct AboutView: View {
 
     private func heroChip(_ text: String, ink: Color) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .bold))
+            .font(.blaze(12, .bold))
             .foregroundStyle(ink)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
@@ -107,7 +107,7 @@ struct AboutView: View {
                 RemoteImage(url: avatar, size: 96) {
                     Circle().fill(palette.surfaceHigh)
                         .overlay(Image(systemName: "person.fill")
-                            .font(.system(size: 34))
+                            .font(.blaze(34))
                             .foregroundStyle(palette.onSurfaceVariant))
                 }
                 .frame(width: 96, height: 96)
@@ -115,11 +115,11 @@ struct AboutView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Rajendra Pandey")
-                        .font(.system(size: 22, weight: .black))
+                        .font(.blaze(22, .black))
                         .tracking(-0.5)
                         .foregroundStyle(palette.onSurface)
                     Text("Developer")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.blaze(16, .semibold))
                         .foregroundStyle(palette.accent)
                 }
                 Spacer(minLength: 0)
@@ -132,16 +132,16 @@ struct AboutView: View {
             }
 
             Text(aboutMe)
-                .font(.system(size: 14))
+                .font(.blaze(14))
                 .lineSpacing(5)
                 .foregroundStyle(palette.onSurfaceVariant)
 
             Button { showCoffee = true } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "cup.and.saucer.fill")
-                        .font(.system(size: 18))
+                        .font(.blaze(18))
                     Text("Buy me a coffee")
-                        .font(.system(size: 16, weight: .heavy))
+                        .font(.blaze(16, .heavy))
                 }
                 .foregroundStyle(palette.onAccent)
                 .frame(maxWidth: .infinity)
@@ -159,7 +159,7 @@ struct AboutView: View {
     private func socialButton(_ icon: String, url: URL) -> some View {
         Link(destination: url) {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .medium))
+                .font(.blaze(18, .medium))
                 .foregroundStyle(palette.onSurface)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
@@ -174,10 +174,10 @@ struct AboutView: View {
         VStack(spacing: 6) {
             Spacer().frame(height: 24)
             Text("Buy me a coffee")
-                .font(.system(size: 22, weight: .black))
+                .font(.blaze(22, .black))
                 .foregroundStyle(palette.onSurface)
             Text("Scan the code to support Blazify")
-                .font(.system(size: 14))
+                .font(.blaze(14))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .multilineTextAlignment(.center)
 
@@ -194,7 +194,7 @@ struct AboutView: View {
 
             Spacer(minLength: 12)
             Button("Dismiss") { showCoffee = false }
-                .font(.system(size: 15, weight: .bold))
+                .font(.blaze(15, .bold))
                 .foregroundStyle(palette.accent)
             Spacer().frame(height: 24)
         }

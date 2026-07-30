@@ -66,7 +66,7 @@ struct AISettingsView: View {
                  + "translate lyrics you're looking at. Blazify has no server: "
                  + "requests go straight from this phone to the provider you pick. "
                  + "With no key entered, nothing is ever sent.")
-                .font(.system(size: 12))
+                .font(.blaze(12))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.horizontal, 6)
         }
@@ -164,13 +164,13 @@ struct AISettingsView: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
                 TextEditor(text: $promptDraft)
-                    .font(.system(size: 14))
+                    .font(.blaze(14))
                     .scrollContentBackground(.hidden)
                     .padding(10)
                     .background(palette.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 Button("Reset to the default") { promptDraft = AIPrefs.defaultPrompt }
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.blaze(14, .semibold))
                     .foregroundStyle(palette.accent)
             }
             .padding(16)

@@ -99,7 +99,7 @@ struct YoursView: View {
     private var header: some View {
         HStack(spacing: 12) {
             Text("Yours")
-                .font(.system(size: 28, weight: .bold))
+                .font(.blaze(28, .bold))
                 .foregroundStyle(palette.onSurface)
 
             Spacer(minLength: 0)
@@ -112,7 +112,7 @@ struct YoursView: View {
                         .scaledToFit()
                         .frame(width: 20, height: 20)
                     Text("Blaze Together")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.blaze(13, .semibold))
                         .foregroundStyle(palette.onSurface)
                         .lineLimit(1)
                 }
@@ -127,7 +127,7 @@ struct YoursView: View {
                 if auth.isLoggedIn { showAccount = true } else { showLogin = true }
             } label: {
                 Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
-                    .font(.system(size: 26))
+                    .font(.blaze(26))
                     .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
             }
         }

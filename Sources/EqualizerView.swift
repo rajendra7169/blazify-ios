@@ -46,7 +46,7 @@ struct EqualizerView: View {
             Text("Boosting a band pulls the preamp down by the same amount, so "
                  + "the loudest point never rises above where it started. That's "
                  + "why heavy bass here changes the tone instead of distorting.")
-                .font(.system(size: 12))
+                .font(.blaze(12))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.horizontal, 6)
         }
@@ -58,13 +58,13 @@ struct EqualizerView: View {
         VStack(spacing: 10) {
             HStack {
                 Text("−12 dB   ·   +12 dB")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.blaze(11, .medium))
                     .foregroundStyle(palette.onSurfaceVariant)
                 Spacer()
                 Text(eq.headroom < 0
                      ? String(format: "Preamp %.1f dB", eq.headroom)
                      : "No preamp needed")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.blaze(11, .semibold))
                     .monospacedDigit()
                     .foregroundStyle(eq.headroom < -6 ? .orange : palette.onSurfaceVariant)
             }
@@ -76,7 +76,7 @@ struct EqualizerView: View {
             HStack(spacing: 0) {
                 ForEach(Array(EqualizerDSP.frequencies.enumerated()), id: \.offset) { _, hz in
                     Text(hz >= 1000 ? "\(Int(hz / 1000))k" : "\(Int(hz))")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.blaze(9, .medium))
                         .foregroundStyle(palette.onSurfaceVariant)
                         .frame(maxWidth: .infinity)
                 }

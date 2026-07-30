@@ -54,7 +54,7 @@ struct IntegrationsView: View {
 
             if let status = lastfm.status {
                 Text(status)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.blaze(13, .medium))
                     .foregroundStyle(palette.accent)
                     .padding(.horizontal, 6)
             }
@@ -63,14 +63,14 @@ struct IntegrationsView: View {
                  + "yours. Create an API account at last.fm/api — it's free and "
                  + "takes a minute — then paste the key and shared secret above. "
                  + "They're kept in the iOS Keychain, never in a file.")
-                .font(.system(size: 12))
+                .font(.blaze(12))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.horizontal, 6)
 
             Text("Discord Rich Presence isn't here: it needs a connection held "
                  + "open in the background, which iOS suspends, so it would only "
                  + "show while the app was on screen.")
-                .font(.system(size: 12))
+                .font(.blaze(12))
                 .foregroundStyle(palette.onSurfaceVariant.opacity(0.8))
                 .padding(.horizontal, 6)
         }

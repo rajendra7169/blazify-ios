@@ -56,7 +56,7 @@ struct AppearanceSettingsView: View {
             Text("Theme, colours, player and mini-player designs, slider style "
                  + "and the navigation bar are in Look & Feel, where you can see "
                  + "each change on a preview before you keep it.")
-                .font(.system(size: 12))
+                .font(.blaze(12))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.horizontal, 6)
         }

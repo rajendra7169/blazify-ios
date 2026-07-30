@@ -52,7 +52,7 @@ struct ChangelogView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     Text("Changelog")
-                        .font(.system(size: 32, weight: .bold))
+                        .font(.blaze(32, .bold))
                         .foregroundStyle(palette.onSurface)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 18)
@@ -71,13 +71,13 @@ struct ChangelogView: View {
                     } else if releases.isEmpty {
                         VStack(spacing: 10) {
                             Image(systemName: "shippingbox")
-                                .font(.system(size: 40))
+                                .font(.blaze(40))
                                 .foregroundStyle(palette.onSurfaceVariant.opacity(0.6))
                             Text("No release notes yet")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.blaze(16, .semibold))
                                 .foregroundStyle(palette.onSurface)
                             Text("Release notes will show up here once Blazify's releases are published.")
-                                .font(.system(size: 13))
+                                .font(.blaze(13))
                                 .foregroundStyle(palette.onSurfaceVariant)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 40)
@@ -99,9 +99,9 @@ struct ChangelogView: View {
             Link(destination: Changelog.releasesURL) {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.blaze(15, .semibold))
                     Text("View on GitHub")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.blaze(15, .semibold))
                 }
                 .foregroundStyle(palette.accent)
                 .padding(.horizontal, 18)
@@ -128,7 +128,7 @@ struct ChangelogView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(release.tag)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.blaze(13, .semibold))
                     .foregroundStyle(palette.onAccent)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
@@ -136,7 +136,7 @@ struct ChangelogView: View {
                     .clipShape(Capsule())
                 Spacer()
                 Text(release.date)
-                    .font(.system(size: 13))
+                    .font(.blaze(13))
                     .foregroundStyle(palette.onSurfaceVariant)
             }
 
@@ -206,7 +206,7 @@ struct MarkdownBody: View {
             }
         }
         return Text(attributed)
-            .font(.system(size: 14))
+            .font(.blaze(14))
             .foregroundStyle(palette.onSurface)
             .tint(palette.accent)
     }

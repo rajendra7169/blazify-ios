@@ -36,7 +36,7 @@ struct ArtistView: View {
                     .playerBottomPadding()
                 } else {
                     VStack(spacing: 10) {
-                        Image(systemName: "person.slash").font(.system(size: 36))
+                        Image(systemName: "person.slash").font(.blaze(36))
                             .foregroundStyle(palette.onSurfaceVariant)
                         Text("Couldn't load this artist")
                             .foregroundStyle(palette.onSurfaceVariant)
@@ -70,13 +70,13 @@ struct ArtistView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(page.name)
-                    .font(.system(size: 32, weight: .bold))
+                    .font(.blaze(32, .bold))
                     .foregroundStyle(palette.onSurface)
                     .lineLimit(2)
                 HStack(spacing: 12) {
                     if !page.subscribers.isEmpty, ContentPrefs.shared.showSubscriberCount {
                         Text(page.subscribers)
-                            .font(.system(size: 13))
+                            .font(.blaze(13))
                             .foregroundStyle(palette.onSurfaceVariant)
                     }
                     if auth.isLoggedIn, page.channelId != nil {
@@ -90,7 +90,7 @@ struct ArtistView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "shuffle")
-                            Text("Shuffle").font(.system(size: 15, weight: .semibold))
+                            Text("Shuffle").font(.blaze(15, .semibold))
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 24).padding(.vertical, 11)
@@ -112,7 +112,7 @@ struct ArtistView: View {
     @ViewBuilder private func sectionView(_ section: ArtistSection) -> some View {
         if !section.title.isEmpty {
             Text(section.title)
-                .font(.system(size: 20, weight: .bold))
+                .font(.blaze(20, .bold))
                 .foregroundStyle(palette.onSurface)
                 .padding(.horizontal, 16)
                 .padding(.top, 20)
@@ -156,7 +156,7 @@ struct ArtistView: View {
             toggleFollow(currently: isFollowing)
         } label: {
             Text(isFollowing ? "Following" : "Follow")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.blaze(13, .semibold))
                 .foregroundStyle(isFollowing ? palette.onSurface : palette.onAccent)
                 .padding(.horizontal, 16).padding(.vertical, 7)
                 .background(isFollowing ? AnyShapeStyle(palette.surfaceHigh)

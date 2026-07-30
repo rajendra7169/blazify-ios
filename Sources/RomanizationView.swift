@@ -39,7 +39,7 @@ struct RomanizationView: View {
                  + "lyrics already in Latin letters are left alone. If AI "
                  + "translation is also on, romanisation wins, since stacking both "
                  + "under one line is unreadable.")
-                .font(.system(size: 12))
+                .font(.blaze(12))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.horizontal, 6)
         }

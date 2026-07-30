@@ -33,15 +33,15 @@ struct LyricsSettingsView: View {
                             icon("character")
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Romanization")
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.blaze(15, .medium))
                                     .foregroundStyle(palette.onSurface)
                                 Text(RomanizePrefs.shared.enabled ? "On" : "Off")
-                                    .font(.system(size: 12))
+                                    .font(.blaze(12))
                                     .foregroundStyle(palette.onSurfaceVariant)
                             }
                             Spacer(minLength: 8)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.blaze(12, .semibold))
                                 .foregroundStyle(palette.onSurfaceVariant.opacity(0.7))
                         }
                         .padding(.horizontal, 16).padding(.vertical, 12)
@@ -54,15 +54,15 @@ struct LyricsSettingsView: View {
                             icon("character.book.closed")
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("AI translation")
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.blaze(15, .medium))
                                     .foregroundStyle(palette.onSurface)
                                 Text(AIPrefs.shared.enabled ? "On" : "Off")
-                                    .font(.system(size: 12))
+                                    .font(.blaze(12))
                                     .foregroundStyle(palette.onSurfaceVariant)
                             }
                             Spacer(minLength: 8)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.blaze(12, .semibold))
                                 .foregroundStyle(palette.onSurfaceVariant.opacity(0.7))
                         }
                         .padding(.horizontal, 16).padding(.vertical, 12)
@@ -178,7 +178,7 @@ struct LyricsSettingsView: View {
                                       @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased())
-                .font(.system(size: 12, weight: .semibold))
+                .font(.blaze(12, .semibold))
                 .tracking(0.6)
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.leading, 6)
@@ -198,15 +198,15 @@ struct LyricsSettingsView: View {
             HStack(spacing: 14) {
                 icon(symbol)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 15, weight: .medium))
+                    Text(title).font(.blaze(15, .medium))
                         .foregroundStyle(palette.onSurface)
-                    Text(subtitle).font(.system(size: 12))
+                    Text(subtitle).font(.blaze(12))
                         .foregroundStyle(palette.onSurfaceVariant)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.blaze(12, .semibold))
                     .foregroundStyle(palette.onSurfaceVariant.opacity(0.7))
             }
             .padding(.horizontal, 16)
@@ -222,18 +222,18 @@ struct LyricsSettingsView: View {
             icon(symbol)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(title).font(.system(size: 15, weight: .medium))
+                    Text(title).font(.blaze(15, .medium))
                         .foregroundStyle(palette.onSurface)
                     if let badge {
                         Text(badge)
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.blaze(9, .bold))
                             .foregroundStyle(palette.onAccent)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(palette.accent)
                             .clipShape(Capsule())
                     }
                 }
-                Text(subtitle).font(.system(size: 12))
+                Text(subtitle).font(.blaze(12))
                     .foregroundStyle(palette.onSurfaceVariant)
                     .multilineTextAlignment(.leading)
             }
@@ -246,7 +246,7 @@ struct LyricsSettingsView: View {
 
     private func icon(_ name: String) -> some View {
         Image(systemName: name)
-            .font(.system(size: 15))
+            .font(.blaze(15))
             .foregroundStyle(palette.accent)
             .frame(width: 26)
     }
@@ -269,10 +269,10 @@ private struct LyricsProviderSheet: View {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(provider.title)
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.blaze(15, .medium))
                                     .foregroundStyle(palette.onSurface)
                                 Text(provider.blurb)
-                                    .font(.system(size: 12))
+                                    .font(.blaze(12))
                                     .foregroundStyle(palette.onSurfaceVariant)
                             }
                             Spacer(minLength: 8)
@@ -293,7 +293,7 @@ private struct LyricsProviderSheet: View {
 
                 Text("At least one source stays on. If every provider misses a "
                      + "song, its lyrics simply aren't available.")
-                    .font(.system(size: 12))
+                    .font(.blaze(12))
                     .foregroundStyle(palette.onSurfaceVariant)
                     .padding(.horizontal, 22).padding(.top, 12)
             }
@@ -327,12 +327,12 @@ private struct LyricsPrioritySheet: View {
                     let on = provider.map(prefs.isEnabled) ?? false
                     HStack(spacing: 12) {
                         Text(provider?.title ?? name)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.blaze(15, .medium))
                             .foregroundStyle(on ? palette.onSurface
                                                 : palette.onSurfaceVariant.opacity(0.6))
                         Spacer()
                         if !on {
-                            Text("Off").font(.system(size: 12))
+                            Text("Off").font(.blaze(12))
                                 .foregroundStyle(palette.onSurfaceVariant.opacity(0.6))
                         }
                     }
@@ -377,12 +377,12 @@ struct EnumPickerSheet<Option: Identifiable & Equatable>: View {
                         } label: {
                             HStack {
                                 Text(label(option))
-                                    .font(.system(size: 15))
+                                    .font(.blaze(15))
                                     .foregroundStyle(palette.onSurface)
                                 Spacer()
                                 if option == selection {
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 13, weight: .bold))
+                                        .font(.blaze(13, .bold))
                                         .foregroundStyle(palette.accent)
                                 }
                             }
@@ -422,20 +422,20 @@ struct SliderSheet: View {
     var body: some View {
         VStack(spacing: 18) {
             Text(title)
-                .font(.system(size: 18, weight: .bold))
+                .font(.blaze(18, .bold))
                 .foregroundStyle(palette.onSurface)
             Text(readout(value))
-                .font(.system(size: 30, weight: .bold))
+                .font(.blaze(30, .bold))
                 .monospacedDigit()
                 .foregroundStyle(palette.accent)
             Slider(value: $value, in: range).tint(palette.accent)
             HStack {
                 Button("Reset") { value = reset }
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.blaze(15, .semibold))
                     .foregroundStyle(palette.onSurfaceVariant)
                 Spacer()
                 Button("Done") { dismiss() }
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.blaze(15, .semibold))
                     .foregroundStyle(palette.onAccent)
                     .padding(.horizontal, 22).padding(.vertical, 10)
                     .background(palette.accent)

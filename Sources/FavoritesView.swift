@@ -43,17 +43,17 @@ struct FavoritesView: View {
                                     ZStack {
                                         palette.heroGradient
                                         Image(systemName: "heart.fill")
-                                            .font(.system(size: 26)).foregroundStyle(.white)
+                                            .font(.blaze(26)).foregroundStyle(.white)
                                     }
                                     .frame(width: 64, height: 64)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text("Liked songs")
-                                            .font(.system(size: 16, weight: .semibold))
+                                            .font(.blaze(16, .semibold))
                                             .foregroundStyle(palette.onSurface)
                                         Text("\(likedAll.count) songs")
-                                            .font(.system(size: 13))
+                                            .font(.blaze(13))
                                             .foregroundStyle(palette.onSurfaceVariant)
                                     }
                                     Spacer(minLength: 0)
@@ -96,14 +96,14 @@ struct FavoritesView: View {
     private var signedOut: some View {
         VStack(spacing: 16) {
             Image(systemName: "heart.fill")
-                .font(.system(size: 48))
+                .font(.blaze(48))
                 .foregroundStyle(palette.accent)
             Text("Sign in to see your favorites")
-                .font(.system(size: 16))
+                .font(.blaze(16))
                 .foregroundStyle(palette.onSurfaceVariant)
             Button { showLogin = true } label: {
                 Text("Sign in with Google")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.blaze(16, .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 32).padding(.vertical, 14)
                     .background(palette.heroGradient)
@@ -156,19 +156,19 @@ private struct LibraryCard: View {
             RemoteImage(url: item.thumbnailURL, size: 180) {
                 palette.onSurface.opacity(0.06)
                     .overlay(Image(systemName: "music.note.list")
-                        .font(.system(size: 36))
+                        .font(.blaze(36))
                         .foregroundStyle(palette.onSurface.opacity(0.35)))
             }
             .aspectRatio(1, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             Text(item.title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.blaze(14, .semibold))
                 .foregroundStyle(palette.onSurface)
                 .lineLimit(1)
             if !item.subtitle.isEmpty {
                 Text(item.subtitle)
-                    .font(.system(size: 12))
+                    .font(.blaze(12))
                     .foregroundStyle(palette.onSurfaceVariant)
                     .lineLimit(1)
             }

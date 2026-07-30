@@ -123,7 +123,7 @@ struct SongListScreen: View {
 
                 if shown.isEmpty {
                     Text(query.isEmpty ? "Nothing here yet" : "No matches")
-                        .font(.system(size: 14))
+                        .font(.blaze(14))
                         .foregroundStyle(palette.onSurfaceVariant)
                         .padding(.top, 40)
                 }
@@ -172,7 +172,7 @@ struct SongListScreen: View {
                 ForEach(Array(filters.enumerated()), id: \.element.id) { index, filter in
                     let active = index == filterIndex
                     Text(filter.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.blaze(13, .semibold))
                         .foregroundStyle(active ? palette.onAccent : palette.onSurface)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -195,7 +195,7 @@ struct SongListScreen: View {
             RemoteImage(url: source.first?.artURL(size: 720), size: 240) {
                 palette.onSurface.opacity(0.06)
                     .overlay(Image(systemName: "music.note.list")
-                        .font(.system(size: 56))
+                        .font(.blaze(56))
                         .foregroundStyle(palette.onSurface.opacity(0.35)))
             }
             .frame(width: 240, height: 240)
@@ -205,14 +205,14 @@ struct SongListScreen: View {
             .padding(.bottom, 20)
 
             Text(title)
-                .font(.system(size: 26, weight: .bold))
+                .font(.blaze(26, .bold))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .foregroundStyle(palette.onSurface)
                 .padding(.horizontal, 32)
 
             Text("\(source.count) song\(source.count == 1 ? "" : "s")\(totalDuration)")
-                .font(.system(size: 14))
+                .font(.blaze(14))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.top, 12)
 
@@ -265,15 +265,15 @@ struct SongListScreen: View {
             } label: {
                 HStack(spacing: 4) {
                     Text(sort.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.blaze(13, .semibold))
                     Image(systemName: descending ? "arrow.down" : "arrow.up")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.blaze(11, .bold))
                 }
                 .foregroundStyle(palette.accent)
             }
             Spacer()
             Text("\(shown.count)")
-                .font(.system(size: 13))
+                .font(.blaze(13))
                 .foregroundStyle(palette.onSurfaceVariant)
         }
         .padding(.horizontal, 16)
@@ -396,7 +396,7 @@ struct SongRowMenu: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 16))
+                .font(.blaze(16))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .frame(width: 40, height: 44)
                 .contentShape(Rectangle())

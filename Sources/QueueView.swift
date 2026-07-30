@@ -114,7 +114,7 @@ private struct QueueRowMenu: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 15))
+                .font(.blaze(15))
                 .foregroundStyle(palette.onSurfaceVariant)
                 .frame(width: 34, height: 44)
                 .contentShape(Rectangle())

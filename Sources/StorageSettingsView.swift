@@ -94,7 +94,7 @@ struct StorageSettingsView: View {
                 clearButton("Clear song cache") { confirmClearCache = true }
             } else {
                 Text("Songs won't be kept on disk after playing.")
-                    .font(.system(size: 13))
+                    .font(.blaze(13))
                     .foregroundStyle(palette.onSurfaceVariant)
             }
         }
@@ -128,10 +128,10 @@ struct StorageSettingsView: View {
     private func header(_ title: String, _ subtitle: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.blaze(17, .semibold))
                 .foregroundStyle(palette.onSurface)
             Text(subtitle)
-                .font(.system(size: 13))
+                .font(.blaze(13))
                 .foregroundStyle(palette.onSurfaceVariant)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -143,11 +143,11 @@ struct StorageSettingsView: View {
             ProgressView(value: min(Double(used) / Double(cap), 1))
                 .tint(palette.accent)
             Text("\(format(used)) of \(format(cap))")
-                .font(.system(size: 13))
+                .font(.blaze(13))
                 .foregroundStyle(palette.onSurfaceVariant)
         } else {
             Text("\(format(used)) used\(cap == nil ? " · unlimited" : "")")
-                .font(.system(size: 13, weight: .medium))
+                .font(.blaze(13, .medium))
                 .foregroundStyle(palette.accent)
         }
     }
@@ -159,7 +159,7 @@ struct StorageSettingsView: View {
                 ForEach(values, id: \.self) { mb in
                     let active = selected == mb
                     Text(label(for: mb))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.blaze(13, .semibold))
                         .foregroundStyle(active ? palette.onAccent : palette.onSurface)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -175,7 +175,7 @@ struct StorageSettingsView: View {
 
     private func clearButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(title, role: .destructive, action: action)
-            .font(.system(size: 14, weight: .semibold))
+            .font(.blaze(14, .semibold))
     }
 
     private func label(for mb: Int) -> String {
