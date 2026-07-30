@@ -23,8 +23,8 @@ extension BlazifyLink {
 /// which performs it on the next foreground.
 enum BlazifyRequest: Equatable {
     case resume, favourites, downloads, recognise
-    /// "Play <something> on Blazify" — the words Siri heard, to search for.
-    case search(String)
+    /// A song Siri already resolved, by videoId.
+    case play(String)
 
     private static let key = "pendingIntentRequest"
     private static let queryKey = "pendingIntentQuery"
@@ -35,15 +35,15 @@ enum BlazifyRequest: Equatable {
         case .favourites: return "favourites"
         case .downloads: return "downloads"
         case .recognise: return "recognise"
-        case .search: return "search"
+        case .play: return "play"
         }
     }
 
     func store() {
         let d = UserDefaults.standard
         d.set(name, forKey: Self.key)
-        if case .search(let query) = self {
-            d.set(query, forKey: Self.queryKey)
+        if case .play(let videoId) = self {
+            d.set(videoId, forKey: Self.queryKey)
         } else {
             d.removeObject(forKey: Self.queryKey)
         }
@@ -61,27 +61,70 @@ enum BlazifyRequest: Equatable {
         case "favourites": return .favourites
         case "downloads": return .downloads
         case "recognise": return .recognise
-        case "search":
+        case "play":
             guard let query, !query.isEmpty else { return nil }
-            return .search(query)
+            return .play(query)
         default: return nil
         }
     }
 }
 
-/// "Play <song> on Blazify". The parameter is what Siri transcribes, handed
-/// straight to search — the first playable result wins, which is what you'd
-/// expect from a spoken request.
+/// A song Siri can resolve from what you said. A phrase slot has to be an
+/// `AppEntity` or `AppEnum` — a plain String is rejected — so the spoken words
+/// go through a query that searches the catalogue and hands Siri real songs to
+/// choose between.
+struct SongEntity: AppEntity, Identifiable {
+    let id: String          // videoId
+    let title: String
+    let artist: String
+
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Song")
+    static var defaultQuery = SongQuery()
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(title)", subtitle: "\(artist)")
+    }
+}
+
+struct SongQuery: EntityStringQuery {
+    /// What Siri heard. Searching here means the match is resolved before the
+    /// app even opens, so playback starts immediately rather than after a round
+    /// trip.
+    func entities(matching string: String) async throws -> [SongEntity] {
+        let results = await YouTube.search(string)
+        return results.prefix(8).map {
+            SongEntity(id: $0.videoId, title: $0.title, artist: $0.artist)
+        }
+    }
+
+    /// Re-resolving a song Shortcuts saved earlier. Answered from what's already
+    /// on the device so a saved shortcut still works with no signal.
+    func entities(for identifiers: [String]) async throws -> [SongEntity] {
+        let known = Downloads.shared.tracks + PlayHistory.tracks
+        return identifiers.compactMap { id in
+            known.first { $0.videoId == id }
+                .map { SongEntity(id: $0.videoId, title: $0.title, artist: $0.artist) }
+        }
+    }
+
+    func suggestedEntities() async throws -> [SongEntity] {
+        PlayHistory.recent.prefix(8).map {
+            SongEntity(id: $0.videoId, title: $0.title, artist: $0.artist)
+        }
+    }
+}
+
+/// "Play <song> on Blazify".
 struct PlaySongIntent: AppIntent {
     static var title: LocalizedStringResource = "Play a song"
-    static var description = IntentDescription("Search Blazify and play the best match.")
+    static var description = IntentDescription("Play a song in Blazify.")
     static var openAppWhenRun = true
 
     @Parameter(title: "Song", requestValueDialog: "What would you like to hear?")
-    var song: String
+    var song: SongEntity
 
     func perform() async throws -> some IntentResult {
-        BlazifyRequest.search(song).store()
+        BlazifyRequest.play(song.id).store()
         return .result()
     }
 }

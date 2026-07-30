@@ -84,16 +84,21 @@ struct RootView: View {
             player.showFullPlayer = true
         case .recognise:
             showRecognition = true
-        case .search(let query):
-            // Spoken request: search, then play the best match. Falls back to
-            // the Explore tab with nothing playing rather than failing silently.
+        case .play(let videoId):
+            // Siri already resolved the song, so this is a direct play. The
+            // related feed just supplies the title and artwork, and a queue to
+            // carry on with once it ends.
             Task { @MainActor in
-                let results = await YouTube.search(query)
-                guard !results.isEmpty else {
-                    tab = .explore
-                    return
-                }
-                player.play(results, startAt: 0)
+                let related = await YouTube.related(videoId: videoId)
+                    .flatMap(\.items)
+                    .filter { $0.browseId == nil }
+                    .map(\.asTrack)
+                let named = related.first { $0.videoId == videoId }
+                let track = named ?? Track(videoId: videoId, title: "Song",
+                                           artist: "", thumbnail: "", duration: 0)
+                var queue = [track]
+                queue += related.filter { $0.videoId != videoId }
+                player.play(queue, startAt: 0)
                 player.showFullPlayer = true
             }
         }
