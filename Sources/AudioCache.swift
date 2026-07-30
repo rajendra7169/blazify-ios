@@ -80,7 +80,7 @@ final class AudioCache: ObservableObject {
             guard let self else { return }
             if self.localArtURL(for: id) == nil,
                let remote = track.artURL(size: 1080),
-               let (data, _) = try? await URLSession.shared.data(from: remote) {
+               let data = await ArtFetch.data(from: remote) {
                 try? data.write(to: self.artFileURL(for: id))
             }
             guard self.cachedLyrics(for: id) == nil else { return }

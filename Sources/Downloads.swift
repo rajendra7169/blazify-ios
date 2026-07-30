@@ -252,7 +252,7 @@ final class Downloads: ObservableObject {
         // 1080, not the catalogue thumbnail: the saved copy has to fill the
         // full player, where a 120px row image is visibly soft.
         if let remote = track.artURL(size: 1080),
-           let (adata, _) = try? await URLSession.shared.data(from: remote) {
+           let adata = await ArtFetch.data(from: remote) {
             try? adata.write(to: artURL(for: id))
             let artPath = self.localArt(for: id) ?? track.thumbnail
             await MainActor.run {
@@ -294,7 +294,7 @@ final class Downloads: ObservableObject {
     /// Derivable from the video id alone, so it always resolves even when the
     /// catalogue thumbnail we saved has been lost.
     static func fallbackArt(_ videoId: String) -> String {
-        "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
+        "https://i.ytimg.com/vi/\(videoId)/maxresdefault.jpg"
     }
 
     /// The downloaded artwork for a song, resolved against THIS install's

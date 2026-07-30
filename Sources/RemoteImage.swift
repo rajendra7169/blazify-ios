@@ -27,6 +27,21 @@ enum ImageCache {
 /// Google/YouTube image URLs carry their size in the path (`=w720-h720`).
 /// Asking for the size we'll actually draw is the single biggest win for
 /// loading speed — a 52pt row was pulling a 720×720 image.
+enum ArtFetch {
+    /// Artwork bytes, dropping back from a maxres still to the size every video
+    /// is guaranteed to have.
+    static func data(from url: URL) async -> Data? {
+        if let data = try? await URLSession.shared.data(from: url).0, !data.isEmpty {
+            return data
+        }
+        guard url.absoluteString.contains("maxresdefault"),
+              let fallback = URL(string: url.absoluteString
+                  .replacingOccurrences(of: "maxresdefault", with: "hqdefault"))
+        else { return nil }
+        return try? await URLSession.shared.data(from: fallback).0
+    }
+}
+
 enum ThumbSize {
     static func url(_ url: URL?, points: CGFloat?) -> URL? {
         guard let url else { return url }
@@ -89,8 +104,8 @@ struct RemoteImage<Placeholder: View>: View {
             return
         }
 
-        guard let (data, _) = try? await URLSession.shared.data(from: target) else { return }
-        guard let decoded = Self.downsample(data, to: size) ?? UIImage(data: data) else { return }
+        guard let data = await ArtFetch.data(from: target),
+              let decoded = Self.downsample(data, to: size) ?? UIImage(data: data) else { return }
         store(decoded, key: key)
     }
 

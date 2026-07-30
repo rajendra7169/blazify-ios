@@ -51,8 +51,25 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
         guard !thumbnail.isEmpty else {
             return videoId.isEmpty ? nil : URL(string: Downloads.fallbackArt(videoId))
         }
-        if size > 0, let r = thumbnail.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
+        guard size > 0 else { return URL(string: thumbnail) }
+
+        // Catalogue URLs carry their size in the path: swap it.
+        if let r = thumbnail.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
             return URL(string: thumbnail.replacingCharacters(in: r, with: "=w\(size)-h\(size)"))
+        }
+        // Same host but no size yet — ask for one rather than taking whatever
+        // small default the row happened to reference.
+        if thumbnail.contains("googleusercontent.com"), !thumbnail.contains("=") {
+            return URL(string: thumbnail + "=w\(size)-h\(size)")
+        }
+        // ytimg names its sizes instead: hqdefault is only 480×360, which is
+        // why some songs looked soft while catalogue-hosted ones were sharp.
+        // RemoteImage falls back if a video has no maxres.
+        if thumbnail.contains("i.ytimg.com"),
+           let r = thumbnail.range(of: "/(default|mqdefault|hqdefault|sddefault)\\.jpg",
+                                   options: .regularExpression) {
+            let name = size >= 700 ? "maxresdefault" : "sddefault"
+            return URL(string: thumbnail.replacingCharacters(in: r, with: "/\(name).jpg"))
         }
         return URL(string: thumbnail)
     }
