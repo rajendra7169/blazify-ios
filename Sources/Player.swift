@@ -119,10 +119,19 @@ final class Player: ObservableObject {
         originalQueue = saved.tracks
         index = min(max(saved.index, 0), saved.tracks.count - 1)
         resumePosition = saved.position
+        // Fill the transport in now so the slider and times aren't blank before
+        // the first tap.
+        if let track = current {
+            duration = Downloads.shared.duration(for: track.videoId) ?? track.duration
+            currentTime = saved.position
+        }
     }
 
     /// Where a restored session left off, applied once the stream is ready.
     private var resumePosition: Double = 0
+    /// Set when the load was triggered by the user pressing play, so the stream
+    /// starts as soon as it's seeked instead of needing a second press.
+    private var playWhenReady = false
 
     private func saveModes() {
         guard PlaybackPrefs.shared.rememberShuffleRepeat else { return }
@@ -729,13 +738,20 @@ final class Player: ObservableObject {
         let target = resumePosition
         resumePosition = 0
         if target > 1, realDuration > target {
+            let wanted = playWhenReady
+            playWhenReady = false
             p.seek(to: CMTime(seconds: target, preferredTimescale: 600)) { [weak self] _ in
-                self?.currentTime = target
+                guard let self else { return }
+                self.currentTime = target
+                guard wanted else { return }
+                p.play()
+                p.rate = Float(PlaybackPrefs.shared.speed)
             }
-            isPlaying = false
+            isPlaying = wanted
             updateNowPlaying()
             return
         }
+        playWhenReady = false
         p.play()
         // Rate has to be set after play(), which resets it to 1.
         p.rate = Float(PlaybackPrefs.shared.speed)
@@ -935,7 +951,13 @@ final class Player: ObservableObject {
         // A session restored from disk has a queue but nothing loaded yet;
         // pressing play should start it rather than silently do nothing.
         guard let avPlayer else {
-            if hasTrack { loadCurrent() }
+            // Nothing loaded yet (a session restored from disk). Load it AND
+            // play — without the intent flag this only loaded, and it took a
+            // second press to actually start.
+            if hasTrack {
+                playWhenReady = true
+                loadCurrent()
+            }
             return
         }
         if isPlaying {

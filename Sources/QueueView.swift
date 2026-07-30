@@ -11,11 +11,12 @@ struct QueueView: View {
             List {
                 ForEach(Array(player.queue.enumerated()), id: \.element.id) { pair in
                     let active = pair.offset == player.index
-                    Button {
-                        player.jump(to: pair.offset)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 12) {
+                    HStack(spacing: 0) {
+                        Button {
+                            player.jump(to: pair.offset)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
                             RemoteImage(url: pair.element.thumbnailURL, size: 48) {
                                 palette.onSurface.opacity(0.10)
                             }
@@ -32,31 +33,28 @@ struct QueueView: View {
                                     .foregroundStyle(palette.onSurfaceVariant)
                                     .lineLimit(1)
                             }
-                            Spacer(minLength: 0)
-                            if active {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(palette.accent)
+                                Spacer(minLength: 0)
+                                if active {
+                                    Image(systemName: "speaker.wave.2.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(palette.accent)
+                                }
                             }
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+
+                        QueueRowMenu(track: pair.element, player: player,
+                                     position: pair.offset)
                     }
-                    .buttonStyle(.plain)
                     .listRowBackground(active ? palette.onSurface.opacity(0.08) : Color.clear)
                     .listRowSeparator(.hidden)
-                    // The menu can't live inside the row's button — the button
-                    // swallows the tap — so it rides in a swipe action and the
-                    // trailing ⋮ overlay instead.
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             player.removeFromQueue(at: pair.offset)
                         } label: {
                             Label("Remove", systemImage: "trash")
                         }
-                    }
-                    .overlay(alignment: .trailing) {
-                        QueueRowMenu(track: pair.element, player: player,
-                                     position: pair.offset)
                     }
                 }
                 .onMove { from, to in player.moveInQueue(from: from, to: to) }
