@@ -383,8 +383,6 @@ struct TogetherSettingsView: View {
     @ObservedObject private var lt = ListenTogether.shared
 
     @AppStorage("ltAutoApproveJoins") private var autoApproveJoins = false
-    @AppStorage("ltAutoApproveSuggestions") private var autoApproveSuggestions = false
-    @AppStorage("ltSyncVolume") private var syncVolume = false
     @AppStorage("ltServerURL") private var serverURL = ListenTogether.defaultServer
 
     @State private var name = ListenTogether.shared.username
@@ -421,14 +419,6 @@ struct TogetherSettingsView: View {
                     toggle("Auto-approve join requests",
                            "Let people in without reviewing each request.",
                            $autoApproveJoins)
-                    Divider().overlay(palette.separator)
-                    toggle("Auto-approve song suggestions",
-                           "Queue guests' suggestions without confirming.",
-                           $autoApproveSuggestions)
-                    Divider().overlay(palette.separator)
-                    toggle("Sync host volume",
-                           "Guests match the host's volume level.",
-                           $syncVolume)
                 }
 
                 group {
