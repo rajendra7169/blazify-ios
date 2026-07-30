@@ -26,6 +26,9 @@ struct PlayerView: View {
     @State private var showMenu = false
     @State private var showEqualizer = false
     @State private var showLyricsSettings = false
+    @State private var showLyricsTiming = false
+    /// Per-song lyric offset, edited from the ⋮ and read back by the pane.
+    @State private var lyricsOffset: Double = 0
     @State private var lyricsMode = false
     @State private var immersive = false
     @State private var dragOffset: CGFloat = 0
@@ -104,6 +107,12 @@ struct PlayerView: View {
             NavigationStack { EqualizerView(player: player) }
                 .environment(\.palette, palette)
         }
+        .sheet(isPresented: $showLyricsTiming) {
+            LyricsTimingSheet(offset: $lyricsOffset) {
+                LyricsOffsets.save(lyricsOffset, for: player.current?.videoId ?? "")
+            }
+            .environment(\.palette, palette)
+        }
         .sheet(isPresented: $showLyricsSettings) {
             NavigationStack { LyricsSettingsView() }
                 .environment(\.palette, palette)
@@ -118,6 +127,10 @@ struct PlayerView: View {
                 onSleep: { showSleep = true },
                 onLyrics: { lyricsMode = true },
                 onLyricsSettings: { showLyricsSettings = true },
+                onLyricsTiming: {
+                    lyricsOffset = LyricsOffsets.load(for: player.current?.videoId ?? "")
+                    showLyricsTiming = true
+                },
                 onEqualizer: { showEqualizer = true },
             )
         }

@@ -25,7 +25,6 @@ struct LyricsPane: View {
     @State private var result: LyricsResult?
     @State private var loading = true
     @State private var showVersions = false
-    @State private var showTiming = false
     /// Seconds to shift the lyrics by, per song. Positive means the words come
     /// later — the fix when lyrics run ahead of the singing.
     @State private var offset: Double = 0
@@ -58,8 +57,8 @@ struct LyricsPane: View {
             anchorPos = player.currentTime
             anchorWall = Date()
         }
-        .sheet(isPresented: $showTiming) {
-            LyricsTimingSheet(offset: $offset) { LyricsOffsets.save(offset, for: songId) }
+        .onReceive(NotificationCenter.default.publisher(for: .blazifyLyricsOffsetChanged)) { _ in
+            loadOffset()
         }
         .sheet(isPresented: $showVersions) {
             LyricsVersionPicker(candidates: candidates, current: result) { pick in
@@ -93,17 +92,6 @@ struct LyricsPane: View {
                         .background(.white)
                         .clipShape(Capsule())
                 }
-            }
-            Button { showTiming = true } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "metronome")
-                    Text(offset == 0 ? "Timing" : String(format: "%+.1fs", offset))
-                }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Color.white.opacity(offset == 0 ? 0.15 : 0.3))
-                .clipShape(Capsule())
             }
             Button { showVersions = true } label: {
                 HStack(spacing: 5) {
@@ -262,7 +250,10 @@ struct LyricsPane: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .mask(fadeMask(height: geo.size.height))
             .contentShape(Rectangle())
-            .gesture(manualScroll)
+            // The player attaches its swipe-down-to-close to the whole sheet,
+            // which swallowed this. High priority means a drag that starts on
+            // the words scrolls them; a drag anywhere else still closes.
+            .highPriorityGesture(manualScroll)
         }
     }
 
@@ -625,7 +616,13 @@ enum LyricsOffsets {
         } else {
             UserDefaults.standard.set(offset, forKey: key(videoId))
         }
+        // The sheet lives in the player's menu now, so the pane has to be told.
+        NotificationCenter.default.post(name: .blazifyLyricsOffsetChanged, object: nil)
     }
+}
+
+extension Notification.Name {
+    static let blazifyLyricsOffsetChanged = Notification.Name("blazifyLyricsOffsetChanged")
 }
 
 /// Nudge the lyrics earlier or later when a provider's timings are off.

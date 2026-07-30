@@ -21,9 +21,13 @@ struct PlaylistView: View {
     /// Only your own playlists can be edited — an album or someone else's
     /// playlist has no edit endpoint, so the controls stay hidden.
     private var isEditable: Bool {
-        guard auth.isLoggedIn, let id = item.browseId else { return false }
-        // Library playlists browse as VL<playlistId>; albums browse as MPREb…
-        return id.hasPrefix("VL") && !tracks.isEmpty
+        guard auth.isLoggedIn, !tracks.isEmpty, let id = item.browseId else { return false }
+        // Albums can't be edited. Everything else is judged on capability
+        // rather than on the id's shape: a row YouTube will let us move or
+        // remove carries a setVideoId, and that's the only reliable signal —
+        // a "VL" prefix check missed playlists opened from some screens.
+        guard !id.hasPrefix("MPREb"), !id.contains("OLAK5uy") else { return false }
+        return tracks.contains { $0.setVideoId != nil }
     }
 
     private var downloadLabel: String {

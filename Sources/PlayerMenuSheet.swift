@@ -14,6 +14,7 @@ struct PlayerMenuSheet: View {
     /// Opened from here because lyrics settings are the ones you actually want
     /// to change while a song is playing and the words are in front of you.
     var onLyricsSettings: () -> Void
+    var onLyricsTiming: () -> Void
     var onEqualizer: () -> Void
 
     private var downloadState: DownloadState { downloads.state(player.current?.videoId ?? "") }
@@ -61,6 +62,7 @@ struct PlayerMenuSheet: View {
                     row("plus.circle", "Add to playlist") { showAddToPlaylist = true }
                     row("quote.bubble", "Lyrics") { dismiss(); onLyrics() }
                     row("textformat.size", "Lyrics settings") { dismiss(); onLyricsSettings() }
+                    row("metronome", "Lyrics timing") { dismiss(); onLyricsTiming() }
                     row("slider.horizontal.3", "Equaliser") { dismiss(); onEqualizer() }
                     row("list.bullet", "View queue") { dismiss(); onQueue() }
                     row(player.sleepActive ? "moon.zzz.fill" : "moon.zzz",
