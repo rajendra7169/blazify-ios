@@ -90,6 +90,8 @@ struct RootView: View {
             player.isShuffled = true
             player.play(songs, startAt: 0)
             player.showFullPlayer = true
+        case .player:
+            if player.hasTrack { player.showFullPlayer = true }
         case .recognise:
             showRecognition = true
         case .play(let videoId):
@@ -167,6 +169,10 @@ struct RootView: View {
         // Siri and Shortcuts leave a request rather than reaching into the
         // player directly; perform it once the app is up.
         .onAppear {
+            // The widget's buttons reach us over a Darwin notification, which
+            // only lands while this process is alive — which it is for the whole
+            // of the case that matters, because it's the one playing audio.
+            WidgetBridge.shared.start(player: player)
             performPendingRequest()
             PlayHistory.pruneOld()
             safeBottom = UIApplication.shared.connectedScenes

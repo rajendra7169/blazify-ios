@@ -58,12 +58,15 @@ targets:
   BlazifyWidget:
     type: app-extension
     platform: iOS
-    # Only the link definitions are shared, so the widget and the app can't
-    # drift on URLs. The intents themselves stay in the app — compiling them
-    # here too would register every App Intent twice.
+    # The widget shares only what it must: the deep-link URLs, the now-playing
+    # snapshot it reads, and the transport intents its buttons run. Blazify's
+    # own App Intents stay in the app — compiling those here too would register
+    # every Siri phrase twice.
     sources:
       - Widget
       - path: Sources/BlazifyLink.swift
+      - path: Sources/NowPlayingShare.swift
+      - path: Sources/WidgetTransport.swift
     info:
       path: Widget/Info.plist
       properties:

@@ -10,4 +10,7 @@ enum BlazifyLink {
     static var favourites: URL { URL(string: "\(scheme)://favourites")! }
     static var downloads: URL { URL(string: "\(scheme)://downloads")! }
     static var recognise: URL { URL(string: "\(scheme)://recognise")! }
+    /// Open the full player on whatever is loaded, without touching playback —
+    /// the turntable widget's tap target.
+    static var player: URL { URL(string: "\(scheme)://player")! }
 }
