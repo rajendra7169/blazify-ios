@@ -574,6 +574,22 @@ enum YouTube {
             if subscribers.isEmpty { subscribers = runsFirst(btn["shortSubscriberCountText"]) }
         }
 
+        // Whether we already follow, and the channel the subscribe call needs.
+        var following = false
+        var channelId: String?
+        for key in ["subscriptionButton2", "subscriptionButton"] {
+            guard let btn = (immersive?[key] as? [String: Any])?["subscribeButtonRenderer"]
+                    as? [String: Any] else { continue }
+            if let subscribed = btn["subscribed"] as? Bool { following = subscribed }
+            if channelId == nil {
+                channelId = (btn["channelId"] as? String)
+                    ?? ((btn["serviceEndpoints"] as? [[String: Any]])?
+                        .compactMap { ($0["subscribeEndpoint"] as? [String: Any])?["channelIds"] as? [String] }
+                        .first?.first)
+            }
+            if channelId != nil { break }
+        }
+
         // Shelves: musicShelfRenderer = song list, musicCarouselShelfRenderer = cards.
         var sections: [ArtistSection] = []
         if let contents = json["contents"] as? [String: Any],
@@ -603,7 +619,9 @@ enum YouTube {
             }
         }
 
-        return ArtistPage(name: name, thumbnail: thumb, subscribers: subscribers, sections: sections)
+        return ArtistPage(name: name, thumbnail: thumb, subscribers: subscribers,
+                          sections: sections, following: following,
+                          channelId: channelId ?? browseId)
     }
 
     // MARK: - Moods & genres
@@ -1082,6 +1100,26 @@ enum YouTube {
                                     userAgent: webUA, visitor: visitor, body: body, login: true)
         else { return false }
         if let status = json["status"] as? String { return status == "STATUS_SUCCEEDED" }
+        return json["error"] == nil
+    }
+
+    /// Follow or unfollow an artist on the signed-in account.
+    static func setFollowing(_ following: Bool, channelId: String) async -> Bool {
+        guard Auth.shared.isLoggedIn, !channelId.isEmpty else { return false }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "channelIds": [channelId],
+        ]
+        let path = following ? "subscription/subscribe" : "subscription/unsubscribe"
+        let endpoint = "https://music.youtube.com/youtubei/v1/\(path)?prettyPrint=false"
+        guard let json = await post(endpoint, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body, login: true)
+        else { return false }
         return json["error"] == nil
     }
 

@@ -164,6 +164,10 @@ struct ArtistPage {
     let thumbnail: String
     let subscribers: String
     let sections: [ArtistSection]
+    /// Whether the signed-in account already follows this artist, and the
+    /// channel id the subscribe endpoint needs.
+    var following: Bool = false
+    var channelId: String?
 
     var thumbnailURL: URL? { URL(string: thumbnail) }
 }

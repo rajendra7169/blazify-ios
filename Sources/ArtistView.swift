@@ -5,6 +5,11 @@ import SwiftUI
 /// albums / singles / similar artists as horizontal card rows.
 struct ArtistView: View {
     @Environment(\.palette) private var palette
+    @ObservedObject private var auth = Auth.shared
+    /// Flipped immediately on tap so the button responds, then reverted if the
+    /// account refuses.
+    @State private var following: Bool?
+    @State private var followBusy = false
     let browseId: String
     @ObservedObject var player: Player
     @Environment(\.dismiss) private var dismiss
@@ -68,10 +73,15 @@ struct ArtistView: View {
                     .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(palette.onSurface)
                     .lineLimit(2)
-                if !page.subscribers.isEmpty, ContentPrefs.shared.showSubscriberCount {
-                    Text(page.subscribers)
-                        .font(.system(size: 13))
-                        .foregroundStyle(palette.onSurfaceVariant)
+                HStack(spacing: 12) {
+                    if !page.subscribers.isEmpty, ContentPrefs.shared.showSubscriberCount {
+                        Text(page.subscribers)
+                            .font(.system(size: 13))
+                            .foregroundStyle(palette.onSurfaceVariant)
+                    }
+                    if auth.isLoggedIn, page.channelId != nil {
+                        followButton
+                    }
                 }
                 if let songs = firstSongs, !songs.isEmpty {
                     Button {
@@ -134,6 +144,40 @@ struct ArtistView: View {
                     }
                 }
                 .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    /// Follow / following, with the state flipped optimistically so the tap
+    /// feels instant and reverted if YouTube refuses.
+    @ViewBuilder private var followButton: some View {
+        let isFollowing = following ?? (page?.following ?? false)
+        Button {
+            toggleFollow(currently: isFollowing)
+        } label: {
+            Text(isFollowing ? "Following" : "Follow")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isFollowing ? palette.onSurface : palette.onAccent)
+                .padding(.horizontal, 16).padding(.vertical, 7)
+                .background(isFollowing ? AnyShapeStyle(palette.surfaceHigh)
+                                        : AnyShapeStyle(palette.accent))
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(followBusy)
+        .opacity(followBusy ? 0.6 : 1)
+    }
+
+    private func toggleFollow(currently: Bool) {
+        guard let channelId = page?.channelId, !followBusy else { return }
+        let wanted = !currently
+        following = wanted
+        followBusy = true
+        Task {
+            let ok = await YouTube.setFollowing(wanted, channelId: channelId)
+            await MainActor.run {
+                followBusy = false
+                if !ok { following = currently }
             }
         }
     }
