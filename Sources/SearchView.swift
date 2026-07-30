@@ -21,6 +21,8 @@ struct SearchView: View {
     @State private var scope: YouTube.SearchScope = .songs
     @State private var cardRoute: HomeItem?
     @State private var artistRoute: ArtistRoute?
+    /// A YouTube link pasted into the box, so a shared link is one tap away.
+    private var pastedLink: YouTubeLink? { YouTubeLink.parse(query) }
     @State private var suggestions: [String] = []
     @State private var suggestedSongs: [Track] = []
     @State private var moods: [MoodItem] = []
@@ -42,7 +44,12 @@ struct SearchView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    if didSearch, !trimmed.isEmpty {
+                    // A pasted link beats any search for it — the words in a
+                    // YouTube URL are not a useful query.
+                    if let link = pastedLink {
+                        linkRow(link)
+                    }
+                    if didSearch, !trimmed.isEmpty, pastedLink == nil {
                         scopePicker
                     }
                     if searching {
@@ -322,6 +329,73 @@ struct SearchView: View {
                 results = found
                 searching = false
             }
+        }
+    }
+}
+
+// MARK: - Shared links
+
+extension SearchView {
+    /// The "open this link" row. Paste a YouTube or YouTube Music URL — from a
+    /// message, Safari, the YouTube app — and it opens here instead of being
+    /// searched for as text.
+    @ViewBuilder func linkRow(_ link: YouTubeLink) -> some View {
+        Button {
+            open(link)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "link")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(palette.onAccent)
+                    .frame(width: 44, height: 44)
+                    .background(palette.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(link.browseId == nil ? "Open this song" : "Open this playlist")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(palette.onSurface)
+                    Text("From the link you pasted")
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(palette.onSurfaceVariant.opacity(0.6))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    func open(_ link: YouTubeLink) {
+        fieldFocused = false
+        switch link {
+        case .song(let videoId):
+            searching = true
+            Task {
+                // Resolve the id to a real track through the related feed, which
+                // names it; a bare id has no title or artwork to show.
+                let found = await YouTube.related(videoId: videoId)
+                    .flatMap(\.items)
+                    .compactMap { $0.videoId == videoId ? $0.asTrack : nil }
+                    .first
+                let track = found ?? Track(videoId: videoId, title: "Shared song",
+                                           artist: "", thumbnail: "", duration: 0)
+                await MainActor.run {
+                    searching = false
+                    query = ""
+                    player.play([track], startAt: 0)
+                    player.showFullPlayer = true
+                }
+            }
+        case .playlist:
+            guard let browseId = link.browseId else { return }
+            query = ""
+            cardRoute = HomeItem(title: "Shared playlist", subtitle: "",
+                                 thumbnail: "", videoId: nil,
+                                 browseId: browseId, isCircular: false)
         }
     }
 }
