@@ -61,6 +61,32 @@ struct RootView: View {
     }
 
     /// Start a random song from everything you've liked or played.
+    /// Act on whatever Siri or a Shortcut asked for. Intents can't touch the
+    /// player directly — it's a `@StateObject` owned by this view — so they
+    /// leave a request and we perform it here.
+    private func performPendingRequest() {
+        guard let request = BlazifyRequest.take() else { return }
+        switch request {
+        case .resume:
+            if player.hasTrack, !player.isPlaying { player.toggle() }
+            player.showFullPlayer = true
+        case .favourites:
+            let songs = player.favoriteTracks.shuffled()
+            guard !songs.isEmpty else { return }
+            player.isShuffled = true
+            player.play(songs, startAt: 0)
+            player.showFullPlayer = true
+        case .downloads:
+            let songs = Downloads.shared.tracks.shuffled()
+            guard !songs.isEmpty else { return }
+            player.isShuffled = true
+            player.play(songs, startAt: 0)
+            player.showFullPlayer = true
+        case .recognise:
+            showRecognition = true
+        }
+    }
+
     private func shuffleAll() {
         var pool = player.favoriteTracks + PlayHistory.recent + Downloads.shared.tracks
         var seen = Set<String>()
@@ -113,11 +139,18 @@ struct RootView: View {
             RecognitionView(player: player)
                 .environment(\.palette, palette)
         }
+        // Siri and Shortcuts leave a request rather than reaching into the
+        // player directly; perform it once the app is up.
         .onAppear {
+            performPendingRequest()
             PlayHistory.pruneOld()
             safeBottom = UIApplication.shared.connectedScenes
                 .compactMap { ($0 as? UIWindowScene)?.keyWindow }
                 .first?.safeAreaInsets.bottom ?? 34
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIApplication.willEnterForegroundNotification)) { _ in
+            performPendingRequest()
         }
         .environment(\.palette, palette)
         .environment(\.playerBottomInset, bottomInset)
