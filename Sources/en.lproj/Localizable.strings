@@ -81,10 +81,6 @@
 "Downloaded songs are always kept." = "Downloaded songs are always kept.";
 "Downloaded songs are kept — only the automatic cache is emptied." = "Downloaded songs are kept — only the automatic cache is emptied.";
 "Downloads" = "Downloads";
-"EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D" = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
-"EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D" = "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D";
-"EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D" = "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D";
-"EgWKAQIoAWoKEAkQChAFEAMQBA%3D%3D" = "EgWKAQIoAWoKEAkQChAFEAMQBA%3D%3D";
 "Electronic" = "Electronic";
 "Enable" = "Enable";
 "End of song" = "End of song";
@@ -92,9 +88,6 @@
 "Enter a room code" = "Enter a room code";
 "Explore" = "Explore";
 "Export playlist" = "Export playlist";
-"FEmusic_library_corpus_artists" = "FEmusic_library_corpus_artists";
-"FEmusic_liked_albums" = "FEmusic_liked_albums";
-"FEmusic_liked_playlists" = "FEmusic_liked_playlists";
 "FIRST" = "FIRST";
 "Fade" = "Fade";
 "Fallback when the other two are refused" = "Fallback when the other two are refused";
@@ -281,3 +274,19 @@
 "visionOS" = "visionOS";
 "xAI" = "xAI";
 "−12 dB   ·   +12 dB" = "−12 dB   ·   +12 dB";
+
+"Add music from Files" = "Add music from Files";
+"Add your own music" = "Add your own music";
+"AirPlay and Bluetooth" = "AirPlay and Bluetooth";
+"Bring in music from Files, iCloud Drive or anywhere else on your phone. It plays with no signal and never touches the network." = "Bring in music from Files, iCloud Drive or anywhere else on your phone. It plays with no signal and never touches the network.";
+"Choose files" = "Choose files";
+"Couldn't save the playlist" = "Couldn't save the playlist";
+"Creates a new playlist on your account with everything in the queue." = "Creates a new playlist on your account with everything in the queue.";
+"Nothing could be added" = "Nothing could be added";
+"On this phone" = "On this phone";
+"Remove all" = "Remove all";
+"Remove all imported songs" = "Remove all imported songs";
+"Remove every imported song?" = "Remove every imported song?";
+"Remove from this phone" = "Remove from this phone";
+"Save queue as a playlist" = "Save queue as a playlist";
+"These came from Files and aren't downloaded again — you'd have to import them once more." = "These came from Files and aren't downloaded again — you'd have to import them once more.";
