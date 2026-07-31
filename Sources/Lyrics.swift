@@ -513,19 +513,11 @@ enum Lyrics {
             let name = attrs["name"] as? String ?? ""
             let by = attrs["artistName"] as? String ?? ""
             let lrc = payload["lrc"] as? String ?? ""
-            // Apple ships the per-word stamps in `ttmlContent`; `lrc` is the same
-            // lyrics flattened to one stamp per line. Reading the LRC threw every
-            // word boundary away — which is why a song that highlights word by
-            // word on Android didn't here, with the timings sitting unused in the
-            // very same response. `raw` still keeps LRC, since that's what the
-            // download cache re-parses.
-            if let ttml = payload["ttmlContent"] as? String, !ttml.isEmpty,
-               let lines = TTML.parse(ttml), !lines.isEmpty {
-                out.append(LyricsCandidate(provider: "Apple Music", trackName: name, artistName: by,
-                                           result: LyricsResult(lines: lines, plain: nil, synced: true,
-                                                                raw: lrc.isEmpty ? TTML.toLRC(ttml) : lrc),
-                                           score: song.score))
-            } else if !lrc.isEmpty {
+            // Apple also serves per-word stamps in `ttmlContent`, and we did use
+            // them for a while — but the user prefers the plain line highlight,
+            // so we deliberately read the flattened `lrc` instead. Don't "fix"
+            // this back to ttmlContent: line-level here is the intended look.
+            if !lrc.isEmpty {
                 out.append(LyricsCandidate(provider: "Apple Music", trackName: name, artistName: by,
                                            result: LyricsResult(lines: parseLRC(lrc), plain: nil,
                                                                 synced: true, raw: lrc),
