@@ -38,6 +38,10 @@ struct LyricsResult: Equatable {
     let synced: Bool
     /// The original LRC text, kept so downloads can cache and re-parse it.
     var raw: String?
+
+    /// Whether any line carries per-word stamps — what the word-by-word
+    /// highlight and the Blazify renderer need.
+    var hasWordTimings: Bool { lines.contains { $0.hasWordTimings } }
 }
 
 /// One candidate in the source picker, tagged with the provider it came from.
@@ -103,6 +107,12 @@ enum Lyrics {
         // Match quality first — that's what stops a confident-but-wrong result
         // from a preferred provider winning. Then synced, then provider rank.
         return all.enumerated().sorted { a, b in
+            // Word-by-word beats line-by-line when both are credible. Score still
+            // rules out the wrong song first: a contradicted duration scores
+            // below `unverifiedScore` and can't win on having prettier timing.
+            let aWords = a.element.result.hasWordTimings && a.element.score >= unverifiedScore
+            let bWords = b.element.result.hasWordTimings && b.element.score >= unverifiedScore
+            if aWords != bWords { return aWords }
             if a.element.score != b.element.score { return a.element.score > b.element.score }
             if a.element.synced != b.element.synced { return a.element.synced }
             let ra = prefs.rank(a.element.provider), rb = prefs.rank(b.element.provider)
@@ -412,7 +422,20 @@ enum Lyrics {
 
             let name = attrs["name"] as? String ?? ""
             let by = attrs["artistName"] as? String ?? ""
-            if let lrc = payload["lrc"] as? String, !lrc.isEmpty {
+            let lrc = payload["lrc"] as? String ?? ""
+            // Apple ships the per-word stamps in `ttmlContent`; `lrc` is the same
+            // lyrics flattened to one stamp per line. Reading the LRC threw every
+            // word boundary away — which is why a song that highlights word by
+            // word on Android didn't here, with the timings sitting unused in the
+            // very same response. `raw` still keeps LRC, since that's what the
+            // download cache re-parses.
+            if let ttml = payload["ttmlContent"] as? String, !ttml.isEmpty,
+               let lines = TTML.parse(ttml), !lines.isEmpty {
+                out.append(LyricsCandidate(provider: "Apple Music", trackName: name, artistName: by,
+                                           result: LyricsResult(lines: lines, plain: nil, synced: true,
+                                                                raw: lrc.isEmpty ? TTML.toLRC(ttml) : lrc),
+                                           score: song.score))
+            } else if !lrc.isEmpty {
                 out.append(LyricsCandidate(provider: "Apple Music", trackName: name, artistName: by,
                                            result: LyricsResult(lines: parseLRC(lrc), plain: nil,
                                                                 synced: true, raw: lrc),
