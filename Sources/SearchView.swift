@@ -562,7 +562,11 @@ struct TrackRow: View {
     var body: some View {
         HStack(spacing: 12) {
             RemoteImage(url: track.thumbnailURL, size: 52) {
-                palette.onSurface.opacity(0.10)
+                if track.thumbnailURL == nil {
+                    ArtPlaceholder()
+                } else {
+                    palette.onSurface.opacity(0.10)
+                }
             }
             .frame(width: 52, height: 52)
             .clipShape(RoundedRectangle(cornerRadius: 8))

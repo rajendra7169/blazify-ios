@@ -24,6 +24,7 @@ final class LocalMusic: ObservableObject {
 
     @Published private(set) var tracks: [Track] = []      // newest first
     @Published private(set) var importing = false
+    @Published private(set) var findingArt = false
     @Published private(set) var sizeBytes: Int64 = 0
 
     private let dir: URL
@@ -79,7 +80,56 @@ final class LocalMusic: ObservableObject {
             refreshSize()
             importing = false
         }
+        Task { await self.fetchMissingArtwork() }
         return added
+    }
+
+    /// Look up covers online for files that had none embedded.
+    ///
+    /// Best effort, and deliberately quiet: it matches on title and artist, so
+    /// it can pick the wrong release — but a plausible cover beats a blank tile,
+    /// and nothing about the audio changes. Runs once per song; a file that
+    /// stays unmatched is retried on the next visit, which costs one search.
+    @discardableResult
+    func fetchMissingArtwork() async -> Int {
+        guard !findingArt else { return 0 }
+        let missing = tracks.filter { localArtURL(for: $0.videoId) == nil }
+        guard !missing.isEmpty else { return 0 }
+        await MainActor.run { findingArt = true }
+        defer { Task { @MainActor in self.findingArt = false } }
+
+        var found = 0
+        for track in missing {
+            let query = [track.title, track.artist]
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            guard !query.isEmpty else { continue }
+            guard let match = await YouTube.search(query).first,
+                  let remote = match.artURL(size: 1080),
+                  let data = await ArtFetch.data(from: remote),
+                  let image = UIImage(data: data),
+                  let jpeg = Self.squared(image).jpegData(compressionQuality: 0.9)
+            else { continue }
+
+            let artURL = dir.appendingPathComponent("\(track.videoId).jpg")
+            try? jpeg.write(to: artURL, options: .atomic)
+            let id = track.videoId
+            let path = artURL.absoluteString
+            await MainActor.run {
+                if let i = self.tracks.firstIndex(where: { $0.videoId == id }) {
+                    let old = self.tracks[i]
+                    self.tracks[i] = Track(videoId: old.videoId, title: old.title,
+                                           artist: old.artist, thumbnail: path,
+                                           duration: old.duration)
+                }
+            }
+            found += 1
+        }
+        await MainActor.run {
+            self.saveMeta()
+            self.refreshSize()
+        }
+        return found
     }
 
     private func copyIn(_ source: URL) async -> Bool {

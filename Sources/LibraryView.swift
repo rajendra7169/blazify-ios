@@ -12,7 +12,6 @@ struct LibraryView: View {
 
     @State private var playlists: [HomeItem] = []
     @State private var artists: [HomeItem] = []
-    @State private var uploaded: [Track] = []
     @State private var loading = false
     @State private var route: LibraryRoute?
 
@@ -27,14 +26,14 @@ struct LibraryView: View {
                     Spacer().frame(height: 8)
 
                     banner(title: "Liked", subtitle: "\(likedTracks.count) songs",
-                           thumbs: likedTracks.prefix(4).map(\.thumbnail),
+                           thumbs: art(likedTracks),
                            seed: Color(hex: 0xB71C5A), icon: "heart.fill",
                            route: .tracks("Liked", likedTracks))
 
                     // Content → Show your stats playlists.
                     if ContentPrefs.shared.showStatsPlaylists {
                         banner(title: "Your Top \(PlayHistory.topSize)", subtitle: "",
-                               thumbs: PlayHistory.top.prefix(4).map(\.thumbnail),
+                               thumbs: art(PlayHistory.top),
                                seed: Color(hex: 0xEF6C00), icon: "chart.line.uptrend.xyaxis",
                                route: .topPlaylist)
                     }
@@ -42,13 +41,13 @@ struct LibraryView: View {
                     HStack(spacing: 12) {
                         BlazePlaylistCard(
                             title: "Cached", subtitle: cacheSize,
-                            thumbnails: cache.tracks.prefix(4).map(\.thumbnail),
+                            thumbnails: art(cache.tracks),
                             seed: Color(hex: 0x00838F), aspectRatio: boxRatio,
                             icon: "arrow.triangle.2.circlepath",
                         ) { route = .tracks("Cached", cache.tracks) }
 
                         BlazePlaylistCard(
-                            title: "Downloaded", thumbnails: downloads.tracks.prefix(4).map(\.thumbnail),
+                            title: "Downloaded", thumbnails: art(downloads.tracks),
                             seed: Color(hex: 0x283593), aspectRatio: boxRatio, icon: "arrow.down.circle",
                         ) { route = .tracks("Downloaded", downloads.tracks) }
                     }
@@ -56,16 +55,10 @@ struct LibraryView: View {
                     .padding(.vertical, 6)
 
                     banner(title: "On this phone", subtitle: localSize,
-                           thumbs: local.tracks.prefix(4).map(\.thumbnail),
+                           thumbs: art(local.tracks),
                            seed: Color(hex: 0x2E7D32), icon: "iphone.gen3",
                            route: .local)
 
-                    if auth.isLoggedIn {
-                        banner(title: "Uploaded", subtitle: "",
-                               thumbs: uploaded.prefix(4).map(\.thumbnail),
-                               seed: Color(hex: 0x6A1B9A), icon: "square.and.arrow.up",
-                               route: .tracks("Uploaded", uploaded))
-                    }
 
                     if loading { SkeletonGrid(count: 2) }
 
@@ -100,6 +93,13 @@ struct LibraryView: View {
             .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
         }
         .task(id: auth.isLoggedIn) { await load() }
+    }
+
+    /// Cover URLs for a card's collage. Resolved rather than raw: a stored
+    /// thumbnail can be a dead file:// path from an old container, and artURL
+    /// also prefers the copy on disk so the collage survives being offline.
+    private func art(_ tracks: [Track]) -> [String] {
+        tracks.prefix(4).compactMap { $0.artURL(size: 544)?.absoluteString }
     }
 
     /// Local favourites merged with the account's liked songs.
@@ -159,18 +159,16 @@ struct LibraryView: View {
 
     private func load() async {
         guard auth.isLoggedIn else {
-            playlists = []; artists = []; uploaded = []
+            playlists = []; artists = []
             return
         }
         loading = true
         async let p = YouTube.library("FEmusic_liked_playlists")
         async let a = YouTube.library("FEmusic_library_corpus_artists")
-        async let u = YouTube.uploadedSongs()
-        let (pl, ar, up) = await (p, a, u)
+        let (pl, ar) = await (p, a)
         await MainActor.run {
             playlists = pl
             artists = ar
-            uploaded = up
             loading = false
         }
     }
@@ -237,7 +235,7 @@ struct LibraryRouteView: View {
 }
 
 /// The capsule filters behind the Songs category — Android's SongFilter
-/// (Library / Liked / Downloaded / Uploaded), plus our own on-disk cache.
+/// (Library / Liked / Downloaded), plus our own on-disk cache and imports.
 enum SongCategories {
     static func filters(player: Player) -> [SongListFilter] {
         [

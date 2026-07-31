@@ -221,10 +221,14 @@ struct SongListScreen: View {
     private var header: some View {
         VStack(spacing: 0) {
             RemoteImage(url: source.first?.artURL(size: 720), size: 240) {
-                palette.onSurface.opacity(0.06)
-                    .overlay(Image(systemName: "music.note.list")
-                        .font(.blaze(56))
-                        .foregroundStyle(palette.onSurface.opacity(0.35)))
+                if !source.isEmpty, source.first?.artURL(size: 720) == nil {
+                    ArtPlaceholder()
+                } else {
+                    palette.onSurface.opacity(0.06)
+                        .overlay(Image(systemName: "music.note.list")
+                            .font(.blaze(56))
+                            .foregroundStyle(palette.onSurface.opacity(0.35)))
+                }
             }
             .frame(width: 240, height: 240)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))

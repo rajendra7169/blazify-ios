@@ -21,10 +21,13 @@ struct LocalMusicView: View {
         .overlay(alignment: .bottom) {
             if let notice { toast(notice) }
         }
+        // Files often carry no embedded cover. If there's a network, go and
+        // find one — it can't run at import time for songs added while offline.
+        .task { await local.fetchMissingArtwork() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { picking = true } label: {
-                    if local.importing {
+                    if local.importing || local.findingArt {
                         ProgressView().tint(palette.accent)
                     } else {
                         Image(systemName: "plus")
