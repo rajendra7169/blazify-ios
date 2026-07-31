@@ -1021,6 +1021,32 @@ enum YouTube {
         return json["error"] == nil
     }
 
+    /// Add many songs in ONE request. `edit_playlist` takes an array of actions,
+    /// so a 40-song queue is a single round trip instead of 40 — and the
+    /// per-song version also re-fetched visitorData each time when it wasn't
+    /// already cached, which is what left the Save button spinning for minutes.
+    /// Returns how many were accepted.
+    @discardableResult
+    static func addToPlaylist(playlistId: String, videoIds: [String]) async -> Int {
+        guard Auth.shared.isLoggedIn, !playlistId.isEmpty else { return 0 }
+        let ids = videoIds.filter { !$0.isEmpty }
+        guard !ids.isEmpty else { return 0 }
+
+        var done = 0
+        // Chunked: a very long queue in one body gets refused outright, and a
+        // partial save beats an all-or-nothing failure.
+        for start in stride(from: 0, to: ids.count, by: 50) {
+            let chunk = Array(ids[start..<min(start + 50, ids.count)])
+            let actions: [[String: Any]] = chunk.map {
+                ["action": "ACTION_ADD_VIDEO", "addedVideoId": $0]
+            }
+            if await editPlaylist(playlistId: playlistId, actions: actions) {
+                done += chunk.count
+            }
+        }
+        return done
+    }
+
     /// Remove a track. YouTube identifies a row inside a playlist by BOTH the
     /// video id and the row's own `setVideoId` — the same song can appear twice,
     /// so the video id alone is ambiguous.

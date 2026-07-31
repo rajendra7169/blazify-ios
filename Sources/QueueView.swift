@@ -123,21 +123,21 @@ struct QueueView: View {
         guard !name.isEmpty, !ids.isEmpty else { return }
         saving = true
         Task {
-            var added = 0
-            if let playlistId = await YouTube.createPlaylist(title: name) {
-                // One at a time: the batch endpoint rejects long lists, and a
-                // half-created playlist is worse than a slow one.
-                for videoId in ids {
-                    if await YouTube.addToPlaylist(playlistId: playlistId, videoId: videoId) {
-                        added += 1
-                    }
+            guard let playlistId = await YouTube.createPlaylist(title: name) else {
+                await MainActor.run {
+                    saving = false
+                    show(String(localized: "Couldn't create the playlist"))
                 }
+                return
             }
-            let done = added
+            let done = await YouTube.addToPlaylist(playlistId: playlistId, videoIds: ids)
             await MainActor.run {
                 saving = false
-                show(done == 0 ? String(localized: "Couldn't save the playlist")
-                               : String(localized: "Saved \(done) songs to \(name)"))
+                // The playlist exists either way — say so rather than implying
+                // nothing happened.
+                show(done == 0
+                     ? String(localized: "Created \(name), but no songs could be added")
+                     : String(localized: "Saved \(done) songs to \(name)"))
             }
         }
     }
