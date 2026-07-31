@@ -49,7 +49,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rajendra.blazifyplayer
-        CODE_SIGN_ENTITLEMENTS: Blazify.entitlements
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"   # iPhone only
@@ -59,15 +58,16 @@ targets:
   BlazifyWidget:
     type: app-extension
     platform: iOS
-    # The widget shares only what it must: the deep-link URLs, the now-playing
-    # snapshot it reads, and the transport intents its buttons run. Blazify's
-    # own App Intents stay in the app — compiling those here too would register
-    # every Siri phrase twice.
+    # Only the link definitions are shared, so the widget and the app can't
+    # drift on URLs. The intents themselves stay in the app — compiling them
+    # here too would register every App Intent twice.
     sources:
       - Widget
       - path: Sources/BlazifyLink.swift
-      - path: Sources/NowPlayingShare.swift
-      - path: Sources/WidgetTransport.swift
+      # The logo lives loose in Sources/Resources, which only lands in the app's
+      # bundle — an extension has its own, so it needs its own copy.
+      - path: Sources/Resources/blaze_logo_white.png
+        buildPhase: resources
     info:
       path: Widget/Info.plist
       properties:
@@ -79,7 +79,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rajendra.blazifyplayer.widget
-        CODE_SIGN_ENTITLEMENTS: BlazifyWidget.entitlements
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"

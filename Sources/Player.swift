@@ -1103,7 +1103,6 @@ final class Player: ObservableObject {
             artwork = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
             artColor = img.gradientSeed
             AppTheme.shared.setArtworkSeed(img.gradientSeed)
-            WidgetBridge.shared.publish(artwork: img)
             updateNowPlaying()
             return
         }
@@ -1115,7 +1114,6 @@ final class Player: ObservableObject {
                 self.artwork = art
                 self.artColor = seed
                 AppTheme.shared.setArtworkSeed(seed)
-                WidgetBridge.shared.publish(artwork: img)
                 self.updateNowPlaying()
             }
         }.resume()
@@ -1132,12 +1130,6 @@ final class Player: ObservableObject {
         ]
         if let artwork { info[MPMediaItemPropertyArtwork] = artwork }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-
-        // Same moment, same facts — the Home Screen widget can't drift from the
-        // lock screen if they're fed from one place.
-        WidgetBridge.shared.publish(title: track.title, artist: track.artist,
-                                    videoId: track.videoId, isPlaying: isPlaying,
-                                    position: currentTime, duration: duration)
     }
 
     private func removeTimeObserver() {

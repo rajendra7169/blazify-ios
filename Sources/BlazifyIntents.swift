@@ -12,7 +12,6 @@ extension BlazifyLink {
         case "favourites": return .favourites
         case "downloads": return .downloads
         case "recognise": return .recognise
-        case "player": return .player
         default: return nil
         }
     }
@@ -24,8 +23,6 @@ extension BlazifyLink {
 /// which performs it on the next foreground.
 enum BlazifyRequest: Equatable {
     case resume, favourites, downloads, recognise
-    /// Just show the player — no play, no pause.
-    case player
     /// A song Siri already resolved, by videoId.
     case play(String)
 
@@ -38,7 +35,6 @@ enum BlazifyRequest: Equatable {
         case .favourites: return "favourites"
         case .downloads: return "downloads"
         case .recognise: return "recognise"
-        case .player: return "player"
         case .play: return "play"
         }
     }
@@ -65,7 +61,6 @@ enum BlazifyRequest: Equatable {
         case "favourites": return .favourites
         case "downloads": return .downloads
         case "recognise": return .recognise
-        case "player": return .player
         case "play":
             guard let query, !query.isEmpty else { return nil }
             return .play(query)

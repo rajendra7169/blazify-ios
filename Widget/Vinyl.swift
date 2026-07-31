@@ -25,16 +25,18 @@ enum Vinyl {
     /// makes it read as hardware sitting on top rather than part of the print.
     static let arm = Color(red: 0.855, green: 0.855, blue: 0.875)
     static let pivot = Color(red: 0.302, green: 0.263, blue: 0.318)
+
+    static let amber = Color(red: 1.0, green: 0.655, blue: 0.149)   // #FFA726
+    static let ember = Color(red: 1.0, green: 0.439, blue: 0.263)   // #FF7043
+
+    /// The real logo, copied into the extension's own bundle — an app extension
+    /// can't reach into the app's.
+    static var logo: Image { Image(uiImage: UIImage(named: "blaze_logo_white") ?? UIImage()) }
 }
 
-/// The record: a black disc with the artwork as its label, under a tonearm.
+/// The record: a black disc pressed with Blazify's own label.
 struct VinylRecord: View {
-    var artwork: Image?
     var diameter: CGFloat
-    /// Records spin. This one leans a few degrees per song so two songs in a
-    /// row never look like a frozen screenshot, without animating a widget
-    /// (which can't animate) or spending reloads pretending to.
-    var angle: Double = 0
 
     private var label: CGFloat { diameter * 0.46 }
 
@@ -57,11 +59,9 @@ struct VinylRecord: View {
             // Grooves. Six rings at falling opacity read as pressed vinyl;
             // more than that turns to moiré at widget scale.
             ForEach(0..<6, id: \.self) { i in
-                let t = CGFloat(i)
                 Circle()
-                    .strokeBorder(.white.opacity(0.05 - Double(i) * 0.006),
-                                  lineWidth: 0.6)
-                    .padding(diameter * (0.055 + t * 0.038))
+                    .strokeBorder(.white.opacity(0.05 - Double(i) * 0.006), lineWidth: 0.6)
+                    .padding(diameter * (0.055 + CGFloat(i) * 0.038))
             }
 
             // The lit edge that makes it sit above the paper rather than in it.
@@ -70,10 +70,9 @@ struct VinylRecord: View {
                                startPoint: .topLeading, endPoint: .bottomTrailing),
                 lineWidth: 0.8)
 
-            artLabel
-                .rotationEffect(.degrees(angle))
+            brandLabel
 
-            // Spindle hole, punched in the paper colour so it looks through.
+            // Spindle hole, punched through the middle of the label.
             Circle()
                 .fill(Color(white: 0.55))
                 .frame(width: diameter * 0.028, height: diameter * 0.028)
@@ -83,31 +82,26 @@ struct VinylRecord: View {
                 x: diameter * 0.008, y: diameter * 0.02)
     }
 
-    @ViewBuilder private var artLabel: some View {
+    /// Blazify's flame on the amber gradient — the one place on a black record
+    /// where the brand can actually carry, and a real printed label rather than
+    /// a placeholder standing in for artwork we can't reach.
+    private var brandLabel: some View {
         ZStack {
-            if let artwork {
-                artwork
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                // No art yet — a warm plate with the flame, rather than a grey
-                // hole where the song should be.
-                LinearGradient(colors: [Color(red: 1.0, green: 0.655, blue: 0.149),
-                                        Color(red: 1.0, green: 0.439, blue: 0.263)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                Image(systemName: "flame.fill")
-                    .font(.system(size: label * 0.34, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
+            Circle()
+                .fill(LinearGradient(colors: [Vinyl.amber, Vinyl.ember],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+            Vinyl.logo
+                .resizable()
+                .scaledToFit()
+                .frame(width: label * 0.6, height: label * 0.6)
         }
         .frame(width: label, height: label)
-        .clipShape(Circle())
         .overlay(Circle().strokeBorder(.black.opacity(0.35), lineWidth: 0.8))
     }
 
     /// Pivot at the upper right, arm reaching down-left onto the record — the
-    /// resting position, drawn in the widget's own coordinate space so it
-    /// scales with the disc instead of needing a size per family.
+    /// resting position, drawn relative to the disc so it scales with it rather
+    /// than needing a size per widget family.
     private var tonearm: some View {
         ZStack {
             Capsule()
@@ -135,24 +129,5 @@ struct VinylRecord: View {
                 .offset(x: diameter * 0.40, y: -diameter * 0.165)
         }
         .shadow(color: .black.opacity(0.2), radius: diameter * 0.012, y: diameter * 0.008)
-    }
-}
-
-/// The bar under the title. Flat capsules, no shading — the record is the
-/// ornament here and a glossy progress bar would compete with it.
-struct VinylProgress: View {
-    var fraction: Double
-    var dark: Bool
-
-    var body: some View {
-        GeometryReader { g in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Vinyl.rail(dark))
-                Capsule()
-                    .fill(Vinyl.ink(dark).opacity(dark ? 0.85 : 0.7))
-                    .frame(width: max(g.size.width * min(max(fraction, 0), 1), 2))
-            }
-        }
-        .frame(height: 5)
     }
 }
