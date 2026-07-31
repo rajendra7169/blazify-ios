@@ -45,14 +45,22 @@ enum ArtFetch {
 enum ThumbSize {
     static func url(_ url: URL?, points: CGFloat?) -> URL? {
         guard let url else { return url }
-        // Without a declared draw size we'd use whatever the catalogue put in
-        // the URL — often 60px, which is why some art looked mushy. 544 is the
-        // size YouTube Music itself serves for a row.
         // Cap at 1080: past that we're paying for pixels no phone shows.
-        let pixels = points.map { min(Int(($0 * UIScreen.main.scale).rounded()), 1080) } ?? 544
         let s = url.absoluteString
         guard let range = s.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) else {
             return url
+        }
+        let pixels: Int
+        if let points {
+            pixels = min(Int((points * UIScreen.main.scale).rounded()), 1080)
+        } else {
+            // No declared draw size. The catalogue's own number is often 60px,
+            // so raise it to the 544 YouTube Music serves for a row — but never
+            // LOWER it: the full player asks for 1080 in the URL precisely
+            // because it draws edge to edge, and knocking that back to 544 made
+            // its artwork soft. Take whichever is larger.
+            let existing = Int(s[range].dropFirst(2).prefix { $0.isNumber }) ?? 0
+            pixels = min(max(existing, 544), 1080)
         }
         return URL(string: s.replacingCharacters(in: range, with: "=w\(pixels)-h\(pixels)")) ?? url
     }
@@ -74,6 +82,12 @@ struct RemoteImage<Placeholder: View>: View {
 
     private var resolved: URL? { ThumbSize.url(url, points: size) }
 
+    /// The pixel size we'll decode to. `nil` size means "whatever the file is".
+    private var decodePixels: Int {
+        guard let size, size > 0 else { return 0 }
+        return Int(min(size * UIScreen.main.scale, 1080))
+    }
+
     var body: some View {
         Group {
             if let image {
@@ -84,12 +98,20 @@ struct RemoteImage<Placeholder: View>: View {
                 placeholder()
             }
         }
-        .task(id: resolved) { await load() }
+        .task(id: "\(resolved?.absoluteString ?? "")|\(decodePixels)") { await load() }
     }
 
     private func load() async {
         guard let target = resolved else { return }
-        let key = target.absoluteString as NSString
+        // The size has to be part of the key. A remote URL carries its size in
+        // the string, so each size caches separately — but a LOCAL file's URL is
+        // identical whatever size we want it at. That let the first 48pt row to
+        // decode a downloaded cover store a 144px bitmap under the file path,
+        // and every later view — the full player included — got that same
+        // 144px image back from the cache. Downloaded and cached songs looked
+        // soft offline while the very same song was sharp online, because
+        // online each size had a key of its own.
+        let key = "\(target.absoluteString)|\(decodePixels)" as NSString
 
         if let cached = ImageCache.store.object(forKey: key) {
             image = cached
