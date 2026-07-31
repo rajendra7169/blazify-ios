@@ -5,6 +5,12 @@ struct QueueView: View {
     @Environment(\.palette) private var palette
     @ObservedObject var player: Player
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var auth = Auth.shared
+
+    @State private var showSave = false
+    @State private var playlistName = ""
+    @State private var saving = false
+    @State private var notice: String?
 
     var body: some View {
         NavigationStack {
@@ -66,10 +72,81 @@ struct QueueView: View {
             .navigationTitle("Queue")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Only offered when there's an account to save it to — a
+                // playlist is created server-side, not on the phone.
+                if auth.isLoggedIn, !player.queue.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { playlistName = ""; showSave = true } label: {
+                            if saving {
+                                ProgressView().tint(palette.accent)
+                            } else {
+                                Image(systemName: "text.badge.plus")
+                            }
+                        }
+                        .tint(palette.accent)
+                        .disabled(saving)
+                        .accessibilityLabel("Save queue as a playlist")
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }.tint(palette.accent)
                 }
             }
+            .overlay(alignment: .bottom) {
+                if let notice {
+                    Text(notice)
+                        .font(.blaze(13, .semibold))
+                        .foregroundStyle(palette.onSurface)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 11)
+                        .background(palette.surfaceHigh)
+                        .clipShape(Capsule())
+                        .padding(.bottom, 28)
+                        .transition(.opacity)
+                }
+            }
+            .alert("Save queue as a playlist", isPresented: $showSave) {
+                TextField("Name", text: $playlistName)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") { save() }
+            } message: {
+                Text("Creates a new playlist on your account with everything in the queue.")
+            }
+        }
+    }
+
+    /// Songs on this phone have no video id on YouTube, so they can't go into a
+    /// playlist that lives on the account — everything else does.
+    private func save() {
+        let name = playlistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ids = player.queue.map(\.videoId).filter { !LocalMusic.isLocal($0) }
+        guard !name.isEmpty, !ids.isEmpty else { return }
+        saving = true
+        Task {
+            var added = 0
+            if let playlistId = await YouTube.createPlaylist(title: name) {
+                // One at a time: the batch endpoint rejects long lists, and a
+                // half-created playlist is worse than a slow one.
+                for videoId in ids {
+                    if await YouTube.addToPlaylist(playlistId: playlistId, videoId: videoId) {
+                        added += 1
+                    }
+                }
+            }
+            let done = added
+            await MainActor.run {
+                saving = false
+                show(done == 0 ? String(localized: "Couldn't save the playlist")
+                               : String(localized: "Saved \(done) songs to \(name)"))
+            }
+        }
+    }
+
+    private func show(_ text: String) {
+        withAnimation { notice = text }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_600_000_000)
+            withAnimation { notice = nil }
         }
     }
 }

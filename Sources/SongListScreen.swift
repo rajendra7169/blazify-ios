@@ -377,22 +377,28 @@ struct SongRowMenu: View {
 
             Divider()
 
-            if isDownloaded {
-                Button(role: .destructive) { downloads.remove(track.videoId) } label: {
-                    Label("Remove download", systemImage: "trash")
+            if LocalMusic.isLocal(track.videoId) {
+                Button(role: .destructive) { LocalMusic.shared.remove(track.videoId) } label: {
+                    Label("Remove from this phone", systemImage: "trash")
                 }
             } else {
-                Button { downloads.download(track) } label: {
-                    Label("Download", systemImage: "arrow.down.circle")
+                if isDownloaded {
+                    Button(role: .destructive) { downloads.remove(track.videoId) } label: {
+                        Label("Remove download", systemImage: "trash")
+                    }
+                } else {
+                    Button { downloads.download(track) } label: {
+                        Label("Download", systemImage: "arrow.down.circle")
+                    }
                 }
-            }
-            Button {
-                if let onOpenArtist { onOpenArtist() } else { openArtist() }
-            } label: {
-                Label("View artist", systemImage: "person")
-            }
-            Button { share() } label: {
-                Label("Share", systemImage: "square.and.arrow.up")
+                Button {
+                    if let onOpenArtist { onOpenArtist() } else { openArtist() }
+                } label: {
+                    Label("View artist", systemImage: "person")
+                }
+                Button { share() } label: {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
             }
         } label: {
             Image(systemName: "ellipsis")

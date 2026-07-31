@@ -430,8 +430,24 @@ struct PlayerView: View {
                 lyricsMode.toggle()
                 if !lyricsMode { immersive = false }
             }
+            airPlayButton
         }
         .padding(.horizontal, 20)
+    }
+
+    /// Same shape as the others, but the tappable part is the system's own
+    /// button — it draws its glyph inside whatever frame it's given, and it
+    /// turns amber by itself once audio is somewhere else.
+    private var airPlayButton: some View {
+        VStack(spacing: 4) {
+            RoutePicker(tint: UIColor.white.withAlphaComponent(0.85),
+                        activeTint: UIColor(Blaze.amber))
+                .frame(width: 26, height: 26)
+            Text("AirPlay").font(.system(size: 11)).lineLimit(1)
+        }
+        .foregroundStyle(.white.opacity(0.85))
+        .frame(maxWidth: .infinity)
+        .accessibilityLabel("AirPlay and Bluetooth")
     }
 
     private func bottomButton(_ icon: String, _ label: String,

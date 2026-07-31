@@ -103,7 +103,8 @@ final class Downloads: ObservableObject {
 
     func download(_ track: Track) {
         let id = track.videoId
-        guard !id.isEmpty, state(id) == .none else { return }
+        // A file already on the phone has no network copy to fetch.
+        guard !id.isEmpty, !LocalMusic.isLocal(id), state(id) == .none else { return }
         states[id] = .downloading
         progress[id] = 0
         pending.append(track)

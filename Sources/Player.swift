@@ -632,8 +632,17 @@ final class Player: ObservableObject {
         countPlay(track)
         Task { @MainActor in ListenTogether.shared.broadcastTrack(track, position: 0) }
 
-        // Disk before network: a deliberate download first, then the automatic
-        // cache of things you've already played.
+        // Your own files first — they have no network path at all — then a
+        // deliberate download, then the automatic cache of things you've played.
+        if let own = LocalMusic.shared.localAudioURL(for: videoId) {
+            let dur = LocalMusic.shared.duration(for: videoId) ?? track.duration
+            duration = dur
+            isLoading = false
+            playStream(own, realDuration: dur)
+            warmLyrics(for: track, duration: dur)
+            prefetchNext()
+            return
+        }
         if let local = Downloads.shared.localAudioURL(for: videoId) {
             let dur = Downloads.shared.duration(for: videoId) ?? track.duration
             duration = dur
@@ -859,6 +868,7 @@ final class Player: ObservableObject {
 
     /// The playable URL for a track: a download, then the cache, then the network.
     private func resolvedURL(for track: Track) async -> URL? {
+        if let own = LocalMusic.shared.localAudioURL(for: track.videoId) { return own }
         if let local = Downloads.shared.localAudioURL(for: track.videoId) { return local }
         if let cached = AudioCache.shared.cachedURL(for: track.videoId) { return cached }
         return await YouTube.streamURL(for: track.videoId)?.url

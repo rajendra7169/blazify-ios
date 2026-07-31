@@ -8,6 +8,7 @@ struct LibraryView: View {
     @ObservedObject private var auth = Auth.shared
     @ObservedObject private var downloads = Downloads.shared
     @ObservedObject private var cache = AudioCache.shared
+    @ObservedObject private var local = LocalMusic.shared
 
     @State private var playlists: [HomeItem] = []
     @State private var artists: [HomeItem] = []
@@ -53,6 +54,11 @@ struct LibraryView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 6)
+
+                    banner(title: "On this phone", subtitle: localSize,
+                           thumbs: local.tracks.prefix(4).map(\.thumbnail),
+                           seed: Color(hex: 0x2E7D32), icon: "iphone.gen3",
+                           route: .local)
 
                     if auth.isLoggedIn {
                         banner(title: "Uploaded", subtitle: "",
@@ -101,6 +107,15 @@ struct LibraryView: View {
 
     /// Human-readable cache footprint, e.g. "128 MB". Reads the *published*
     /// size — it used to stat every cached file on each render.
+    /// Songs and their size, or an invitation when there aren't any yet.
+    private var localSize: String {
+        guard !local.tracks.isEmpty else { return String(localized: "Add your own music") }
+        let mb = Double(local.sizeBytes) / 1_048_576
+        let count = local.tracks.count
+        let songs = count == 1 ? String(localized: "1 song") : String(localized: "\(count) songs")
+        return mb < 1 ? songs : songs + String(format: " · %.0f MB", mb)
+    }
+
     private var cacheSize: String {
         let mb = Double(cache.sizeBytes) / 1_048_576
         return mb < 1 ? "" : String(format: "%.0f MB", mb)
@@ -165,6 +180,8 @@ struct LibraryView: View {
 enum LibraryRoute: Hashable {
     case tracks(String, [Track])
     case artist(String)
+    /// Music imported from Files, which manages its own list.
+    case local
     case playlist(HomeItem)
     /// Browse categories, which open filtered collections rather than one list.
     case songs
@@ -195,6 +212,8 @@ struct LibraryRouteView: View {
             SongListScreen(title: title, tracks: tracks, player: player)
         case .artist(let id):
             ArtistView(browseId: id, player: player)
+        case .local:
+            LocalMusicView(player: player)
         case .playlist(let item):
             PlaylistView(item: item, player: player)
         case .songs:
@@ -226,6 +245,7 @@ enum SongCategories {
             SongListFilter("Liked", player.favoriteTracks),
             SongListFilter("Downloaded", Downloads.shared.tracks),
             SongListFilter("Cached", AudioCache.shared.tracks),
+            SongListFilter("On this phone", LocalMusic.shared.tracks),
         ]
     }
 

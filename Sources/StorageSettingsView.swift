@@ -7,6 +7,7 @@ struct StorageSettingsView: View {
     @Environment(\.palette) private var palette
     @ObservedObject private var downloads = Downloads.shared
     @ObservedObject private var cache = AudioCache.shared
+    @ObservedObject private var local = LocalMusic.shared
 
     @State private var songCacheOn = AudioCache.shared.isEnabled
     @State private var songLimitMB = AudioCache.shared.limitMB
@@ -16,6 +17,7 @@ struct StorageSettingsView: View {
     @State private var confirmClearDownloads = false
     @State private var confirmClearCache = false
     @State private var confirmClearImages = false
+    @State private var confirmClearLocal = false
 
     /// Android's exact ladder: 0 disables, -1 is unlimited.
     private let songValues = [0, 128, 256, 512, 1024, 2048, 4096, 8192, -1]
@@ -25,6 +27,7 @@ struct StorageSettingsView: View {
         ScrollView {
             VStack(spacing: 18) {
                 downloadsCard
+                if !local.tracks.isEmpty { localCard }
                 songCacheCard
                 imageCacheCard
             }
@@ -38,6 +41,13 @@ struct StorageSettingsView: View {
             downloads.refreshSize()
             cache.refreshSize()
             imageUsed = ImageCacheSettings.used
+        }
+        .confirmationDialog("Remove every imported song?",
+                            isPresented: $confirmClearLocal, titleVisibility: .visible) {
+            Button("Remove all", role: .destructive) { local.removeAll() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("These came from Files and aren't downloaded again — you'd have to import them once more.")
         }
         .confirmationDialog("Delete every downloaded song?",
                             isPresented: $confirmClearDownloads, titleVisibility: .visible) {
@@ -68,6 +78,16 @@ struct StorageSettingsView: View {
             header("Downloaded songs",
                    "\(downloads.tracks.count) song\(downloads.tracks.count == 1 ? "" : "s") · \(format(downloads.sizeBytes))")
             clearButton("Clear all downloads") { confirmClearDownloads = true }
+        }
+    }
+
+    /// Imported files get their own card: unlike a download or a cache entry,
+    /// clearing this is the only copy the phone has.
+    private var localCard: some View {
+        card {
+            header("On this phone",
+                   "\(local.tracks.count) song\(local.tracks.count == 1 ? "" : "s") · \(format(local.sizeBytes))")
+            clearButton("Remove all imported songs") { confirmClearLocal = true }
         }
     }
 
