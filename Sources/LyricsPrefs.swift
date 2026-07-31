@@ -29,6 +29,7 @@ enum LyricsProvider: String, CaseIterable, Identifiable {
     case lrcLib = "LrcLib"
     case betterLyrics = "BetterLyrics"
     case youTube = "YouTube"
+    case lyricsPlus = "LyricsPlus"
     case kuGou = "KuGou"
 
     var id: String { rawValue }
@@ -40,6 +41,7 @@ enum LyricsProvider: String, CaseIterable, Identifiable {
         case .lrcLib: return String(localized: "LrcLib")
         case .kuGou: return String(localized: "KuGou")
         case .youTube: return String(localized: "YouTube Music")
+        case .lyricsPlus: return String(localized: "LyricsPlus")
         }
     }
 
@@ -50,6 +52,7 @@ enum LyricsProvider: String, CaseIterable, Identifiable {
         case .lrcLib: return String(localized: "Open synced-lyrics database")
         case .kuGou: return String(localized: "Strong on Mandarin and Cantonese tracks")
         case .youTube: return String(localized: "Plain lyrics straight from the track page")
+        case .lyricsPlus: return String(localized: "Community word-by-word database, mirrored across several servers")
         }
     }
 }

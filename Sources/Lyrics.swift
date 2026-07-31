@@ -103,7 +103,9 @@ enum Lyrics {
             ? betterLyrics(title: title, artist: artist,
                            videoId: videoId, duration: duration)
             : [LyricsCandidate]()
-        let all = await apple + better + lrc + kugou + yt
+        async let plus = prefs.contains(.lyricsPlus)
+            ? lyricsPlus(title: title, artist: artist, duration: duration) : [LyricsCandidate]()
+        let all = await apple + better + lrc + kugou + yt + plus
         // Match quality first — that's what stops a confident-but-wrong result
         // from a preferred provider winning. Then synced, then provider rank.
         // Provider order decides, exactly as Android does — there, the first
@@ -276,6 +278,94 @@ enum Lyrics {
         return [LyricsCandidate(provider: "BetterLyrics", trackName: title, artistName: artist,
                                 result: LyricsResult(lines: lines, plain: nil, synced: true, raw: lrc),
                                 score: duration > 0 ? 90 : unverifiedScore)]
+    }
+
+    // MARK: LyricsPlus (word-level, community-run mirrors)
+
+    /// Ported from Android's `LyricsPlusProvider`. It hands back per-syllable
+    /// stamps in milliseconds, which is the same shape TTML gives us — so this
+    /// is a second word-by-word source for songs Apple doesn't carry.
+    private static func lyricsPlus(title: String, artist: String,
+                                   duration: Double) async -> [LyricsCandidate] {
+        guard !title.isEmpty, !artist.isEmpty else { return [] }
+        // Community-run, so any one of them can be down; try them in turn as
+        // Android does rather than treating a dead mirror as "no lyrics".
+        let mirrors = ["https://lyricsplus.prjktla.my.id",
+                       "https://lyricsplus.binimum.org",
+                       "https://lyricsplus-seven.vercel.app"]
+
+        for host in mirrors {
+            guard var comps = URLComponents(string: host + "/v2/lyrics/get") else { continue }
+            var items = [URLQueryItem(name: "title", value: title),
+                         URLQueryItem(name: "artist", value: artist)]
+            if duration > 0 {
+                items.append(URLQueryItem(name: "duration", value: String(Int(duration))))
+            }
+            comps.queryItems = items
+            guard let url = comps.url,
+                  let (data, response) = try? await URLSession.shared.data(from: url),
+                  (response as? HTTPURLResponse)?.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let rows = json["lyrics"] as? [[String: Any]], !rows.isEmpty
+            else { continue }
+
+            // "Word" means the syllable stamps are present; anything else is
+            // line-level and the words array stays empty, as with LrcLib.
+            let byWord = (json["type"] as? String)?
+                .caseInsensitiveCompare("Word") == .orderedSame
+
+            var lines: [LyricLine] = []
+            for row in rows {
+                guard let start = milliseconds(row["time"]) else { continue }
+                let text = (row["text"] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard !text.isEmpty else { continue }
+
+                var words: [LyricWord] = []
+                if byWord, let syllables = row["syllabus"] as? [[String: Any]] {
+                    for syllable in syllables {
+                        guard let begin = milliseconds(syllable["time"]),
+                              let body = (syllable["text"] as? String)?
+                                  .trimmingCharacters(in: .whitespacesAndNewlines),
+                              !body.isEmpty
+                        else { continue }
+                        let length = milliseconds(syllable["duration"]) ?? 0
+                        words.append(LyricWord(text: body, start: begin,
+                                               end: begin + max(length, 0.05)))
+                    }
+                }
+                let agent = (row["element"] as? [String: Any])?["singer"] as? String
+                lines.append(LyricLine(time: start, text: text, words: words, agent: agent))
+            }
+            guard !lines.isEmpty else { continue }
+
+            return [LyricsCandidate(provider: "LyricsPlus", trackName: title, artistName: artist,
+                                    result: LyricsResult(lines: lines, plain: nil, synced: true,
+                                                         raw: asLRC(lines)),
+                                    // Matched server-side on title, artist and
+                                    // duration, so a 200 is already a confirmation.
+                                    score: duration > 0 ? 90 : unverifiedScore)]
+        }
+        return []
+    }
+
+    /// Milliseconds off a JSON number, in seconds.
+    private static func milliseconds(_ value: Any?) -> Double? {
+        if let d = value as? Double { return d / 1000 }
+        if let n = value as? NSNumber { return n.doubleValue / 1000 }
+        return nil
+    }
+
+    /// A line-level LRC rendering, so a downloaded song can cache these lyrics
+    /// the same way it caches LrcLib's. The word stamps don't survive the trip —
+    /// LRC can't carry them — but the sync does.
+    private static func asLRC(_ lines: [LyricLine]) -> String {
+        lines.map { line in
+            let hundredths = Int((line.time * 100).rounded())
+            return String(format: "[%02d:%02d.%02d]%@",
+                          hundredths / 6000, (hundredths / 100) % 60,
+                          hundredths % 100, line.text)
+        }.joined(separator: "\n")
     }
 
     // MARK: LrcLib
