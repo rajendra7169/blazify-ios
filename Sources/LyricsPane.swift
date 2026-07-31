@@ -44,6 +44,11 @@ struct LyricsPane: View {
     @State private var manualOffset: CGFloat = 0
     @State private var dragStart: CGFloat = 0
     @State private var autoScroll = true
+    /// Where the auto-scroll was standing when you took over. The base position
+    /// has to stop following the song while you're dragging — otherwise the
+    /// music advances underneath your finger and pulls the page back, which is
+    /// exactly what "it won't scroll, it just repositions" looks like.
+    @State private var frozenIndex = 0
     @State private var ready = false
 
     private let anchorRatio: CGFloat = 0.35
@@ -190,9 +195,8 @@ struct LyricsPane: View {
             TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !player.isPlaying)) { timeline in
                 let pos = smoothedPosition(at: timeline.date)
                 let highlight = itemIndex(in: items, at: pos)          // no lead
-                let scrollTo = prefs.autoScroll
-                    ? max(itemIndex(in: items, at: pos + 0.25), 0)     // +250ms scroll lead
-                    : 0
+                let live = max(itemIndex(in: items, at: pos + 0.25), 0)  // +250ms scroll lead
+                let scrollTo = prefs.autoScroll ? (autoScroll ? live : frozenIndex) : 0
                 let map = positions(active: scrollTo, heights: hs)
 
                 ZStack(alignment: .top) {
@@ -259,7 +263,7 @@ struct LyricsPane: View {
             // The player attaches its swipe-down-to-close to the whole sheet,
             // which swallowed this. High priority means a drag that starts on
             // the words scrolls them; a drag anywhere else still closes.
-            .highPriorityGesture(manualScroll)
+            .highPriorityGesture(manualScroll(items: items, heights: hs))
         }
     }
 
@@ -453,7 +457,9 @@ struct LyricsPane: View {
 
     private func alpha(distance: Int, isActive: Bool) -> Double {
         if isActive { return 1.0 }
-        guard autoScroll else { return 0.2 }
+        // Reading is the whole point of scrolling by hand — the auto-scroll's
+        // far-away dimming would leave what you're scrolling towards unreadable.
+        guard autoScroll else { return 0.55 }
         switch distance {
         case 0: return 0.3
         case 1, 2: return 0.2
@@ -465,14 +471,31 @@ struct LyricsPane: View {
 
     // MARK: Interaction
 
-    private var manualScroll: some Gesture {
+    private func manualScroll(items: [StageItem], heights: [CGFloat]) -> some Gesture {
         DragGesture(minimumDistance: 6)
             .onChanged { v in
                 if autoScroll {
+                    // Match whatever the layout anchors on: with auto-scroll
+                    // turned off in Settings it's pinned to line 0, not the
+                    // playing line, and clamping against the wrong base would
+                    // fight the drag.
+                    frozenIndex = prefs.autoScroll
+                        ? max(itemIndex(in: items, at: player.currentTime + 0.25), 0) : 0
                     autoScroll = false
                     dragStart = manualOffset
                 }
-                manualOffset = dragStart + v.translation.height
+                let raw = dragStart + v.translation.height
+                // Clamped so the first and last lines are both reachable and you
+                // can't drag the words off into empty space. If the map can't be
+                // built there's nothing meaningful to clamp against — a bad
+                // range here would pin the offset at 0 and block scrolling
+                // outright, which is the bug we're fixing.
+                let map = positions(active: frozenIndex, heights: heights)
+                if let first = map[0], let last = map[max(heights.count - 1, 0)], last > first {
+                    manualOffset = min(max(raw, -last), -first)
+                } else {
+                    manualOffset = raw
+                }
             }
     }
 
@@ -486,6 +509,7 @@ struct LyricsPane: View {
     private func resync() {
         let duration = min(max(Double(abs(manualOffset)) / 4 / 1000, 0.2), 0.6)
         autoScroll = true
+        frozenIndex = 0
         withAnimation(.timingCurve(0.4, 0.0, 0.2, 1.0, duration: duration)) { manualOffset = 0 }
     }
 
@@ -495,6 +519,7 @@ struct LyricsPane: View {
         candidates = []
         manualOffset = 0
         autoScroll = true
+        frozenIndex = 0
         ready = false
         guard let track = player.current else { loading = false; return }
 
