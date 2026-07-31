@@ -12,63 +12,39 @@ struct LocalMusicView: View {
     @State private var notice: String?
 
     var body: some View {
-        SongListScreen(title: "On this phone", tracks: local.tracks, player: player)
-            .overlay(alignment: .center) {
-                if local.tracks.isEmpty && !local.importing { empty }
-            }
-            .overlay(alignment: .bottom) {
-                if let notice { toast(notice) }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { picking = true } label: {
-                        if local.importing {
-                            ProgressView().tint(palette.accent)
-                        } else {
-                            Image(systemName: "plus")
-                        }
-                    }
-                    .tint(palette.accent)
-                    .disabled(local.importing)
-                    .accessibilityLabel("Add music from Files")
-                }
-            }
-            // `.audio` is the supertype every audio format conforms to, so this
-            // one entry covers mp3, m4a, wav, aiff and flac without listing them.
-            .fileImporter(isPresented: $picking, allowedContentTypes: [.audio],
-                          allowsMultipleSelection: true) { result in
-                guard case .success(let urls) = result, !urls.isEmpty else { return }
-                Task {
-                    let added = await local.importFiles(urls)
-                    show(message(added: added, of: urls.count))
-                }
-            }
-    }
-
-    private var empty: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "iphone.gen3")
-                .font(.system(size: 42))
-                .foregroundStyle(palette.accent)
-            Text("Nothing here yet")
-                .font(.blaze(17, .semibold))
-                .foregroundStyle(palette.onSurface)
-            Text("Bring in music from Files, iCloud Drive or anywhere else on your phone. It plays with no signal and never touches the network.")
-                .font(.blaze(13))
-                .foregroundStyle(palette.onSurfaceVariant)
-                .multilineTextAlignment(.center)
-            Button { picking = true } label: {
-                Text("Choose files")
-                    .font(.blaze(15, .semibold))
-                    .foregroundStyle(palette.onAccent)
-                    .padding(.horizontal, 26)
-                    .padding(.vertical, 12)
-                    .background(palette.accent)
-                    .clipShape(Capsule())
-            }
-            .padding(.top, 4)
+        SongListScreen(
+            title: "On this phone", tracks: local.tracks, player: player,
+            emptyMessage: String(localized: "Bring in music from Files, iCloud Drive or anywhere else on your phone. It plays with no signal and never touches the network."),
+            emptyActionTitle: String(localized: "Choose files"),
+            emptyAction: { picking = true },
+        )
+        .overlay(alignment: .bottom) {
+            if let notice { toast(notice) }
         }
-        .padding(.horizontal, 40)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { picking = true } label: {
+                    if local.importing {
+                        ProgressView().tint(palette.accent)
+                    } else {
+                        Image(systemName: "plus")
+                    }
+                }
+                .tint(palette.accent)
+                .disabled(local.importing)
+                .accessibilityLabel("Add music from Files")
+            }
+        }
+        // `.audio` is the supertype every audio format conforms to, so this one
+        // entry covers mp3, m4a, wav, aiff and flac without listing them.
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.audio],
+                      allowsMultipleSelection: true) { result in
+            guard case .success(let urls) = result, !urls.isEmpty else { return }
+            Task {
+                let added = await local.importFiles(urls)
+                show(message(added: added, of: urls.count))
+            }
+        }
     }
 
     private func toast(_ text: String) -> some View {

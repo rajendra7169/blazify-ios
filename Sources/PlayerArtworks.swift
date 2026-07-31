@@ -3,11 +3,17 @@ import SwiftUI
 /// Shared placeholder for missing art.
 struct ArtPlaceholder: View {
     var body: some View {
-        ZStack {
-            Blaze.gradient
-            Image(systemName: "music.note")
-                .font(.system(size: 44))
-                .foregroundStyle(.white.opacity(0.85))
+        GeometryReader { g in
+            ZStack {
+                Blaze.gradient
+                Image(bundleImage: "blaze_logo_white")
+                    .resizable()
+                    .scaledToFit()
+                    // Half the tile, so it reads at a 48pt row and at full
+                    // player size without a size parameter at every call site.
+                    .frame(width: g.size.width * 0.5, height: g.size.height * 0.5)
+                    .frame(width: g.size.width, height: g.size.height)
+            }
         }
     }
 }
@@ -23,8 +29,7 @@ struct SquareArtwork: View {
         // and "Fill the frame" is the crop-vs-letterbox choice.
         Group {
             if look.hidePlayerThumbnail {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.white.opacity(0.06))
+                ArtPlaceholder()
             } else {
                 RemoteImage(url: player.current?.artURL(size: 1080),
                             fill: look.cropAlbumArt) { ArtPlaceholder() }

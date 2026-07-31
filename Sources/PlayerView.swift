@@ -424,13 +424,13 @@ struct PlayerView: View {
     private var bottomRow: some View {
         HStack(spacing: 0) {
             bottomButton("list.bullet", "Queue") { showQueue = true }
+            airPlayButton
             bottomButton(player.sleepActive ? "moon.zzz.fill" : "moon.zzz",
                          sleepLabel, active: player.sleepActive) { showSleep = true }
             bottomButton("quote.bubble", "Lyrics", active: lyricsMode) {
                 lyricsMode.toggle()
                 if !lyricsMode { immersive = false }
             }
-            airPlayButton
         }
         .padding(.horizontal, 20)
     }

@@ -42,6 +42,13 @@ struct SongListScreen: View {
     var filters: [SongListFilter] = []
     var tracks: [Track] = []
     @ObservedObject var player: Player
+    /// What to say when the list is empty and the host has something better
+    /// than "Nothing here yet" — Local music explains where songs come from.
+    /// It renders INSIDE the list, under the header, rather than as an overlay:
+    /// an overlay sat on top of the cover and the shuffle buttons.
+    var emptyMessage: String?
+    var emptyActionTitle: String?
+    var emptyAction: (() -> Void)?
 
     @State private var filterIndex = 0
     @State private var sort: SongSort = .createDate
@@ -122,10 +129,31 @@ struct SongListScreen: View {
                 }
 
                 if shown.isEmpty {
-                    Text(query.isEmpty ? "Nothing here yet" : "No matches")
-                        .font(.blaze(14))
-                        .foregroundStyle(palette.onSurfaceVariant)
-                        .padding(.top, 40)
+                    VStack(spacing: 12) {
+                        Text(query.isEmpty ? "Nothing here yet" : "No matches")
+                            .font(.blaze(15, .semibold))
+                            .foregroundStyle(palette.onSurface)
+                        if query.isEmpty, let emptyMessage {
+                            Text(emptyMessage)
+                                .font(.blaze(13))
+                                .foregroundStyle(palette.onSurfaceVariant)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 36)
+                        }
+                        if query.isEmpty, let emptyActionTitle, let emptyAction {
+                            Button(action: emptyAction) {
+                                Text(emptyActionTitle)
+                                    .font(.blaze(15, .semibold))
+                                    .foregroundStyle(palette.onAccent)
+                                    .padding(.horizontal, 26)
+                                    .padding(.vertical, 12)
+                                    .background(palette.accent)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 32)
                 }
             }
             .playerBottomPadding()

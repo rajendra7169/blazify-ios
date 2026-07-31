@@ -43,14 +43,25 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
 
     /// Thumbnail upscaled to a requested square size (googleusercontent resize).
     func artURL(size: Int) -> URL? {
+        // A copy on disk wins outright. We save it at 1080, it needs no signal,
+        // and for a CACHED song it's the only art there is offline — the saved
+        // thumbnail still points at the network, which is why most cached songs
+        // came up blank. Each check is gated on a string prefix or a dictionary
+        // lookup so a scrolling list never stats a file it doesn't have.
+        if LocalMusic.isLocal(videoId) {
+            // An imported file has no video id, so there's no catalogue art to
+            // fall back to — nil lets the placeholder show instead of fetching
+            // a URL that can only 404.
+            return LocalMusic.shared.localArtURL(for: videoId)
+        }
+        if Downloads.shared.isDownloaded(videoId),
+           let saved = Downloads.shared.localArtURL(for: videoId) { return saved }
+        if let saved = AudioCache.shared.cachedArtURL(for: videoId) { return saved }
+
         // A file:// path saved by an earlier install points into a container
-        // that no longer exists — every reinstall gets a new one. Resolve the
-        // download against the CURRENT container, and if it isn't downloaded
-        // here, fall back to the thumbnail every video has.
+        // that no longer exists — every reinstall gets a new one — and nothing
+        // above resolved it, so fall back to the thumbnail every video has.
         if thumbnail.hasPrefix("file:") {
-            if let own = LocalMusic.shared.localArtURL(for: videoId) { return own }
-            if let local = Downloads.shared.localArtURL(for: videoId) { return local }
-            if let cached = AudioCache.shared.localArtURL(for: videoId) { return cached }
             return URL(string: Downloads.fallbackArt(videoId))
         }
         guard !thumbnail.isEmpty else {

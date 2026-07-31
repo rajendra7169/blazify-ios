@@ -54,6 +54,14 @@ final class AudioCache: ObservableObject {
     private func lrcURL(for id: String) -> URL { dir.appendingPathComponent("\(id).lrc") }
     private func txtURL(for id: String) -> URL { dir.appendingPathComponent("\(id).txt") }
 
+    /// Artwork for a song we know we've cached. The membership test is a
+    /// dictionary lookup, so this is safe to ask from a row body — `isCached`
+    /// stats the audio file, which is not.
+    func cachedArtURL(for id: String) -> URL? {
+        guard lastUsed[id] != nil else { return nil }
+        return localArtURL(for: id)
+    }
+
     /// Artwork kept beside a cached song, so a cached track still has a cover
     /// with no network. Downloads do the same; this is the automatic half.
     func localArtURL(for id: String) -> URL? {

@@ -1,12 +1,14 @@
 import SwiftUI
 import WidgetKit
 
-/// The Home Screen widget.
+/// The Home Screen widget: four shortcuts into the app, and nothing that
+/// pretends to know what's playing.
 ///
-/// It shows no live playback on purpose. Reading what the app is playing needs
-/// an App Group container, and free signing never provisions one — the widget
-/// gets an empty store, so a progress bar and a play/pause glyph would sit there
-/// permanently lying. Everything here is either true or a link that works.
+/// It deliberately shows no live playback. Reading the app's state needs an App
+/// Group container, and free signing never provisions one — the widget gets an
+/// empty store, so a progress bar and a play/pause glyph would sit there
+/// permanently lying. The live now-playing card already exists for free on the
+/// Lock Screen and in Control Centre.
 struct BlazifyEntry: TimelineEntry { let date: Date }
 
 struct BlazifyProvider: TimelineProvider {
@@ -17,11 +19,26 @@ struct BlazifyProvider: TimelineProvider {
     }
 
     /// Nothing here changes on its own, so one entry that never expires — no
-    /// refresh budget spent on a widget that is really a launcher.
+    /// refresh budget spent on what is really a launcher.
     func getTimeline(in context: Context, completion: @escaping (Timeline<BlazifyEntry>) -> Void) {
         completion(Timeline(entries: [BlazifyEntry(date: Date())], policy: .never))
     }
 }
+
+private struct Shortcut: Identifiable {
+    let id: String
+    let symbol: String
+    let title: LocalizedStringKey
+    let url: URL
+}
+
+private let shortcuts: [Shortcut] = [
+    Shortcut(id: "play", symbol: "play.fill", title: "Play", url: BlazifyLink.resume),
+    Shortcut(id: "liked", symbol: "heart.fill", title: "Liked", url: BlazifyLink.favourites),
+    Shortcut(id: "offline", symbol: "arrow.down.circle.fill", title: "Offline",
+             url: BlazifyLink.downloads),
+    Shortcut(id: "identify", symbol: "waveform", title: "Identify", url: BlazifyLink.recognise),
+]
 
 struct BlazifyWidgetView: View {
     @Environment(\.widgetFamily) private var family
@@ -43,106 +60,49 @@ struct BlazifyWidgetView: View {
 
     // MARK: Home Screen
 
-    /// The record, and the app's name under it. One tap, straight into playing.
+    /// Two by two. No header — at 155pt the wordmark would cost a whole row of
+    /// tile height to say something the icon already says.
     private var small: some View {
-        GeometryReader { g in
-            VStack(spacing: 0) {
-                VinylRecord(diameter: g.size.width * 0.74)
-                Spacer(minLength: 8)
-                wordmark(16)
-                Text("Tap to play")
-                    .font(.system(size: 11.5, weight: .semibold, design: .serif))
-                    .foregroundStyle(Vinyl.muted(dark))
-            }
-            .frame(width: g.size.width, height: g.size.height, alignment: .top)
+        VStack(spacing: 8) {
+            row(0..<2, icon: 19, label: 11)
+            row(2..<4, icon: 19, label: 11)
         }
-        .padding(14)
-        .containerBackground(for: .widget) { Vinyl.paper(dark) }
-        .widgetURL(BlazifyLink.resume)
+        .padding(12)
+        .containerBackground(for: .widget) { Sleeve.paper(dark) }
     }
 
-    /// Record on the left at full height, the four things worth a shortcut on
-    /// the right — each its own tap target, not a decoration.
     private var medium: some View {
-        GeometryReader { g in
-            HStack(spacing: 14) {
-                VinylRecord(diameter: g.size.height * 0.96)
-                VStack(alignment: .leading, spacing: 8) {
-                    wordmark(19)
-                    grid(icon: 15, label: 10)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            }
-            .frame(width: g.size.width, height: g.size.height)
+        VStack(alignment: .leading, spacing: 10) {
+            SleeveHeader(dark: dark, size: 20)
+            row(0..<4, icon: 18, label: 10.5)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-        .containerBackground(for: .widget) { Vinyl.paper(dark) }
+        .padding(14)
+        .containerBackground(for: .widget) { Sleeve.paper(dark) }
     }
 
     private var large: some View {
-        GeometryReader { g in
-            VStack(spacing: 0) {
-                VinylRecord(diameter: g.size.width * 0.60)
-                Spacer(minLength: 16)
-                wordmark(26)
-                Text("Your music, on fire")
-                    .font(.system(size: 13, weight: .semibold, design: .serif))
-                    .foregroundStyle(Vinyl.muted(dark))
-                Spacer(minLength: 18)
-                grid(icon: 21, label: 12)
-                    .frame(height: g.size.height * 0.3)
-            }
-            .frame(width: g.size.width, height: g.size.height)
+        VStack(alignment: .leading, spacing: 14) {
+            SleeveHeader(dark: dark, size: 26)
+            row(0..<2, icon: 30, label: 14)
+            row(2..<4, icon: 30, label: 14)
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 20)
-        .containerBackground(for: .widget) { Vinyl.paper(dark) }
+        .padding(18)
+        .containerBackground(for: .widget) { Sleeve.paper(dark) }
     }
 
-    private func wordmark(_ size: CGFloat) -> some View {
-        Text("Blazify")
-            .font(.system(size: size, weight: .bold, design: .serif))
-            .foregroundStyle(Vinyl.ink(dark))
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-    }
-
-    private func grid(icon: CGFloat, label: CGFloat) -> some View {
-        VStack(spacing: 7) {
-            HStack(spacing: 7) {
-                tile("play.fill", "Play", BlazifyLink.resume, icon, label)
-                tile("heart.fill", "Liked", BlazifyLink.favourites, icon, label)
-            }
-            HStack(spacing: 7) {
-                tile("arrow.down.circle.fill", "Offline", BlazifyLink.downloads, icon, label)
-                tile("waveform", "Identify", BlazifyLink.recognise, icon, label)
+    private func row(_ range: Range<Int>, icon: CGFloat, label: CGFloat) -> some View {
+        HStack(spacing: 8) {
+            ForEach(shortcuts[range]) { item in
+                SleeveTile(symbol: item.symbol, title: item.title, url: item.url,
+                           dark: dark, icon: icon, label: label)
             }
         }
-    }
-
-    private func tile(_ symbol: String, _ title: String, _ url: URL,
-                      _ icon: CGFloat, _ label: CGFloat) -> some View {
-        Link(destination: url) {
-            VStack(spacing: 4) {
-                Image(systemName: symbol)
-                    .font(.system(size: icon, weight: .semibold))
-                Text(title)
-                    .font(.system(size: label, weight: .semibold, design: .serif))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(Vinyl.ink(dark))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Vinyl.rail(dark))
-            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-        }
-        .accessibilityLabel(title)
     }
 
     // MARK: Lock Screen
     //
     // These render as a vibrant monochrome stencil, so colour is thrown away and
-    // fine detail turns to mush — hence a symbol rather than the turntable.
+    // fine detail turns to mush — hence a symbol rather than the logo.
 
     private var circular: some View {
         ZStack {
@@ -157,10 +117,8 @@ struct BlazifyWidgetView: View {
 
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Label("Blazify", systemImage: "flame.fill")
-                .font(.headline)
-            Text("Tap to play")
-                .font(.caption)
+            Label("Blazify", systemImage: "flame.fill").font(.headline)
+            Text("Tap to play").font(.caption)
         }
         .containerBackground(for: .widget) { Color.clear }
         .widgetURL(BlazifyLink.resume)
