@@ -43,6 +43,11 @@ struct LyricsPane: View {
     // Scroll engine.
     @State private var manualOffset: CGFloat = 0
     @State private var dragStart: CGFloat = 0
+    /// True between a drag's first movement and its end. `dragStart` has to be
+    /// captured once per DRAG — a `DragGesture`'s translation is measured from
+    /// where that gesture began, so reusing the first drag's base made every
+    /// later drag jump back to where the first one started.
+    @State private var dragging = false
     @State private var autoScroll = true
     /// Where the auto-scroll was standing when you took over. The base position
     /// has to stop following the song while you're dragging — otherwise the
@@ -482,6 +487,9 @@ struct LyricsPane: View {
                     frozenIndex = prefs.autoScroll
                         ? max(itemIndex(in: items, at: player.currentTime + 0.25), 0) : 0
                     autoScroll = false
+                }
+                if !dragging {
+                    dragging = true
                     dragStart = manualOffset
                 }
                 let raw = dragStart + v.translation.height
@@ -497,6 +505,7 @@ struct LyricsPane: View {
                     manualOffset = raw
                 }
             }
+            .onEnded { _ in dragging = false }
     }
 
     private func seek(to line: LyricLine) {
@@ -510,6 +519,7 @@ struct LyricsPane: View {
         let duration = min(max(Double(abs(manualOffset)) / 4 / 1000, 0.2), 0.6)
         autoScroll = true
         frozenIndex = 0
+        dragging = false
         withAnimation(.timingCurve(0.4, 0.0, 0.2, 1.0, duration: duration)) { manualOffset = 0 }
     }
 
@@ -520,6 +530,7 @@ struct LyricsPane: View {
         manualOffset = 0
         autoScroll = true
         frozenIndex = 0
+        dragging = false
         ready = false
         guard let track = player.current else { loading = false; return }
 
