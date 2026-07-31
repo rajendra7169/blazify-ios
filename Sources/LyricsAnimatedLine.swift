@@ -5,9 +5,12 @@ import SwiftUI
 /// stamps; a line without them (LrcLib, KuGou, plain YouTube) falls back to the
 /// flat text, exactly as Android does when `hasWordTimings` is false.
 ///
-/// Karaoke and Apple wipe a mask across a single `Text`, so their metrics match
-/// the pane's height measurement exactly. Fade, Glow and Slide need a view per
-/// word, and lay out through `WordFlow`.
+/// Every style lays out through `WordFlow`, one view per syllable. Karaoke and
+/// Apple used to mask a single `Text` with one horizontal gradient instead —
+/// which looks right only while the line fits on one row. A line that WRAPS has
+/// all of its rows inside that same left-to-right gradient, so they filled
+/// together rather than the sweep travelling row by row: three rows lighting up
+/// at once instead of word by word.
 struct LyricsAnimatedLine: View {
     let line: LyricLine
     let position: Double
@@ -78,29 +81,43 @@ struct LyricsAnimatedLine: View {
 
     // MARK: Karaoke / Apple — a wipe across the whole line
 
-    /// A dim copy with a bright copy over it, revealed left-to-right as the line
-    /// is sung. Karaoke's edge is hard; Apple's is a soft gradient with a glow,
-    /// which is what makes it read as Apple Music rather than a progress bar.
+    /// A dim line with each syllable brightened as it's sung. The sweep is per
+    /// WORD rather than across the block, so it follows the words onto the next
+    /// row instead of filling every row at once. Karaoke's edge is hard;
+    /// Apple's is a soft gradient with a glow, which is what makes it read as
+    /// Apple Music rather than a progress bar.
     private func wipe(soft: Bool) -> some View {
-        let progress = line.progress(at: position)
-        return plain
+        WordFlow(spacing: 0, lineSpacing: leading, alignment: frameAlignment) {
+            ForEach(Array(line.words.enumerated()), id: \.offset) { _, word in
+                syllable(word.text + " ", progress: reveal(word), soft: soft)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: frameAlignment)
+    }
+
+    /// One word: a dim copy with a bright copy masked over it.
+    private func syllable(_ text: String, progress: Double, soft: Bool) -> some View {
+        Text(text)
+            .font(font)
+            .tracking(-0.5)
             .foregroundStyle(color.opacity(0.35))
-            .overlay(alignment: .leading) {
+            .overlay {
                 GeometryReader { geo in
-                    Text(displayText)
+                    Text(text)
                         .font(font)
                         .tracking(-0.5)
-                        .lineSpacing(leading)
-                        .multilineTextAlignment(alignment)
                         .foregroundStyle(color)
                         .shadow(color: soft ? color.opacity(0.5) : .clear, radius: 10)
-                        .frame(width: geo.size.width, alignment: frameAlignment)
+                        .frame(width: geo.size.width, height: geo.size.height,
+                               alignment: .leading)
                         .mask(alignment: .leading) {
                             if soft {
+                                // Wider than the old block gradient: spread over
+                                // one word, a 6% edge is a hard line again.
                                 LinearGradient(stops: [
                                     .init(color: .black, location: 0),
-                                    .init(color: .black, location: max(progress - 0.06, 0)),
-                                    .init(color: .clear, location: min(progress + 0.06, 1)),
+                                    .init(color: .black, location: max(progress - 0.25, 0)),
+                                    .init(color: .clear, location: min(progress + 0.25, 1)),
                                     .init(color: .clear, location: 1),
                                 ], startPoint: .leading, endPoint: .trailing)
                             } else {
@@ -109,7 +126,7 @@ struct LyricsAnimatedLine: View {
                         }
                 }
             }
-            .animation(.linear(duration: 0.1), value: progress)
+            .animation(.linear(duration: 0.12), value: progress)
     }
 
     // MARK: Fade / Glow / Slide — a view per word
