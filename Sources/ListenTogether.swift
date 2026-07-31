@@ -187,6 +187,9 @@ final class ListenTogether: ObservableObject {
 
     func broadcastTrack(_ track: Track, position: Double) {
         guard isHost, state == .inRoom, !applyingRemote else { return }
+        // A file that only exists on this phone can't be resolved by anyone
+        // else in the room — sending its id would just break their playback.
+        guard !LocalMusic.isLocal(track.videoId) else { return }
         revision += 1
         let info = Proto.field(1, track.videoId)
             + Proto.field(2, track.title)

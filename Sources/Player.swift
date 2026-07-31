@@ -580,6 +580,9 @@ final class Player: ObservableObject {
 
     /// Pull the last song's related tracks in and carry on playing.
     private func extendWithRadio(from track: Track) {
+        // An imported file has no catalogue id, so there's no radio to build
+        // from it — asking would just spin the loading state on a doomed call.
+        guard !LocalMusic.isLocal(track.videoId) else { return }
         isLoading = true
         Task { @MainActor in
             // `related` hands back shelves of cards, so flatten to the songs —

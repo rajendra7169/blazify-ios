@@ -31,6 +31,10 @@ final class LocalMusic: ObservableObject {
     private let metaURL: URL
     /// id → the file we wrote, which keeps whatever extension it arrived with.
     private var files: [String: String] = [:]
+    /// Songs we've already been to the network for. Without this, a file whose
+    /// title matches nothing would be searched again on every single visit to
+    /// the screen — 40 unmatched imports would mean 40 requests each time.
+    private var triedArt: Set<String> = []
 
     private struct Entry: Codable {
         let track: Track
@@ -93,13 +97,21 @@ final class LocalMusic: ObservableObject {
     @discardableResult
     func fetchMissingArtwork() async -> Int {
         guard !findingArt else { return 0 }
-        let missing = tracks.filter { localArtURL(for: $0.videoId) == nil }
+        // Nothing to look art up with — and a hundred failing requests is a
+        // worse outcome than a hundred blank tiles.
+        guard await MainActor.run(body: { Reachability.shared.isOnline }) else { return 0 }
+        // Capped per pass so importing an album doesn't fire off a burst of
+        // searches; the rest are picked up next time the screen opens.
+        let missing = tracks
+            .filter { localArtURL(for: $0.videoId) == nil && !triedArt.contains($0.videoId) }
+            .prefix(25)
         guard !missing.isEmpty else { return 0 }
         await MainActor.run { findingArt = true }
         defer { Task { @MainActor in self.findingArt = false } }
 
         var found = 0
         for track in missing {
+            triedArt.insert(track.videoId)
             let query = [track.title, track.artist]
                 .filter { !$0.isEmpty }
                 .joined(separator: " ")
@@ -153,9 +165,17 @@ final class LocalMusic: ObservableObject {
         var seconds = 0.0
         var artData: Data?
 
-        if let duration = try? await asset.load(.duration) {
-            seconds = CMTimeGetSeconds(duration)
-            if !seconds.isFinite || seconds < 0 { seconds = 0 }
+        // If AVFoundation can't even read a duration it can't play the file
+        // either. Drop the copy rather than leave a 0:00 row that does nothing
+        // when tapped — and so the count we report stays honest.
+        guard let duration = try? await asset.load(.duration) else {
+            try? FileManager.default.removeItem(at: destination)
+            return false
+        }
+        seconds = CMTimeGetSeconds(duration)
+        if !seconds.isFinite || seconds <= 0 {
+            try? FileManager.default.removeItem(at: destination)
+            return false
         }
         if let metadata = try? await asset.load(.commonMetadata) {
             for item in metadata {
