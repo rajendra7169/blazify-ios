@@ -58,13 +58,25 @@ struct LyricsAnimatedLine: View {
         if !animating {
             plain
         } else {
-            switch style {
-            case .karaoke: wipe(soft: false)
-            case .apple: wipe(soft: true)
-            case .fade, .glow, .slide: perWord
-            case .none: plain
+            Group {
+                switch style {
+                case .karaoke: wipe(soft: false)
+                case .apple: wipe(soft: true)
+                case .fade, .glow, .slide: perWord
+                case .none: plain
+                }
             }
+            .scaleEffect(bounce)
         }
+    }
+
+    /// Android's `bounceScale`: a single 3% swell over the first third of the
+    /// line's fill, then flat. It's what gives the active line its little kick
+    /// as it starts — subtle enough that it reads as life rather than movement.
+    private var bounce: Double {
+        let fill = line.progress(at: position)
+        guard fill < 0.3 else { return 1 }
+        return 1 + sin(fill * 3.33 * .pi) * 0.03
     }
 
     // MARK: Flat

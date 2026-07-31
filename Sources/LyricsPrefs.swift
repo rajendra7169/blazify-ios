@@ -21,12 +21,15 @@ enum LyricsAnimation: String, CaseIterable, Identifiable {
 }
 
 /// One lyrics provider, in the order Android's registry lists them.
+/// Listed in Android's default priority order (LyricsProviderRegistry.kt), which
+/// is also the order they're tried in. "Apple Music" is Android's "Paxsenix" —
+/// same service, named for what it actually serves.
 enum LyricsProvider: String, CaseIterable, Identifiable {
     case appleMusic = "Apple Music"
-    case betterLyrics = "BetterLyrics"
     case lrcLib = "LrcLib"
-    case kuGou = "KuGou"
+    case betterLyrics = "BetterLyrics"
     case youTube = "YouTube"
+    case kuGou = "KuGou"
 
     var id: String { rawValue }
 

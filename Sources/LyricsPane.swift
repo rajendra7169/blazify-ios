@@ -251,10 +251,6 @@ struct LyricsPane: View {
                             .offset(y: target)
                             .animation(lineAnimation(distance: distance), value: target)
                             .animation(.easeInOut(duration: 0.25), value: highlight)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if prefs.clickToSeek, case .line(_, let line) = item { seek(to: line) }
-                            }
                     }
                 }
                 // Must fill the stage: offsets don't affect layout, so without an
@@ -268,7 +264,15 @@ struct LyricsPane: View {
             // The player attaches its swipe-down-to-close to the whole sheet,
             // which swallowed this. High priority means a drag that starts on
             // the words scrolls them; a drag anywhere else still closes.
-            .highPriorityGesture(manualScroll(items: items, heights: hs))
+            //
+            // The tap has to live in the SAME high-priority gesture. A parent's
+            // high-priority gesture outranks anything its children declare, so
+            // an `onTapGesture` on the line itself never fired — which is why
+            // tapping a line to jump there did nothing. Exclusive means the drag
+            // is tried first and, having a 6pt minimum, cleanly fails on a tap.
+            .highPriorityGesture(
+                ExclusiveGesture(manualScroll(items: items, heights: hs),
+                                 tapToSeek(items: items, heights: hs, anchorY: anchorY)))
         }
     }
 
@@ -506,6 +510,32 @@ struct LyricsPane: View {
                 }
             }
             .onEnded { _ in dragging = false }
+    }
+
+    /// Which line is under a tap. The stack is hand-positioned with offsets, so
+    /// this repeats the layout's own arithmetic rather than relying on SwiftUI
+    /// hit-testing a child that can't receive the touch anyway.
+    private func tapToSeek(items: [StageItem], heights: [CGFloat],
+                           anchorY: CGFloat) -> some Gesture {
+        SpatialTapGesture()
+            .onEnded { value in
+                guard prefs.clickToSeek else { return }
+                let base = autoScroll
+                    ? (prefs.autoScroll
+                       ? max(itemIndex(in: items, at: player.currentTime + 0.25), 0) : 0)
+                    : frozenIndex
+                let map = positions(active: base, heights: heights)
+                for (i, item) in items.enumerated() {
+                    guard case .line(_, let line) = item, let offset = map[i] else { continue }
+                    let top = anchorY + offset + manualOffset
+                    // The drawn box is the measured text plus its 12pt padding
+                    // above and below.
+                    if value.location.y >= top, value.location.y <= top + heights[i] + 24 {
+                        seek(to: line)
+                        return
+                    }
+                }
+            }
     }
 
     private func seek(to line: LyricLine) {

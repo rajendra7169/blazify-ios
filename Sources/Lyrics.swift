@@ -106,17 +106,17 @@ enum Lyrics {
         let all = await apple + better + lrc + kugou + yt
         // Match quality first — that's what stops a confident-but-wrong result
         // from a preferred provider winning. Then synced, then provider rank.
+        // Provider order decides, exactly as Android does — there, the first
+        // provider that answers wins outright. Every provider already scores its
+        // OWN candidates and drops contradicted ones, so scoring is what picks
+        // the right release; using it to re-rank ACROSS providers quietly
+        // overruled the order set in Settings, which is how a song ended up on
+        // LrcLib's line-level words while Android had Apple's word-level ones.
         return all.enumerated().sorted { a, b in
-            // Word-by-word beats line-by-line when both are credible. Score still
-            // rules out the wrong song first: a contradicted duration scores
-            // below `unverifiedScore` and can't win on having prettier timing.
-            let aWords = a.element.result.hasWordTimings && a.element.score >= unverifiedScore
-            let bWords = b.element.result.hasWordTimings && b.element.score >= unverifiedScore
-            if aWords != bWords { return aWords }
-            if a.element.score != b.element.score { return a.element.score > b.element.score }
-            if a.element.synced != b.element.synced { return a.element.synced }
             let ra = prefs.rank(a.element.provider), rb = prefs.rank(b.element.provider)
             if ra != rb { return ra < rb }
+            if a.element.score != b.element.score { return a.element.score > b.element.score }
+            if a.element.synced != b.element.synced { return a.element.synced }
             return a.offset < b.offset
         }.map(\.element)
     }
