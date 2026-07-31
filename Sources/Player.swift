@@ -61,6 +61,12 @@ final class Player: ObservableObject {
     /// The next track, already built and buffered but paused. Swapping to this
     /// on end is what removes the gap — loading from scratch is the gap.
     private var preparedPlayer: AVPlayer?
+    /// The REAL length of the prepared / crossfading track. AVPlayer misreads
+    /// this fragmented MP4 by roughly 2×, so the true duration has to travel
+    /// with the player we hand over to — reading it back off AVPlayer gives the
+    /// doubled figure, and the song then runs past its end into silence.
+    private var preparedDuration: Double = 0
+    private var fadeDuration: Double = 0
     private var preparedIndex: Int?
     private var endHandled = false
     private var artwork: MPMediaItemArtwork?
@@ -799,11 +805,15 @@ final class Player: ObservableObject {
         preparedIndex = next
         let track = queue[next]
         Task { @MainActor in
-            guard let url = await self.resolvedURL(for: track),
+            guard let resolved = await self.resolved(for: track),
                   self.preparedIndex == next else { return }
-            let asset = AVURLAsset(url: url,
+            let asset = AVURLAsset(url: resolved.url,
                                    options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
             let item = AVPlayerItem(asset: asset)
+            if resolved.duration > 0 {
+                item.forwardPlaybackEndTime = CMTime(seconds: resolved.duration,
+                                                     preferredTimescale: 600)
+            }
             item.audioTimePitchAlgorithm = PlaybackPrefs.shared.preservePitch
                 ? .timeDomain : .varispeed
             let player = AVPlayer(playerItem: item)
@@ -811,6 +821,7 @@ final class Player: ObservableObject {
             // Buffer without making a sound.
             player.pause()
             self.preparedPlayer = player
+            self.preparedDuration = resolved.duration
         }
     }
 
@@ -834,7 +845,8 @@ final class Player: ObservableObject {
         index = target
         prepared.play()
         prepared.rate = Float(PlaybackPrefs.shared.speed)
-        adoptPlayingTrack()
+        adoptPlayingTrack(realDuration: preparedDuration)
+        preparedDuration = 0
         return true
     }
 
@@ -842,6 +854,7 @@ final class Player: ObservableObject {
         preparedPlayer?.pause()
         preparedPlayer = nil
         preparedIndex = nil
+        preparedDuration = 0
     }
 
     // MARK: - Crossfade
@@ -861,27 +874,41 @@ final class Player: ObservableObject {
         crossfading = true
         let upcoming = queue[index + 1]
         Task { @MainActor in
-            guard let url = await self.resolvedURL(for: upcoming) else {
+            guard let resolved = await self.resolved(for: upcoming) else {
                 self.crossfading = false
                 return
             }
-            self.startCrossfade(to: url, over: window)
+            self.startCrossfade(to: resolved.url, over: window,
+                                realDuration: resolved.duration)
         }
     }
 
-    /// The playable URL for a track: a download, then the cache, then the network.
-    private func resolvedURL(for track: Track) async -> URL? {
-        if let own = LocalMusic.shared.localAudioURL(for: track.videoId) { return own }
-        if let local = Downloads.shared.localAudioURL(for: track.videoId) { return local }
-        if let cached = AudioCache.shared.cachedURL(for: track.videoId) { return cached }
-        return await YouTube.streamURL(for: track.videoId)?.url
+    /// The playable URL for a track and its REAL duration: your own files, then
+    /// a download, then the cache, then the network. Both halves matter — see
+    /// `preparedDuration`.
+    private func resolved(for track: Track) async -> (url: URL, duration: Double)? {
+        if let own = LocalMusic.shared.localAudioURL(for: track.videoId) {
+            return (own, LocalMusic.shared.duration(for: track.videoId) ?? track.duration)
+        }
+        if let local = Downloads.shared.localAudioURL(for: track.videoId) {
+            return (local, Downloads.shared.duration(for: track.videoId) ?? track.duration)
+        }
+        if let cached = AudioCache.shared.cachedURL(for: track.videoId) {
+            return (cached, track.duration)
+        }
+        guard let stream = await YouTube.streamURL(for: track.videoId) else { return nil }
+        return (stream.url, stream.duration)
     }
 
-    private func startCrossfade(to url: URL, over seconds: Double) {
+    private func startCrossfade(to url: URL, over seconds: Double, realDuration: Double) {
         guard let outgoing = avPlayer else { crossfading = false; return }
 
         let asset = AVURLAsset(url: url, options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
         let item = AVPlayerItem(asset: asset)
+        if realDuration > 0 {
+            item.forwardPlaybackEndTime = CMTime(seconds: realDuration, preferredTimescale: 600)
+        }
+        fadeDuration = realDuration
         let incoming = AVPlayer(playerItem: item)
         incoming.volume = 0
         fadePlayer = incoming
@@ -928,12 +955,13 @@ final class Player: ObservableObject {
         crossfading = false
 
         index += 1
-        adoptPlayingTrack()
+        adoptPlayingTrack(realDuration: fadeDuration)
+        fadeDuration = 0
     }
 
     /// Refresh everything the UI and the system need for the track that is
     /// already playing on the adopted player.
-    private func adoptPlayingTrack() {
+    private func adoptPlayingTrack(realDuration: Double) {
         guard let track = current, let player = avPlayer else { return }
 
         scrobbleStart = Date()
@@ -947,8 +975,9 @@ final class Player: ObservableObject {
         artColor = Blaze.amber
         loadArtwork(track.thumbnailURL)
 
-        let realDuration = player.currentItem?.duration.seconds ?? track.duration
-        duration = realDuration.isFinite && realDuration > 0 ? realDuration : track.duration
+        // Never `player.currentItem.duration` — that is precisely the doubled
+        // figure this whole dance exists to avoid.
+        duration = realDuration > 0 ? realDuration : track.duration
         currentTime = player.currentTime().seconds
         isPlaying = true
 
