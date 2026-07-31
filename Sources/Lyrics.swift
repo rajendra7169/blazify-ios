@@ -162,6 +162,41 @@ enum Lyrics {
         return score
     }
 
+    /// Clean up a title that came from a FILENAME rather than a catalogue.
+    /// Imported files arrive as "03 - Song_Name (Official Video) [320kbps]", and
+    /// searching that verbatim matches nothing — which is how a song ends up
+    /// wearing another song's lyrics, since the best of a bad set still wins.
+    static func fileTitle(_ raw: String) -> String {
+        var s = raw.replacingOccurrences(of: "_", with: " ")
+        let rules: [(String, String)] = [
+            // A leading track number: "03 - ", "03. ", "03 "
+            (#"^\s*\d{1,3}\s*[-.)]?\s+"#, ""),
+            // Bracketed noise, but only when it's noise — "(Live)" and
+            // "(Acoustic)" are part of the song and change the lyrics.
+            (#"\s*[(\[][^)\]]*(official|video|audio|lyrics?|kbps|mp3|hq|hd|full song|www\.|\.com|\.in|download|remaster)[^)\]]*[)\]]"#, ""),
+            (#"\s*[-–]\s*(128|192|256|320)\s*kbps"#, ""),
+            (#"\s*[-–]\s*(youtube|spotify|pagalworld|songspk)\b.*$"#, ""),
+            (#"\s{2,}"#, " "),
+        ]
+        for (pattern, replacement) in rules {
+            s = s.replacingOccurrences(of: pattern, with: replacement,
+                                       options: [.regularExpression, .caseInsensitive])
+        }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// How good a match has to be before we'll put it on an IMPORTED song.
+    /// Catalogue songs carry an exact title and artist, so their top result is
+    /// trustworthy; a file's title is whatever someone named it. With no artist
+    /// at all we insist on the duration agreeing, because a title alone matches
+    /// half the covers ever recorded.
+    ///
+    /// Reference points from `matchScore`: duration within 2s = 100, within
+    /// 5s = 50, exact title = 80, artist = 50, an unverifiable provider = 45.
+    static func importedFloor(artist: String) -> Double {
+        artist.trimmingCharacters(in: .whitespaces).isEmpty ? 90 : 50
+    }
+
     /// Providers that match server-side and hand back a single answer, so we
     /// can't score their result — treat them as a reasonable-but-not-verified
     /// match, below a duration-confirmed hit and above a contradicted one.
@@ -183,8 +218,14 @@ enum Lyrics {
         }
     }
 
-    static func best(_ candidates: [LyricsCandidate]) -> LyricsResult? {
-        candidates.first(where: { $0.synced })?.result ?? candidates.first?.result
+    /// The one to show without being asked. `floor` is how well it has to match
+    /// before we'll put it on the song unprompted — 0 for catalogue songs, whose
+    /// title and artist are exact, and higher for imported files. Below the
+    /// floor we show nothing rather than somebody else's words; the candidates
+    /// are all still there for the version picker.
+    static func best(_ candidates: [LyricsCandidate], floor: Double = 0) -> LyricsResult? {
+        let usable = floor > 0 ? candidates.filter { $0.score >= floor } : candidates
+        return usable.first(where: { $0.synced })?.result ?? usable.first?.result
     }
 
     // MARK: BetterLyrics (word-level TTML, no account)

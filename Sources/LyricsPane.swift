@@ -23,6 +23,12 @@ struct LyricsPane: View {
 
     @State private var candidates: [LyricsCandidate] = []
     @State private var result: LyricsResult?
+    /// Nothing to switch between when the only candidate is already showing —
+    /// but if nothing was good enough to show, one candidate is still worth
+    /// reaching, so an imported song isn't left with no route to any lyrics.
+    private var pickerDisabled: Bool {
+        candidates.isEmpty || (candidates.count < 2 && result != nil)
+    }
     @State private var loading = true
     @State private var showVersions = false
     /// Seconds to shift the lyrics by, per song. Positive means the words come
@@ -104,8 +110,8 @@ struct LyricsPane: View {
                 .background(Color.white.opacity(0.15))
                 .clipShape(Capsule())
             }
-            .disabled(candidates.count < 2)
-            .opacity(candidates.count < 2 ? 0.4 : 1)
+            .disabled(pickerDisabled)
+            .opacity(pickerDisabled ? 0.4 : 1)
             Spacer()
         }
         .padding(.horizontal, 22)
@@ -523,11 +529,16 @@ struct LyricsPane: View {
         // cache hit and the pane opens already populated.
         let found = await LyricsCache.shared.warm(videoId: track.videoId, title: track.title,
                                                   artist: track.artist, duration: knownDuration)
+        // An imported file only gets lyrics put on it automatically when the
+        // match is convincing. Anything weaker stays in the picker.
+        let floor = LocalMusic.isLocal(track.videoId)
+            ? Lyrics.importedFloor(artist: track.artist) : 0
+        let chosen = Lyrics.best(found, floor: floor)
         await MainActor.run {
             candidates = found
-            result = Lyrics.best(found)
+            result = chosen
             prepareSecondary(result)
-            provider = found.first(where: { $0.result == Lyrics.best(found) })?.provider ?? Lyrics.sourceName
+            provider = found.first(where: { $0.result == chosen })?.provider ?? Lyrics.sourceName
             loading = false
         }
         // Let the first frame land at its position, then start animating.

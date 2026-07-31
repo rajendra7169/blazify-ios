@@ -329,8 +329,10 @@ struct RingLyricsCard: View {
         guard let track = player.current else { loading = false; return }
         let found = await LyricsCache.shared.warm(videoId: track.videoId, title: track.title,
                                                   artist: track.artist, duration: knownDuration)
+        let floor = LocalMusic.isLocal(track.videoId)
+            ? Lyrics.importedFloor(artist: track.artist) : 0
         await MainActor.run {
-            lines = Lyrics.best(found)?.lines ?? []
+            lines = Lyrics.best(found, floor: floor)?.lines ?? []
             loading = false
         }
     }

@@ -28,8 +28,18 @@ actor LyricsCache {
         inFlight.insert(videoId)
         defer { inFlight.remove(videoId) }
 
-        let found = await Lyrics.search(title: title, artist: artist,
-                                        videoId: videoId, duration: duration)
+        // An imported file needs both: a title cleaned of filename debris, and
+        // a floor under the result — otherwise the best of a bad set wins and
+        // the song gets somebody else's words. Its id is ours, not YouTube's,
+        // so the YouTube provider gets nothing to look up.
+        // An imported file's title is whatever someone named it, so search a
+        // cleaned version of it — and its id is ours, not YouTube's, so the
+        // YouTube provider gets nothing to look up.
+        let imported = LocalMusic.isLocal(videoId)
+        let found = await Lyrics.search(title: imported ? Lyrics.fileTitle(title) : title,
+                                        artist: artist,
+                                        videoId: imported ? "" : videoId,
+                                        duration: duration)
         guard !found.isEmpty else { return [] }
 
         store[videoId] = found
