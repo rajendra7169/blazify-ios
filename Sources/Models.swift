@@ -105,7 +105,13 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
 extension Track {
     /// Show a played/liked song as a home-rail card.
     var asHomeItem: HomeItem {
-        HomeItem(title: title, subtitle: artist, thumbnail: thumbnail,
+        // Resolved, not the raw stored string. A thumbnail saved by an older
+        // install is a file:// path into a container that no longer exists, and
+        // one saved without art is empty — either way the rail came up blank
+        // while the full player showed the cover perfectly, because the player
+        // goes through `artURL` and this didn't.
+        HomeItem(title: title, subtitle: artist,
+                 thumbnail: artURL(size: 544)?.absoluteString ?? thumbnail,
                  videoId: videoId, browseId: nil, isCircular: false)
     }
 }
