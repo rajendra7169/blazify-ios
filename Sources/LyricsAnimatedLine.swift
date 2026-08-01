@@ -254,24 +254,84 @@ struct IntervalIndicator: View {
         return min(max((position - start) / span, 0), 1)
     }
 
+    /// Android runs the drift and the breathing off a 2.6s linear loop. Taking
+    /// the phase from the playback position rather than a timer keeps this free
+    /// of any clock of its own — nothing here can drift against the lyrics, and
+    /// it settles when playback does.
+    private var phase: Double {
+        let loop = 2.6
+        let t = position.truncatingRemainder(dividingBy: loop) / loop
+        return t < 0 ? t + 1 : t
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
-            ForEach(0..<3, id: \.self) { i in
-                // Each dot lights as its third of the break goes by, and gives a
-                // small pulse on the way.
-                let share = min(max(progress * 3 - Double(i), 0), 1)
-                Circle()
-                    .fill(tint.opacity(0.25 + 0.75 * share))
-                    .frame(width: 10, height: 10)
-                    .scaleEffect(active ? 1 + 0.35 * sin(share * .pi) : 0.6)
-            }
+        ZStack {
+            floatingNotes
+            // A slow swell on the loop, exactly Android's 1 + 0.06·|sin(πt)|.
+            glyph(breathe: 1 + 0.06 * abs(sin(phase * .pi)))
         }
         .opacity(active ? 1 : 0.25)
         .animation(.easeInOut(duration: 0.35), value: active)
-        .animation(.linear(duration: 0.12), value: progress)
         // Centred regardless of the chosen text position, as Android's
         // wrapContentWidth(CenterHorizontally) puts it.
         .frame(maxWidth: .infinity, alignment: .center)
-        .frame(height: 22)
+        .frame(height: Self.height)
     }
+
+    /// Must match `LyricsPane.gapHeight`, which is what the scroll maths measures
+    /// a break as — if the two disagree the lines below drift out of place.
+    static let height: CGFloat = 118
+
+    /// A dim glyph with a brighter copy filling it from the bottom as the break
+    /// runs down, tinted white→accent like Android's clef.
+    private func glyph(breathe: Double) -> some View {
+        let size: CGFloat = 54
+        return ZStack {
+            Image(systemName: "music.note")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(tint.opacity(0.26))
+            Image(systemName: "music.note")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(LinearGradient(colors: [.white, tint.opacity(0.95)],
+                                                startPoint: .top, endPoint: .bottom))
+                .mask(alignment: .bottom) {
+                    GeometryReader { g in
+                        Rectangle()
+                            .frame(height: g.size.height * progress)
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+                    }
+                }
+        }
+        .scaleEffect(breathe)
+        .animation(.linear(duration: 0.12), value: progress)
+    }
+
+    /// Six notes rising past the glyph on staggered phases, fading in and out so
+    /// none of them is ever cut off. Positions and phases are Android's.
+    private var floatingNotes: some View {
+        ForEach(Self.notes, id: \.x) { note in
+            let p = (phase + note.phase).truncatingRemainder(dividingBy: 1)
+            let fade = sin(p * .pi) * sin(p * .pi) * 0.55
+            Image(systemName: "music.note")
+                .font(.system(size: note.size, weight: .medium))
+                .foregroundStyle(tint)
+                .rotationEffect(.degrees(8 * sin((p + note.phase) * 2 * .pi)))
+                .opacity(fade)
+                .offset(x: note.x + note.drift * sin(p * 2 * .pi),
+                        y: 30 - 84 * p)
+        }
+    }
+
+    private struct Note {
+        let x: CGFloat, size: CGFloat, phase: Double, drift: CGFloat
+    }
+
+    private static let notes: [Note] = [
+        Note(x: -78, size: 13, phase: 0.00, drift: -7),
+        Note(x: -50, size: 10, phase: 0.42, drift: 6),
+        Note(x: 52, size: 12, phase: 0.68, drift: 7),
+        Note(x: 82, size: 14, phase: 0.20, drift: -6),
+        Note(x: -26, size: 9, phase: 0.85, drift: 5),
+        Note(x: 30, size: 9, phase: 0.55, drift: -5),
+    ]
 }

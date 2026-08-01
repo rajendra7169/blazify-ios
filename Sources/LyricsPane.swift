@@ -313,7 +313,9 @@ struct LyricsPane: View {
 
     /// Instrumental breaks shorter than this aren't worth marking.
     private static let minGap: Double = 5
-    private static let gapHeight: CGFloat = 46
+    /// Taken from the indicator itself, so the measured height of a break and
+    /// the height it actually draws at can never disagree.
+    private static let gapHeight: CGFloat = IntervalIndicator.height
 
     /// A line, or the instrumental gap before one.
     enum StageItem: Identifiable {
