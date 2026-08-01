@@ -191,7 +191,11 @@ struct HomeView: View {
     private static func seedPool(player: Player) -> [Track] {
         var pool = player.favoriteTracks + PlayHistory.recent
         var seenIds = Set<String>()
-        pool = pool.filter { !$0.videoId.isEmpty && seenIds.insert($0.videoId).inserted }
+        // An imported file has no catalogue id, so it can't seed a radio.
+        pool = pool.filter {
+            !$0.videoId.isEmpty && !LocalMusic.isLocal($0.videoId)
+                && seenIds.insert($0.videoId).inserted
+        }
         return Array(pool.shuffled().prefix(3))
     }
 
@@ -228,13 +232,20 @@ struct HomeView: View {
     private static func buildLocalSections(player: Player) -> [HomeSection] {
         var out: [HomeSection] = []
 
-        let quick = PlayHistory.mostPlayed(.month1, limit: 40).shuffled().prefix(20)
+        // Songs imported from Files have no place in the online feed — they
+        // aren't part of the catalogue and can't seed a radio. They get their
+        // own shelf, and only when there's no network to fill Home with.
+        func catalogue(_ tracks: [Track]) -> [Track] {
+            tracks.filter { !LocalMusic.isLocal($0.videoId) }
+        }
+
+        let quick = catalogue(PlayHistory.mostPlayed(.month1, limit: 40)).shuffled().prefix(20)
         if quick.count >= 4 {
             out.append(HomeSection(title: "Quick picks",
                                    items: quick.map(\.asHomeItem), isSongs: true))
         }
 
-        let keep = PlayHistory.recent.prefix(40).shuffled().prefix(15)
+        let keep = catalogue(PlayHistory.recent).prefix(40).shuffled().prefix(15)
         if keep.count >= 4 {
             out.append(HomeSection(title: "Keep listening",
                                    items: keep.map(\.asHomeItem), isSongs: false))
@@ -242,7 +253,8 @@ struct HomeView: View {
 
         // Liked a while ago but not played recently — Android's forgotten favourites.
         let recentIds = Set(PlayHistory.recent.prefix(20).map(\.videoId))
-        let forgotten = player.favoriteTracks.filter { !recentIds.contains($0.videoId) }
+        let forgotten = catalogue(player.favoriteTracks)
+            .filter { !recentIds.contains($0.videoId) }
             .shuffled().prefix(15)
         if forgotten.count >= 4 {
             out.append(HomeSection(title: "Forgotten favourites",
@@ -307,6 +319,14 @@ struct HomeView: View {
         if !downloaded.isEmpty {
             out.append(HomeSection(title: "Downloaded",
                                    items: downloaded.map(\.asHomeItem), isSongs: true))
+        }
+
+        // Your own files need no network at all, so with no signal they're the
+        // most useful thing on the screen.
+        let own = LocalMusic.shared.tracks
+        if !own.isEmpty {
+            out.append(HomeSection(title: "On this phone",
+                                   items: own.map(\.asHomeItem), isSongs: true))
         }
 
         let recent = Array(playable(PlayHistory.recent).prefix(20))
