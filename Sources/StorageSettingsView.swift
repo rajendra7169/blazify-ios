@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Storage, ported from StorageSettings.kt: downloads, the song cache with its
+/// Storage: downloads, the song cache with its
 /// on/off switch and cap, and the image cache with its own cap — each showing
 /// what it's using and offering a way to clear it.
 struct StorageSettingsView: View {
@@ -19,7 +19,7 @@ struct StorageSettingsView: View {
     @State private var confirmClearImages = false
     @State private var confirmClearLocal = false
 
-    /// Android's exact ladder: 0 disables, -1 is unlimited.
+ /// The ladder: 0 disables, -1 is unlimited.
     private let songValues = [0, 128, 256, 512, 1024, 2048, 4096, 8192, -1]
     private let imageValues = [0, 128, 256, 512, 1024, 2048, 4096, 8192]
 

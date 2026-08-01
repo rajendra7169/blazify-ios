@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Settings → Lyrics → Romanization, ported from `RomanizationSettings.kt`.
-/// Unlike Android this needs no library and no network: iOS transliterates with
+/// Settings → Lyrics → Romanization.
+/// No library and no network needed: iOS transliterates with
 /// `StringTransform.toLatin`, so it works offline and costs nothing.
 struct RomanizationView: View {
     @Environment(\.palette) private var palette

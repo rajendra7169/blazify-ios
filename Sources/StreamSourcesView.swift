@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Settings → Stream sources, ported from `StreamSourcesSettings.kt`: the order
-/// InnerTube clients are tried when resolving a song's audio. Android lists
-/// seven; only three answer for music with a direct URL, so only those are here
+/// Settings → Stream sources: the order
+/// InnerTube clients are tried when resolving a song's audio. Of the seven
+/// that exist, only three answer for music with a direct URL, so only those are here
 /// — the rest error, come back unplayable, or demand a login.
 struct StreamSourcesView: View {
     @Environment(\.palette) private var palette

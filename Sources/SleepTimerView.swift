@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Blaze sleep-timer sheet, ported from BlazeSleepTimerDialog.kt: a big readout,
+/// Blaze sleep-timer sheet: a big readout,
 /// a minutes slider with 15/30/45/60 chips, "End of song", a "± N songs" stepper,
 /// and a live countdown with END / RESET while it runs.
 struct SleepTimerView: View {
@@ -99,7 +99,7 @@ struct SleepTimerView: View {
         }
     }
 
-    /// "− N songs +" — bordered pill, matching the Android stepper.
+ /// "− N songs +" — a bordered stepper pill.
     private var songsStepper: some View {
         HStack(spacing: 6) {
             stepButton("minus") { songs = max(0, songs - 1) }

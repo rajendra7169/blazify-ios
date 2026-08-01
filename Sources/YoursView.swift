@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "Yours", ported from YoursScreen.kt: Recently Played, Recommended for You,
+/// "Yours": Recently Played, Recommended for You,
 /// Browse Categories, Your Playlists, Trending, Mood Playlists and Favorite
 /// Artists — every rail 16pt inset with 12pt spacing.
 struct YoursView: View {
@@ -30,7 +30,7 @@ struct YoursView: View {
             .prefix(15).map { $0 }
     }
 
-    /// Android cycles these glyphs across the mood rail.
+ /// The glyphs cycled across the mood rail.
     private let moodIcons = ["waveform", "antenna.radiowaves.left.and.right", "slider.horizontal.3",
                              "star.fill", "heart.fill", "moon.zzz.fill", "music.note", "speedometer"]
 
@@ -41,7 +41,7 @@ struct YoursView: View {
                     header
 
                     if !PlayHistory.recent.isEmpty {
-                        // "See more" opens the full dated history, as Android does.
+ // "See more" opens the full dated history.
                         BlazeSectionHeader(title: "Recently Played") { route = .history }
                         rail(PlayHistory.recent.prefix(15).map { $0 }, queueTitle: "Recently Played")
                     }
@@ -155,7 +155,7 @@ struct YoursView: View {
 
     /// Six square gradient tiles, three per row. Each opens its own collection —
     /// Songs, Albums, Artists and Playlists are filtered browsers; Downloads and
-    /// Favorites are auto-playlists, exactly as Android routes them.
+ /// Favorites are auto-playlists.
     private var categories: some View {
         let items: [(String, String, Color, LibraryRoute)] = [
             ("Songs", "music.note", Color(hex: 0xFF6B6B), .songs),
@@ -182,7 +182,7 @@ struct YoursView: View {
         .padding(.horizontal, 16)
     }
 
-    /// Favorites first, then the account's playlists — one seed colour, as Android does.
+ /// Favorites first, then the account's playlists — one seed colour each.
     private var playlistCards: [(title: String, subtitle: String, thumb: String?, item: HomeItem?)] {
         var out: [(String, String, String?, HomeItem?)] = []
         if !player.favoriteTracks.isEmpty {
@@ -198,7 +198,7 @@ struct YoursView: View {
             LazyHStack(spacing: 12) {
                 ForEach(Array(playlistCards.enumerated()), id: \.offset) { _, card in
                     // Seeded from the accent, so these recolour with the artwork
-                    // of whatever is playing — as Android's colorScheme.primary does.
+ // of whatever is playing — as the colorScheme.primary does.
                     BlazeGradientCard(title: card.title, subtitle: card.subtitle,
                                       thumbnail: card.thumb, seed: palette.accent,
                                       width: 160, height: 160,

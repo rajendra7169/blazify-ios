@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The mini-player drawn small for pickers and previews — a faithful copy of
-/// the mini section in Android's `ThemePhonePreview`: art shape, trailing
+/// the mini section of the phone preview: art shape, trailing
 /// controls, card shape and background all switch with the design.
 struct MiniPlayerPreviewBar: View {
     @Environment(\.palette) private var palette
@@ -12,7 +12,7 @@ struct MiniPlayerPreviewBar: View {
     private var isFlat: Bool { design == .flat }
     private var isFloating: Bool { design == .floating }
 
-    /// Ink per background, as the Kotlin preview picks it.
+ /// Ink per background, as the preview picks it.
     private var onMini: Color {
         switch background {
         case .gradient: return palette.onAccent
@@ -72,7 +72,7 @@ struct MiniPlayerPreviewBar: View {
         .background(fill)
         .clipShape(shape)
         .shadow(color: isFloating ? .black.opacity(0.3) : .clear, radius: 4, y: 2)
-        // Floating rides slightly inset, as the Kotlin's 0.94-width card does.
+ // Floating rides slightly inset, as the 0.94-width card does.
         .padding(.horizontal, isFloating ? 8 : 0)
     }
 

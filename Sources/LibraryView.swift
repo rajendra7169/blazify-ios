@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Library tab, ported from BlazeLibraryHome.kt: gradient auto-playlist cards,
+/// Library tab: gradient auto-playlist cards,
 /// then "Created by you" and "Artists you liked".
 struct LibraryView: View {
     @Environment(\.palette) private var palette
@@ -234,7 +234,7 @@ struct LibraryRouteView: View {
     }
 }
 
-/// The capsule filters behind the Songs category — Android's SongFilter
+/// The capsule filters behind the Songs category
 /// (Library / Liked / Downloaded), plus our own on-disk cache and imports.
 enum SongCategories {
     static func filters(player: Player) -> [SongListFilter] {
@@ -247,7 +247,7 @@ enum SongCategories {
         ]
     }
 
-    /// Top-50 periods, mirroring Android's `MyTopFilter` on the Top playlist.
+ /// Top-50 periods for the Top playlist.
     static var topFilters: [SongListFilter] {
         StatPeriod.topFilters.map {
             SongListFilter($0.title, PlayHistory.mostPlayed($0, limit: PlayHistory.topSize))

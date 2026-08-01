@@ -3,11 +3,11 @@ import ShazamKit
 import AVFoundation
 
 /// "What's playing?" — song recognition, the iOS counterpart to Blazify
-/// Android's ShazamKit screen.
+/// the ShazamKit screen.
 ///
-/// Same approach as the Android app: record a few seconds, turn it into a
+/// Record a few seconds, turn it into a
 /// Shazam *signature*, and POST that to Shazam's public tag endpoint. No
-/// account, no API key, no entitlement — Android hand-ports the signature
+/// account, no API key, no entitlement — we build the signature
 /// algorithm; on iOS ShazamKit generates the identical format for us.
 struct RecognitionView: View {
     @Environment(\.palette) private var palette
@@ -128,7 +128,7 @@ struct RecognitionView: View {
 }
 
 /// Records a few seconds, builds a Shazam signature locally, and asks Shazam's
-/// public endpoint what it is — mirroring `Shazam.kt` on Android.
+/// public endpoint what it is.
 ///
 /// Deliberately *not* `SHSession`: catalog matching through SHSession needs the
 /// ShazamKit App Service enabled on the App ID, which a sideloaded build can't
@@ -288,7 +288,7 @@ final class Recognizer: ObservableObject {
         req.timeoutInterval = 20
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("en_US", forHTTPHeaderField: "Content-Language")
-        // Shazam's tag endpoint expects the Android client's shape; a default
+ // Shazam's tag endpoint expects a mobile client's shape; a default
         // URLSession agent gets much worse results.
         req.setValue(Self.userAgents.randomElement(), forHTTPHeaderField: "User-Agent")
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)

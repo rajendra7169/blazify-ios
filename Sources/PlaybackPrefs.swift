@@ -1,7 +1,7 @@
 import Combine
 import SwiftUI
 
-/// Which audio stream to pick, mirroring Android's `AudioQuality`.
+/// Which audio stream to pick.
 enum AudioQuality: String, CaseIterable, Identifiable {
     case auto, high, low
     var id: String { rawValue }
@@ -21,9 +21,9 @@ enum AudioQuality: String, CaseIterable, Identifiable {
     }
 }
 
-/// Settings → Player and audio. Every option here does something — the ones
-/// Android offers that iOS genuinely handles itself (audio offload, refresh
-/// rate, task-clear) are left out rather than shown as dead switches.
+/// Settings → Player and audio. Every option here does something — anything
+/// iOS genuinely handles itself (audio offload, refresh rate, task-clear) is
+/// left out rather than shown as a dead switch.
 final class PlaybackPrefs: ObservableObject {
     static let shared = PlaybackPrefs()
 
@@ -60,7 +60,7 @@ final class PlaybackPrefs: ObservableObject {
 
     static let speedRange: ClosedRange<Double> = 0.5...2.0
     static let crossfadeRange: ClosedRange<Double> = 1...12
-    /// 0 = keep forever, matching Android's "unlimited" history duration.
+ /// 0 = keep forever, matching the "unlimited" history duration.
     static let historyOptions: [Int] = [0, 7, 30, 90, 365]
 
     private init() {

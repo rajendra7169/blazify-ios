@@ -74,7 +74,7 @@ struct LyricsCandidate: Identifiable, Equatable {
     var script: String? { Lyrics.detectScript(result.raw ?? result.plain ?? "") }
 }
 
-/// Multi-source lyrics — the same five providers Android uses: Apple Music
+/// Multi-source lyrics — five providers: Apple Music
 /// (via Paxsenix), BetterLyrics, LrcLib, KuGou and YouTube Music's own. None
 /// needs an account, so all five are queried concurrently and every candidate
 /// is offered in the picker.
@@ -108,12 +108,12 @@ enum Lyrics {
         let all = await apple + better + lrc + kugou + yt + plus
         // Match quality first — that's what stops a confident-but-wrong result
         // from a preferred provider winning. Then synced, then provider rank.
-        // Provider order decides, exactly as Android does — there, the first
+ // Provider order decides outright — the first
         // provider that answers wins outright. Every provider already scores its
         // OWN candidates and drops contradicted ones, so scoring is what picks
         // the right release; using it to re-rank ACROSS providers quietly
         // overruled the order set in Settings, which is how a song ended up on
-        // LrcLib's line-level words while Android had Apple's word-level ones.
+ // LrcLib's line-level words when Apple had word-level ones.
         return all.enumerated().sorted { a, b in
             let ra = prefs.rank(a.element.provider), rb = prefs.rank(b.element.provider)
             if ra != rb { return ra < rb }
@@ -242,8 +242,8 @@ enum Lyrics {
 
     // MARK: BetterLyrics (word-level TTML, no account)
 
-    /// Deliberately queries the *exact* title and artist, as the Android module
-    /// does: normalising them tends to match a different cut of the song (radio
+ /// Deliberately queries the *exact* title and artist: normalising them tends
+    /// to match a different cut of the song (radio
     /// edit vs original) whose timings then drift against what's playing.
     private static func betterLyrics(title: String, artist: String,
                                      videoId: String, duration: Double) async -> [LyricsCandidate] {
@@ -282,14 +282,14 @@ enum Lyrics {
 
     // MARK: LyricsPlus (word-level, community-run mirrors)
 
-    /// Ported from Android's `LyricsPlusProvider`. It hands back per-syllable
+ /// LyricsPlus hands back per-syllable
     /// stamps in milliseconds, which is the same shape TTML gives us — so this
     /// is a second word-by-word source for songs Apple doesn't carry.
     private static func lyricsPlus(title: String, artist: String,
                                    duration: Double) async -> [LyricsCandidate] {
         guard !title.isEmpty, !artist.isEmpty else { return [] }
-        // Community-run, so any one of them can be down; try them in turn as
-        // Android does rather than treating a dead mirror as "no lyrics".
+        // Community-run, so any one of them can be down; try them in turn
+ // rather than treating a dead mirror as "no lyrics".
         let mirrors = ["https://lyricsplus.prjktla.my.id",
                        "https://lyricsplus.binimum.org",
                        "https://lyricsplus-seven.vercel.app"]
@@ -691,7 +691,7 @@ enum Lyrics {
     }
 }
 
-/// Remembers which source the user picked for a song, like Android's lyrics table.
+/// Remembers which source the user picked for a song, like the lyrics table.
 enum LyricsStore {
     private static func key(_ videoId: String) -> String { "lyricsPick_\(videoId)" }
 

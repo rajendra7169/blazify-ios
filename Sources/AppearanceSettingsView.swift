@@ -5,7 +5,7 @@ import SwiftUI
 /// them here would mean two places to set one thing. What's left is everything
 /// Look & Feel doesn't preview.
 ///
-/// Android options with no honest iOS counterpart are omitted rather than shown
+/// Options with no honest iOS counterpart are omitted rather than shown
 /// dead: display density and high refresh rate are decided by iOS, landscape
 /// scaling is handled by the layout itself, and the dynamic launcher icon needs
 /// alternate icons declared at build time.

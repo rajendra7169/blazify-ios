@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Settings → Backup and restore, ported from `BackupAndRestore.kt`. Playlists
+/// Settings → Backup and restore. Playlists
 /// live on YouTube and come back with the account, so what's actually at risk is
 /// what only exists on this phone: favourites, listening history, search history
 /// and every setting. All of it goes into one JSON file you keep yourself.

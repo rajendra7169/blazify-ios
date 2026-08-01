@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// CASSETTE design — ported from the CASSETTE branch of Player.kt. It replaces the
+/// CASSETTE design. It replaces the
 /// standard chrome entirely: the cream waveform card is the only seek surface (and
 /// owns the heart), shuffle/repeat live in the retro transport row, and lyrics /
 /// queue / sleep / palette / more live in the bottom pill.

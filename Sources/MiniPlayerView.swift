@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// MODERN mini player, ported from MiniPlayer.kt: a 64pt rounded card whose
+/// MODERN mini player: a 64pt rounded card whose
 /// leading control is the album thumb ringed by a circular progress arc, then
 /// the track info, then subscribe / add / favourite. Swipe it sideways to
 /// change track; tap it to open the full player.

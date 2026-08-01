@@ -1,6 +1,6 @@
 import Foundation
 
-/// One play, stamped with when it happened — the equivalent of Android's
+/// One play, stamped with when it happened —
 /// `Event` row. Stats and the History screen both need the timestamp, which the
 /// old "ordered list of tracks" store couldn't give us.
 struct PlayEvent: Codable, Hashable {
@@ -8,14 +8,14 @@ struct PlayEvent: Codable, Hashable {
     let at: Date
 }
 
-/// How far back a Stats view reaches. Mirrors Android's `StatPeriod`, plus the
-/// `day` bucket that Android's `MyTopFilter` adds for the Top-50 playlist.
+/// How far back a Stats view reaches. Mirrors `StatPeriod`, plus the
+/// `day` bucket the Top-50 playlist adds.
 enum StatPeriod: String, CaseIterable, Identifiable {
     case day, week1, month1, month3, month6, year1, all
 
     var id: String { rawValue }
 
-    /// The periods Android offers on the Top playlist (`MyTopFilter`).
+ /// The periods offered on the Top playlist.
     static var topFilters: [StatPeriod] { [.all, .day, .week1, .month1, .year1] }
 
     var title: String {
@@ -46,7 +46,7 @@ enum StatPeriod: String, CaseIterable, Identifiable {
     }
 }
 
-/// The bucket a play falls into on the History screen. Mirrors Android's
+/// The bucket a play falls into on the History screen. Mirrors the
 /// `DateAgo`, including its "this week starts on Monday" rule.
 enum DateAgo: Hashable {
     case today, yesterday, thisWeek, lastWeek
@@ -67,7 +67,7 @@ enum DateAgo: Hashable {
         }
     }
 
-    /// Sort key: newest bucket first, exactly as Android orders them.
+ /// Sort key: newest bucket first.
     var order: Int {
         switch self {
         case .today: 0
@@ -88,7 +88,7 @@ enum DateAgo: Hashable {
         if daysAgo == 0 { return .today }
         if daysAgo == 1 { return .yesterday }
 
-        // Weeks run Monday-to-Monday, matching Android.
+ // Weeks run Monday-to-Monday.
         var monday = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)
         monday.weekday = 2
         let thisMonday = cal.date(from: monday) ?? today
@@ -216,7 +216,7 @@ enum PlayHistory {
         return out
     }
 
-    /// Most-played songs within a period — what Android's Trending rail and the
+ /// Most-played songs within a period — what the Trending rail and the
     /// Stats screen both show.
     static func mostPlayed(_ period: StatPeriod = .all, limit: Int = 50) -> [Track] {
         let lookup = byId
@@ -255,7 +255,7 @@ enum PlayHistory {
         var seen: Set<String> = []
 
         for event in events.reversed() {
-            // One entry per song per bucket, as Android's distinct list does.
+ // One entry per song per bucket, as the distinct list does.
             let bucket = DateAgo.of(event.at)
             let key = "\(bucket.order)_\(event.videoId)"
             guard !seen.contains(key), let track = lookup[event.videoId] else { continue }
@@ -267,7 +267,7 @@ enum PlayHistory {
             .sorted { $0.bucket.order < $1.bucket.order }
     }
 
-    /// How many songs the Top playlist holds — Android's `TopSize`, default 50.
+ /// How many songs the Top playlist holds. Default 50.
     static var topSize: Int {
         let saved = UserDefaults.standard.integer(forKey: "topSize")
         return saved > 0 ? saved : 50
@@ -277,7 +277,7 @@ enum PlayHistory {
     static var top: [Track] { mostPlayed(.all, limit: topSize) }
 
     /// Settings → Player → Keep history for: drop anything older than the
-    /// chosen window. 0 means keep everything, as Android's unlimited does.
+ /// chosen window. 0 means keep everything, as the unlimited does.
     @MainActor
     static func pruneOld() {
         let days = PlaybackPrefs.shared.historyDays

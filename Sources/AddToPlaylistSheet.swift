@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "Add to playlist", ported from AddToPlaylistDialog.kt: a Create playlist
+/// "Add to playlist": a Create playlist
 /// action on top, then the user's editable playlists. Creating one adds the
 /// song to it straight away.
 struct AddToPlaylistSheet: View {

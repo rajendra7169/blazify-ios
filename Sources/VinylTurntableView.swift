@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Vinyl turntable, ported 1:1 from VinylTurntable.kt.
+/// Vinyl turntable, ported 1:1.
 /// The DISC (grooves + album label) rotates at 360°/8s and freezes on pause;
 /// the sheen and the TONEARM never rotate with it — the arm pivots about its
 /// bearing, swinging out (-16°) when paused and tracking inward as the song plays.

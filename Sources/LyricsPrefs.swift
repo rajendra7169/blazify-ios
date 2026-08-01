@@ -1,8 +1,8 @@
 import Combine
 import SwiftUI
 
-/// How the active line animates, ported from `LyricsAnimationStyle` in
-/// PreferenceKeys.kt. Only applies when a provider gives word timings, and only
+/// How the active line animates. Only applies when a provider gives word
+/// timings, and only
 /// in the classic renderer — the Blazify style has its own animation.
 enum LyricsAnimation: String, CaseIterable, Identifiable {
     case none, fade, glow, slide, karaoke, apple
@@ -20,9 +20,9 @@ enum LyricsAnimation: String, CaseIterable, Identifiable {
     }
 }
 
-/// One lyrics provider, in the order Android's registry lists them.
-/// Listed in Android's default priority order (LyricsProviderRegistry.kt), which
-/// is also the order they're tried in. "Apple Music" is Android's "Paxsenix" —
+/// One lyrics provider, in the order the registry lists them.
+/// Listed in the default priority order, which
+/// is also the order they're tried in. "Apple Music" is the "Paxsenix" —
 /// same service, named for what it actually serves.
 enum LyricsProvider: String, CaseIterable, Identifiable {
     case appleMusic = "Apple Music"
@@ -57,7 +57,7 @@ enum LyricsProvider: String, CaseIterable, Identifiable {
     }
 }
 
-/// Every lyrics preference Android exposes under Settings → Lyrics, in one
+/// Every lyrics preference under Settings → Lyrics, in one
 /// store. Kept apart from `LookFeel` because the Look & Feel hub only owns the
 /// one setting it previews (text position).
 final class LyricsPrefs: ObservableObject {
@@ -71,8 +71,7 @@ final class LyricsPrefs: ObservableObject {
 
     // MARK: Display
 
-    /// Android calls this "experimental lyrics"; it's our own renderer, so it
-    /// carries our name. Default on, matching `ExperimentalLyricsKey`.
+ /// Our own lyrics renderer, so it carries our name. On by default.
     @Published var blazifyStyle: Bool { didSet { save(blazifyStyle, "blazifyLyricsStyle") } }
     @Published var glowEffect: Bool { didSet { save(glowEffect, "lyricsGlowEffect") } }
     @Published var animation: LyricsAnimation { didSet { save(animation.rawValue, "lyricsAnimationStyle") } }
@@ -83,7 +82,7 @@ final class LyricsPrefs: ObservableObject {
     @Published var autoScroll: Bool { didSet { save(autoScroll, "lyricsScrollKey") } }
     @Published var hideStatusBarFullscreen: Bool { didSet { save(hideStatusBarFullscreen, "hideStatusBarOnFullscreen") } }
 
-    // Android's defaults, from LyricsSettings.kt's reset buttons.
+ // Defaults, matching the reset buttons in Settings.
     static let defaultTextSize: Double = 24
     static let defaultLineSpacing: Double = 1.3
     static let textSizeRange: ClosedRange<Double> = 12...48

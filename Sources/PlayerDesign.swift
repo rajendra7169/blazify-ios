@@ -1,6 +1,6 @@
 import Foundation
 
-/// The player artwork layouts, matching Android Blaze's PlayerDesign.
+/// The player artwork layouts.
 enum PlayerDesign: String, CaseIterable, Identifiable {
     case classic, ring, fullArt, record, cassette
 

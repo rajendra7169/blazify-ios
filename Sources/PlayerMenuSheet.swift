@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The ⋮ player menu (Android's PlayerMenu): track actions in a bottom sheet.
+/// The ⋮ player menu (the PlayerMenu): track actions in a bottom sheet.
 /// Shared by every design so the overflow button behaves identically.
 struct PlayerMenuSheet: View {
     @ObservedObject var player: Player

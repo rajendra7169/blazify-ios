@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// The player. Each design is a DISTINCT full-screen layout (mirroring the
-/// separate branches in Android's BottomSheetPlayer), not one layout with a
+/// separate branches in the BottomSheetPlayer), not one layout with a
 /// swapped picture: RING and CASSETTE own their whole chrome, while CLASSIC,
 /// RECORD and FULL_ART share the standard control stack under different stages.
 struct PlayerView: View {
@@ -35,7 +35,7 @@ struct PlayerView: View {
 
     private var design: PlayerDesign { PlayerDesign(rawValue: designRaw) ?? .classic }
 
-    // MARK: Sheet physics (ported from BottomSheet.kt)
+ // MARK: Sheet physics
     //
     // The sheet's "value" is its visible height: expandedBound at rest, shrinking
     // 1:1 with the finger (no rubber-banding, hard-clamped at the top).
@@ -61,7 +61,7 @@ struct PlayerView: View {
             // the real app sits behind this. Fully opaque at rest — the gradient
             // above has a soft 0.45 middle stop and would otherwise let the app
             // show through — and fades only as the sheet is dragged down, which
-            // is what reveals the app behind. Android's bottom-sheet reveal.
+ // is what reveals the app behind. the bottom-sheet reveal.
             Color.black.opacity(sheetProgress)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
@@ -82,7 +82,7 @@ struct PlayerView: View {
                 content
                     .padding(.bottom, 16)
                     .foregroundStyle(.white)
-                    // Full-player content fades over progress 0.15…0.40, as in BottomSheet.kt.
+ // Full-player content fades over progress 0.15…0.40, as.
                     .opacity(min(max((sheetProgress - 0.15) * 4, 0), 1))
                     .animation(.easeInOut(duration: 0.25), value: lyricsMode)
                     .animation(.easeInOut(duration: 0.25), value: immersive)
@@ -137,7 +137,7 @@ struct PlayerView: View {
     }
 
     /// The sheet drag: 1:1 with the finger, then a velocity/position classifier —
-    /// never a decay fling (performFling in BottomSheet.kt uses velocity only to
+ /// never a decay fling (performFling uses velocity only to
     /// choose a target, and the spring gets no initial velocity).
     private var sheetDrag: some Gesture {
         DragGesture(minimumDistance: 8)

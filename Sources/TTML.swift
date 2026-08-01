@@ -1,6 +1,6 @@
 import Foundation
 
-/// Apple-style TTML → LRC, ported from the Android module's TTMLParser.
+/// Apple-style TTML → LRC.
 ///
 /// BetterLyrics serves word-level TTML (`<span begin= end=>` per syllable). We
 /// keep each `<p>`'s start time, its full text AND its per-word stamps — the

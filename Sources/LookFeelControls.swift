@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Theme
 
-/// Theme controls, ported from ThemeControls in ThemeScreen.kt: four mode
+/// Theme controls, ported from ThemeControls: four mode
 /// circles (System · Light · Dark · Pure black) then the colour palette, where
 /// the first swatch is the "dynamic" sentinel that follows the album art.
 struct LookFeelThemeControls: View {
@@ -98,7 +98,7 @@ struct LookFeelThemeControls: View {
         .contentShape(Rectangle())
         .onTapGesture {
             theme.setDarkMode(mode)
-            // Pure black is only meaningful in dark; Android clears it otherwise.
+ // Pure black is only meaningful in dark; clear it otherwise.
             theme.setPureBlack(mode == .on ? pureBlack : false)
         }
     }
@@ -159,7 +159,7 @@ struct LookFeelThemeControls: View {
     }
 }
 
-/// Android's `PaletteColors`, minus the dynamic sentinel which is its own swatch.
+/// The palette swatches, minus the dynamic sentinel which is its own swatch.
 enum BlazeThemePalette {
     struct Entry { let name: String; let color: Color }
 
@@ -219,10 +219,10 @@ struct LookFeelPlayerControls: View {
     }
 }
 
-/// Slider style picker, ported from SliderStyleDialog.kt: a 2×2 grid of square
+/// Slider style picker: a 2×2 grid of square
 /// tiles — Capsule · Wavy · Slim · Squiggly — each showing its slider live,
 /// outlined in the accent when active. Squiggly is WAVY + a flag underneath,
-/// but Android presents it as its own tile, so we do too.
+/// but it earns its own tile.
 struct SliderStyleSheet: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
@@ -321,8 +321,7 @@ struct LookFeelMiniControls: View {
             }
             .padding(.horizontal, 16)
 
-            // Two designs per row, each card drawing its design live —
-            // the layout AppearanceSettings.kt uses.
+            // Two designs per row, each card drawing its design live.
             ForEach(Array(stride(from: 0, to: MiniPlayerDesign.allCases.count, by: 2)), id: \.self) { i in
                 HStack(spacing: 12) {
                     designCard(MiniPlayerDesign.allCases[i])

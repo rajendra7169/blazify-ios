@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Listening stats, ported from StatsScreen.kt: a period chip row (1 week →
+/// Listening stats: a period chip row (1 week →
 /// all time) over the most-played songs and artists for that window.
 struct StatsView: View {
     @Environment(\.palette) private var palette

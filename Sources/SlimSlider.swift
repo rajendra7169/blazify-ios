@@ -1,23 +1,22 @@
 import SwiftUI
 import UIKit
 
-/// The player seek bar in whichever style Look & Feel selects, each ported from
-/// its Android counterpart:
+/// The player seek bar in whichever style Look & Feel selects:
 ///
 /// - **Slim** — the 8pt Apple-Music bar (Blaze default).
-/// - **Capsule** — `CapsuleSeekBar.kt`: a thin 3pt track with a 20pt pill riding
+/// - **Capsule** — a thin 3pt track with a 20pt pill riding
 ///   it that carries the "0:36 / 2:59" time label; the fill runs to the pill's
 ///   middle.
-/// - **Wavy** — `WavySlider.kt`: an animated wave over the played portion, flat
+/// - **Wavy** — an animated wave over the played portion, flat
 ///   track ahead, that settles flat while paused.
-/// - **Squiggly** — `SquigglySlider.kt`: the same idea with a much tighter,
+/// - **Squiggly** — the same idea with a much tighter,
 ///   livelier squiggle.
 struct SlimSlider: View {
     @Binding var value: Double        // 0...1
     let active: Color
     /// Seconds, so the capsule style can print its time label. 0 hides times.
     var duration: Double = 0
-    /// The wave styles flatten while paused, as Android's do.
+ /// The wave styles flatten while paused, as the do.
     var isPlaying: Bool = true
     let onCommit: (Double) -> Void
 
@@ -87,10 +86,10 @@ struct SlimTrack: View {
     }
 }
 
-// MARK: - Capsule (CapsuleSeekBar.kt)
+// MARK: - Capsule
 
 /// Thin track with a time-label pill riding along it. The pill travels between
-/// the track ends rather than overhanging them, exactly as the Kotlin does.
+/// the track ends rather than overhanging them.
 struct CapsuleTrack: View {
     let fraction: Double
     let active: Color
@@ -138,7 +137,7 @@ struct CapsuleTrack: View {
     }
 }
 
-// MARK: - Wavy / Squiggly (WavySlider.kt / SquigglySlider.kt)
+// MARK: - Wavy / Squiggly
 
 /// Animated wave over the played portion, flat ahead, with a bar thumb at the
 /// boundary. The wave rolls while playing and settles flat when paused.
@@ -147,10 +146,10 @@ struct WavyTrack: View {
     let active: Color
     let squiggly: Bool
     let isPlaying: Bool
-    /// Pickers draw the same slider smaller, the way the Kotlin dialog tiles do.
+ /// Pickers draw the same slider smaller, the way the picker tiles do.
     var compact = false
 
-    // Straight from the Kotlin. WavySlider: wavelength 40dp, stroke 4dp,
+ // Straight. WavySlider: wavelength 40dp, stroke 4dp,
     // thumbRadius 8dp, gapSize thumbRadius + 4dp, waveSpeed = wavelength.
     // SquigglySlider: waveLength 80px ≈ 27dp, lineAmplitude 6px ≈ 2.5dp,
     // strokeWidth 5dp, phaseSpeed 24px ≈ 8dp/s, bar thumb 5dp wide.
@@ -239,7 +238,7 @@ struct WavePath: Shape {
         guard rect.width > 0, wavelength > 0 else { return path }
         let mid = rect.midY
 
-        // Amplitude coefficient, matching the Kotlin's computeAmplitude().
+ // Amplitude coefficient, for the amplitude curve.
         func amp(at x: CGFloat, _ sign: CGFloat) -> CGFloat {
             guard fadeFrom.isFinite else { return sign * amplitude }
             let coeff = min(max((fadeFrom + fadeLength / 2 - x) / fadeLength, 0), 1)
@@ -247,7 +246,7 @@ struct WavePath: Shape {
         }
 
         // Half-wavelength cubic segments, alternating sign — the same crest
-        // construction the Kotlin canvas uses.
+ // construction the canvas uses.
         let step = wavelength / 2
         var x = -phase.truncatingRemainder(dividingBy: wavelength) - step
         var sign: CGFloat = 1

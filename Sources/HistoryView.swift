@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Listening history, ported from HistoryScreen.kt: a Local/Remote switch, with
+/// Listening history: a Local/Remote switch, with
 /// plays grouped by date. Local buckets come from our own event log; remote ones
 /// are whatever YouTube Music itself has recorded for the account.
 struct HistoryView: View {

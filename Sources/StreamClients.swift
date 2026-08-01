@@ -1,7 +1,7 @@
 import Combine
 import SwiftUI
 
-/// The InnerTube clients that can resolve an audio stream, ported from Android's
+/// The InnerTube clients that can resolve an audio stream, ported from the
 /// Stream sources screen. Only these three answer for music with a direct,
 /// un-ciphered URL — TVHTML5 errors, WEB_REMIX comes back unplayable, and both
 /// creator clients demand a login, so they aren't offered.
@@ -74,7 +74,7 @@ enum StreamClient: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-/// The order stream clients are tried in. Android VR leads because it's the one
+/// The order stream clients are tried in. ANDROID_VR leads because it's the one
 /// that needs no proof-of-origin token and the only one that hands back the
 /// loudness the volume normalisation uses; the others are the fallback chain if
 /// YouTube ever refuses it.

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The signed-in account's YouTube Music library, ported from AccountScreen.kt:
+/// The signed-in account's YouTube Music library:
 /// a Playlists / Albums / Artists chip row over an adaptive grid.
 struct AccountLibraryView: View {
     @Environment(\.palette) private var palette

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings → Content, ported from `ContentSettings.kt`. Proxy is left out: iOS
+/// Settings → Content. Proxy is left out: iOS
 /// routes through the system's network settings, and a per-app proxy would only
 /// cover our own requests while the OS keeps its own. Everything else here is
 /// live — the language and region go into every request YouTube sees.

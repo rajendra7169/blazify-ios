@@ -10,7 +10,7 @@ final class Reachability: ObservableObject {
 
     @Published private(set) var isOnline = true
     /// False on cellular or a personal hotspot — "Auto" audio quality drops to
-    /// the smaller stream there, as Android's AudioQuality.AUTO does.
+ /// the smaller stream there, as the Auto quality setting does.
     @Published private(set) var isUnmetered = true
 
     private let monitor = NWPathMonitor()

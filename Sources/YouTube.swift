@@ -1,6 +1,6 @@
 import Foundation
 
-/// Fully on-device YouTube access (no server), mirroring the Android Blazify app.
+/// Fully on-device YouTube access — no server of our own.
 ///
 /// - Playback: the **VISIONOS** client — no PoToken, no signature cipher, and its
 ///   CDN URLs have no range/throttle cap, so AVPlayer streams them directly.
@@ -205,7 +205,7 @@ enum YouTube {
         return parseMusicSearch(json)
     }
 
-    /// Live search suggestions, as Android's `searchSuggestions()` does.
+ /// Live search suggestions as you type.
     /// Section 0 is the completed query strings, section 1 is real songs — so
     /// we can put playable results above text suggestions while you type.
     static func searchSuggestions(_ query: String) async -> (queries: [String], songs: [Track]) {
@@ -434,7 +434,7 @@ enum YouTube {
     // MARK: - Related (what powers the ever-changing home rails)
 
     /// The "Related" tab for a song: "You might also like", other performances,
-    /// similar artists and so on. Android seeds Daily Discover and "Similar to X"
+ /// similar artists and so on. We seed Daily Discover and "Similar to X"
     /// from this, which is why its home feed differs on every refresh.
     static func related(videoId: String) async -> [HomeSection] {
         guard !videoId.isEmpty else { return [] }
@@ -488,7 +488,7 @@ enum YouTube {
     private static var artistIdCache: [String: String] = [:]
 
     /// Resolve an artist's channel id from their name — the fallback for rows
-    /// that carry no browseId (mirrors Android's resolveArtistIdMap).
+ /// that carry no browseId (mirrors the resolveArtistIdMap).
     static func resolveArtistId(name: String) async -> String? {
         let key = name.trimmingCharacters(in: .whitespaces)
         guard !key.isEmpty else { return nil }
@@ -523,7 +523,7 @@ enum YouTube {
                    id.hasPrefix("UC") {
                     let cols = r["flexColumns"] as? [[String: Any]] ?? []
                     let title = flexText(cols, 0)
-                    // Prefer an exact name match, as Android does.
+ // Prefer an exact name match.
                     if title.compare(name, options: .caseInsensitive) == .orderedSame {
                         found = id
                     } else if found == nil {
@@ -808,7 +808,7 @@ enum YouTube {
     }
 
     /// The account's own play history, already grouped by date by YouTube.
-    /// Mirrors Android's `musicHistory()` browse of `FEmusic_history`.
+ /// Browses `FEmusic_history`.
     static func musicHistory() async -> [HistorySection] {
         guard Auth.shared.isLoggedIn else { return [] }
         var visitor = Auth.shared.visitorData
@@ -1215,7 +1215,7 @@ enum YouTube {
     // MARK: - Charts (what's trending on YouTube Music)
 
     /// The global/region charts page: trending videos plus the top artists.
-    /// Mirrors Android's `getChartsPage()` browse of `FEmusic_charts`.
+ /// Browses `FEmusic_charts`.
     static func charts() async -> (songs: [Track], artists: [HomeItem]) {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }

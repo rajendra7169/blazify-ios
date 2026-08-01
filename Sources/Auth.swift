@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import Combine
 
-/// YouTube account session, ported from Blazify Android's login:
+/// YouTube account session, ported from Blazify the login:
 /// a captured Google cookie + `SAPISIDHASH` auth on WEB_REMIX requests.
 final class Auth: ObservableObject {
     static let shared = Auth()
@@ -91,7 +91,7 @@ final class Auth: ObservableObject {
         return true
     }
 
-    /// The credential blob Android shows behind "tap to show token" — your own
+ /// The credential blob we show behind "tap to show token" — your own
     /// session, on your own device.
     func tokenBlob() -> String {
         """

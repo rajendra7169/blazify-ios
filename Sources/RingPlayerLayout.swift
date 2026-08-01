@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// RING design — ported from RingPlayerLayout.kt: its own top bar, a draggable
+/// RING design: its own top bar, a draggable
 /// progress ring around circular art, queue·title·heart row, the transport in
 /// repeat · prev · PLAY · next · shuffle order, then a sleep/more row and the
 /// "Show Lyrics" card pinned to the bottom.

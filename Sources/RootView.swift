@@ -39,7 +39,7 @@ struct RootView: View {
     }
 
     /// Floating action above the mini-player: shuffle everywhere, but song
-    /// recognition on Explore — matching where each belongs on Android.
+ /// recognition on Explore — matching where each belongs.
     private var actionButton: some View {
         HStack {
             Spacer()
@@ -218,7 +218,7 @@ enum BlazeTab: CaseIterable {
     }
 }
 
-/// The bottom bar, matching AppNavigation.kt per style:
+/// The bottom bar, per style:
 /// PILL is Material's indicator — a fixed capsule behind the ICON only, label
 /// outside it; GRADIENT and OUTLINED wrap icon+label in a rounded box;
 /// UNDERLINE is a plain icon with a bar underneath. Slim hides the labels.

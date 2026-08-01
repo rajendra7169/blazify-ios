@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 /// Songs you've played, kept on disk automatically — the equivalent of
-/// ExoPlayer's SimpleCache on Android.
+/// ExoPlayer's SimpleCache.
 ///
 /// AVPlayer doesn't persist progressive streams itself, so we fetch the same
 /// resolved URL in the background while it plays and keep the file under an
@@ -11,12 +11,12 @@ import Combine
 final class AudioCache: ObservableObject {
     static let shared = AudioCache()
 
-    /// Whether songs are cached at all (Android's EnableSongCacheKey).
+ /// Whether songs are cached at all (the EnableSongCacheKey).
     var isEnabled: Bool {
         UserDefaults.standard.object(forKey: "enableSongCache") as? Bool ?? true
     }
 
-    /// Cap in MB, matching Android's MaxSongCacheSize: -1 is unlimited,
+ /// Cap in MB, matching the MaxSongCacheSize: -1 is unlimited,
     /// 0 disables, anything else is a megabyte figure. Default 512.
     var limitMB: Int {
         guard UserDefaults.standard.object(forKey: "songCacheLimitMB") != nil else { return 512 }

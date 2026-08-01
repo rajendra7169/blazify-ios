@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// "Player theme" gallery — a swipeable carousel of LIVE previews, each rendered
-/// inside a phone frame, ported from PlayerDesignScreen.kt. Swiping only moves
+/// inside a phone frame. Swiping only moves
 /// the carousel; the design is persisted when you tap Apply.
 struct PlayerDesignPicker: View {
     @ObservedObject var player: Player
@@ -75,7 +75,7 @@ struct PlayerDesignPicker: View {
                         PhoneFrame {
                             DesignLivePreview(design: design, player: player)
                         }
-                        // Slightly smaller than Android's 0.94/0.82 so the mini
+ // Slightly smaller than the 0.94/0.82 so the mini
                         // player fits underneath.
                         .frame(height: geo.size.height * (focused ? 0.90 : 0.78))
                         .frame(width: pageWidth, height: geo.size.height)
@@ -140,7 +140,7 @@ struct PhoneFrame<Content: View>: View {
                 .clipShape(RoundedRectangle(cornerRadius: 33, style: .continuous))
         }
             .overlay(alignment: .top) {
-                // iPhone Dynamic Island (Android's frame draws a speaker slit here).
+ // iPhone Dynamic Island (the frame draws a speaker slit here).
                 Capsule()
                     .fill(.black)
                     .frame(width: 46, height: 13)
@@ -225,7 +225,7 @@ private struct PreviewPill: View {
 private struct PreviewSlider: View {
     @ObservedObject var player: Player
     var inactiveAlpha: Double = 0.22
-    /// The preview follows the chosen slider style live, as Android's does.
+ /// The preview follows the chosen slider style live, as the does.
     @ObservedObject private var look = LookFeel.shared
     @ObservedObject private var clock: PlaybackClock
 

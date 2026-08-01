@@ -1,9 +1,9 @@
 import SwiftUI
 import Combine
 
-// MARK: - Options, mirroring the Kotlin enums one-for-one
+// MARK: - Options
 
-/// Where lyric lines sit. Android's `LyricsPosition`.
+/// Where lyric lines sit.
 enum LyricsPosition: String, CaseIterable, Identifiable {
     case left, center, right
     var id: String { rawValue }
@@ -47,7 +47,7 @@ enum LyricsPosition: String, CaseIterable, Identifiable {
     }
 }
 
-/// Seek-bar look. Android's `SliderStyle`, where squiggly is a WAVY variant.
+/// Seek-bar look, where squiggly is a WAVY variant.
 enum SliderStyle: String, CaseIterable, Identifiable {
     case capsule, wavy, slim
     var id: String { rawValue }
@@ -61,7 +61,7 @@ enum SliderStyle: String, CaseIterable, Identifiable {
     }
 }
 
-/// How the bottom bar marks the active tab. Android's `NavBarStyle`.
+/// How the bottom bar marks the active tab.
 enum NavBarStyle: String, CaseIterable, Identifiable {
     case pill, gradient, underline, outlined
     var id: String { rawValue }
@@ -75,7 +75,7 @@ enum NavBarStyle: String, CaseIterable, Identifiable {
     }
 }
 
-/// Grid card size. Android's `GridItemSize`.
+/// Grid card size.
 enum GridItemSize: String, CaseIterable, Identifiable {
     case small, big
     var id: String { rawValue }
@@ -84,7 +84,7 @@ enum GridItemSize: String, CaseIterable, Identifiable {
     var cardWidth: CGFloat { self == .small ? 140 : 176 }
 }
 
-/// The mini-player's shape. Android's `MiniPlayerDesign` — ids are persisted,
+/// The mini-player's shape — ids are persisted,
 /// so never rename them.
 enum MiniPlayerDesign: String, CaseIterable, Identifiable {
     case flat, modern, rounded, floating
@@ -109,7 +109,7 @@ enum MiniPlayerDesign: String, CaseIterable, Identifiable {
     var usesArtBackground: Bool { self != .flat }
 }
 
-/// What fills the mini-player behind the art. Android's `MiniPlayerBackgroundStyle`.
+/// What fills the mini-player behind the art.
 enum MiniPlayerBackground: String, CaseIterable, Identifiable {
     case followTheme, transparent, blur, gradient, pureBlack
     var id: String { rawValue }
@@ -124,7 +124,7 @@ enum MiniPlayerBackground: String, CaseIterable, Identifiable {
     }
 }
 
-/// Which tab the app opens on. Android's `NavigationTab`, widened to our four.
+/// Which tab the app opens on.
 enum DefaultTab: String, CaseIterable, Identifiable {
     case home, explore, yours, library
     var id: String { rawValue }
@@ -149,7 +149,7 @@ enum DefaultTab: String, CaseIterable, Identifiable {
 // MARK: - Store
 
 /// Every Look & Feel preference, in one observable object so the live preview
-/// and the real UI update together. Defaults match the Kotlin's.
+/// and the real UI update together.
 final class LookFeel: ObservableObject {
     static let shared = LookFeel()
 

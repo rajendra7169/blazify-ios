@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// One lyric line drawn in the chosen animation style, ported from the six
-/// branches of `OriginalLyrics.kt`'s renderer. Every style needs per-word
-/// stamps; a line without them (LrcLib, KuGou, plain YouTube) falls back to the
-/// flat text, exactly as Android does when `hasWordTimings` is false.
+/// One lyric line drawn in the chosen animation style. Every style needs
+/// per-word stamps; a line without them (LrcLib, KuGou, plain YouTube) falls
+/// back to flat text.
 ///
 /// Every style lays out through `WordFlow`, one view per syllable. Karaoke and
 /// Apple used to mask a single `Text` with one horizontal gradient instead —
@@ -70,7 +69,7 @@ struct LyricsAnimatedLine: View {
         }
     }
 
-    /// Android's `bounceScale`: a single 3% swell over the first third of the
+ /// A single 3% swell over the first third of the
     /// line's fill, then flat. It's what gives the active line its little kick
     /// as it starts — subtle enough that it reads as life rather than movement.
     private var bounce: Double {
@@ -235,9 +234,8 @@ struct WordFlow: Layout {
     }
 }
 
-/// The instrumental-break marker, ported from `IntervalIndicator` in
-/// ExperimentalLyrics.kt: three dots that swell in while the break runs and fill
-/// left-to-right as it elapses, then collapse as the next line arrives.
+/// The instrumental-break marker: a music glyph that fills as the break
+/// elapses, with notes drifting past it, fading out as the next line arrives.
 struct IntervalIndicator: View {
     let start: Double
     let end: Double
@@ -246,7 +244,7 @@ struct IntervalIndicator: View {
     let active: Bool
     let tint: Color
 
-    /// Android stops the indicator 650ms before the next line, so it's gone by
+ /// The indicator stops 650ms before the next line, so it's gone by
     /// the time the singing starts.
     private var progress: Double {
         let span = end - 0.65 - start
@@ -254,7 +252,7 @@ struct IntervalIndicator: View {
         return min(max((position - start) / span, 0), 1)
     }
 
-    /// Android runs the drift and the breathing off a 2.6s linear loop. Taking
+ /// The drift and the breathing run off a 2.6s linear loop. Taking
     /// the phase from the playback position rather than a timer keeps this free
     /// of any clock of its own — nothing here can drift against the lyrics, and
     /// it settles when playback does.
@@ -267,12 +265,12 @@ struct IntervalIndicator: View {
     var body: some View {
         ZStack {
             floatingNotes
-            // A slow swell on the loop, exactly Android's 1 + 0.06·|sin(πt)|.
+ // A slow swell on the loop, exactly the 1 + 0.06·|sin(πt)|.
             glyph(breathe: 1 + 0.06 * abs(sin(phase * .pi)))
         }
         .opacity(active ? 1 : 0.25)
         .animation(.easeInOut(duration: 0.35), value: active)
-        // Centred regardless of the chosen text position, as Android's
+ // Centred regardless of the chosen text position, as the
         // wrapContentWidth(CenterHorizontally) puts it.
         .frame(maxWidth: .infinity, alignment: .center)
         .frame(height: Self.height)
@@ -283,7 +281,7 @@ struct IntervalIndicator: View {
     static let height: CGFloat = 118
 
     /// A dim glyph with a brighter copy filling it from the bottom as the break
-    /// runs down, tinted white→accent like Android's clef.
+ /// runs down, tinted white→accent like the clef.
     private func glyph(breathe: Double) -> some View {
         let size: CGFloat = 54
         return ZStack {
@@ -307,7 +305,7 @@ struct IntervalIndicator: View {
     }
 
     /// Six notes rising past the glyph on staggered phases, fading in and out so
-    /// none of them is ever cut off. Positions and phases are Android's.
+ /// none of them is ever cut off.
     private var floatingNotes: some View {
         ForEach(Self.notes, id: \.x) { note in
             let p = (phase + note.phase).truncatingRemainder(dividingBy: 1)

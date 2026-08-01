@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// Recently searched queries, the equivalent of Android's `search_history`
+/// Recently searched queries, our own store of the
 /// table. Newest first, de-duplicated, capped so the chip row stays sensible.
 final class SearchHistory: ObservableObject {
     static let shared = SearchHistory()
@@ -36,7 +36,7 @@ final class SearchHistory: ObservableObject {
         save()
     }
 
-    /// History entries that match what's been typed so far, as Android shows
+ /// History entries that match what's been typed so far, as we show
     /// above the live suggestions.
     func matching(_ query: String, limit: Int = 3) -> [String] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()

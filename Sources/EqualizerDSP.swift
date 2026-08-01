@@ -90,7 +90,7 @@ final class EqualizerDSP {
         }
         next[Self.bandCount] = .lowShelf(freq: 120, gainDB: Float(bass), sampleRate: sampleRate)
 
-        // Headroom compensation: this is what stops the Android problem where
+ // Headroom compensation: this is what stops the usual problem where
         // boosting bass just clips. Whatever the loudest boost is, the preamp
         // comes down by the same amount, so the peak never rises above where it
         // started — you hear the tone change, not distortion.

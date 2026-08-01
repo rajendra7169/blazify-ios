@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings → Player and audio, ported from `PlayerSettings.kt`. Android options
+/// Settings → Player and audio. Options
 /// that iOS handles itself are left out rather than shown dead: audio offload
 /// (AVFoundation decides), stop-on-task-clear (no such lifecycle), pause-on-mute
 /// (the hardware switch isn't observable), and skip-silence (needs an ExoPlayer

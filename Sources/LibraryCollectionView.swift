@@ -15,7 +15,7 @@ struct LibraryCollectionView: View {
             }
         }
 
-        /// Android browses these same three library corpora.
+ /// The three library corpora we browse.
         var browseId: String {
             switch self {
             case .albums: String(localized: "FEmusic_liked_albums")

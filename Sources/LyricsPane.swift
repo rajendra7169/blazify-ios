@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Inline lyrics, ported from ExperimentalLyrics.kt.
+/// Inline lyrics.
 ///
 /// Lines are absolutely positioned from their measured heights against a 35%
 /// anchor — not a scroll view — and the playback position is re-derived every
@@ -36,7 +36,7 @@ struct LyricsPane: View {
     @State private var offset: Double = 0
     @State private var provider = Lyrics.sourceName
 
-    // Position smoothing anchors (see the withFrameNanos loop in Kotlin).
+ // Position smoothing anchors, resampled every frame.
     @State private var anchorPos: Double = 0
     @State private var anchorWall = Date()
 
@@ -227,7 +227,7 @@ struct LyricsPane: View {
                                                   active: active, tint: .white)
                             case .line(_, let line):
                                 let side = alignment(for: line, secondary: secondary)
-                                // Android stores line spacing as a multiplier of
+ // Line spacing is stored as a multiplier of
                                 // the type size; the line view converts it to leading.
                                 LyricsAnimatedLine(
                                     line: line, position: pos, style: effectiveAnimation,
@@ -280,7 +280,7 @@ struct LyricsPane: View {
 
     /// The Blazify renderer sets its own type and always highlights word by
     /// word — which is why Settings hides size, spacing, glow and animation
-    /// while it's on, exactly as Android hides them behind experimental lyrics.
+ /// while it's on.
     private var effectiveSize: Double { prefs.blazifyStyle ? 34 : prefs.textSize }
     private var effectiveSpacing: Double { prefs.blazifyStyle ? 1.3 : prefs.lineSpacing }
     private var effectiveAnimation: LyricsAnimation { prefs.blazifyStyle ? .apple : prefs.animation }
@@ -300,7 +300,7 @@ struct LyricsPane: View {
     }
 
     /// Where a line sits. Background/second-voice lines mirror to the opposite
-    /// side, which is what Android's respect-agent-positioning does; everything
+ /// side, which is what the respect-agent-positioning does; everything
     /// else follows the chosen text position.
     private func alignment(for line: LyricLine, secondary: String?) -> LyricsPosition {
         guard let secondary, line.agent == secondary else { return look.lyricsPosition }

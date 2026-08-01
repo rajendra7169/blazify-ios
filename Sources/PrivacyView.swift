@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Privacy, ported from PrivacySettings.kt: pause/clear listen history and
-/// pause/clear search history, each clear behind a confirmation. (Android's
+/// Privacy: pause/clear listen history and
+/// pause/clear search history, each clear behind a confirmation. (the
 /// third group is "Disable screenshot", which iOS doesn't allow apps to do.)
 struct PrivacyView: View {
     @Environment(\.palette) private var palette

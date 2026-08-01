@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// Settings → Lyrics, ported from `LyricsSettings.kt`: a Sources group (which
+/// Settings → Lyrics: a Sources group (which
 /// providers to ask, and in what order) and a Display group. The Display group
 /// hides glow / animation / text size / line spacing while the Blazify style is
-/// on, exactly as Android hides them behind `experimentalLyrics` — that renderer
+/// on — that renderer
 /// sets its own type and animation.
 struct LyricsSettingsView: View {
     @Environment(\.palette) private var palette
@@ -78,8 +78,8 @@ struct LyricsSettingsView: View {
                            isOn: Binding(
                                get: { prefs.blazifyStyle },
                                set: { on in
-                                   // Turning it ON asks first, the way Android
-                                   // gates the experimental renderer.
+ // Turning it ON asks first — it swaps
+                                   // the whole renderer.
                                    if on { showBetaConfirm = true } else { prefs.blazifyStyle = false }
                                }))
 
@@ -254,7 +254,7 @@ struct LyricsSettingsView: View {
 
 // MARK: - Provider on/off
 
-/// Android's provider-selection dialog: one switch per source, with the note
+/// the provider-selection dialog: one switch per source, with the note
 /// that YouTube's own lyrics are always available as a fallback.
 private struct LyricsProviderSheet: View {
     @Environment(\.palette) private var palette
@@ -312,7 +312,7 @@ private struct LyricsProviderSheet: View {
 
 // MARK: - Provider priority
 
-/// Drag to reorder, mirroring Android's draggable priority dialog. Disabled
+/// Drag to reorder, mirroring the draggable priority dialog. Disabled
 /// providers are listed greyed out and can't be dragged — they aren't consulted.
 private struct LyricsPrioritySheet: View {
     @Environment(\.palette) private var palette
@@ -356,7 +356,7 @@ private struct LyricsPrioritySheet: View {
 
 // MARK: - Shared pickers
 
-/// A plain enum picker sheet, standing in for Android's `EnumDialog`.
+/// A plain enum picker sheet for choosing one of a set.
 struct EnumPickerSheet<Option: Identifiable & Equatable>: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
@@ -407,7 +407,7 @@ struct EnumPickerSheet<Option: Identifiable & Equatable>: View {
     }
 }
 
-/// Android's slider dialogs (text size, line spacing): a big readout, a slider,
+/// the slider dialogs (text size, line spacing): a big readout, a slider,
 /// and a Reset that goes back to the shipped default.
 struct SliderSheet: View {
     @Environment(\.palette) private var palette

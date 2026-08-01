@@ -1,7 +1,7 @@
 import Combine
 import SwiftUI
 
-/// The translation services Android's AI settings offer. Everything is
+/// The translation services the AI settings offer. Everything is
 /// bring-your-own-key: nothing leaves the phone unless you've entered one.
 enum AIProvider: String, CaseIterable, Identifiable, Codable {
     case openAI, claude, gemini, deepL, mistral, openRouter, perplexity, xAI
@@ -94,7 +94,7 @@ enum DeepLFormality: String, CaseIterable, Identifiable {
     }
 }
 
-/// Settings → Lyrics → AI translation, ported from `AiSettings.kt`.
+/// Settings → Lyrics → AI translation.
 final class AIPrefs: ObservableObject {
     static let shared = AIPrefs()
 

@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// The six-colour rotation Android cycles playlist cards through.
+/// The six-colour rotation playlist cards cycle through.
 enum BlazePalette {
     static let colors: [Color] = [
         Color(hex: 0xB71C5A),   // magenta
@@ -224,8 +224,7 @@ struct BlazeCategoryTile: View {
 }
 
 /// A gradient card — playlists (artwork fading top-down into the seed colour)
-/// and the mood tiles (seed-only). Ported from BlazeGradientCard in
-/// BlazeYoursComponents.kt, gradient stops included.
+/// and the mood tiles (seed-only), gradient stops included.
 struct BlazeGradientCard: View {
     let title: String
     var subtitle: String = ""
@@ -236,7 +235,7 @@ struct BlazeGradientCard: View {
     var icon: String?
     let action: () -> Void
 
-    /// Black ink on light seeds, white on dark — Android's luminance rule.
+ /// Black ink on light seeds, white on dark, by luminance.
     private var ink: Color { seed.isLight ? .black : .white }
 
     var body: some View {

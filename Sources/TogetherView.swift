@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Blaze Together, ported from ListenTogetherScreen.kt: header, connection
+/// Blaze Together: header, connection
 /// status, the room card with its shareable code, connected users, pending join
 /// requests, the join/create form and the room settings.
 ///
@@ -376,7 +376,7 @@ struct TogetherView: View {
     }
 }
 
-/// Listen Together settings, ported from ListenTogetherSettings.kt — reachable
+/// Listen Together settings, — reachable
 /// both from the Together sheet and from Settings > Connections.
 struct TogetherSettingsView: View {
     @Environment(\.palette) private var palette
@@ -514,7 +514,7 @@ struct TogetherSettingsView: View {
     }
 }
 
-/// Connection events, with a copy button — Android's log viewer.
+/// Connection events, with a copy button.
 struct TogetherLogsView: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss

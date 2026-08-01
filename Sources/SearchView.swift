@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Explore — the search experience, ported from OnlineSearchScreen.kt.
+/// Explore — the search experience.
 ///
 /// Idle it shows recent-search chips over browse tiles; typing brings live
 /// suggestions (playable songs first, then completed queries, with matching
@@ -154,7 +154,7 @@ struct SearchView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 10)
 
-            // Chips, as Android's recent-search row does — ✕ removes one.
+ // Chips, as the recent-search row does — ✕ removes one.
             FlowChips(items: Array(history.queries.prefix(12))) { entry in
                 run(entry)
             } onDelete: { entry in
@@ -491,7 +491,7 @@ extension SearchView {
     }
 }
 
-/// A wrapping row of removable chips — the recent-search row from Android.
+/// A wrapping row of removable chips, used for the recent-search row.
 struct FlowChips: View {
     @Environment(\.palette) private var palette
     let items: [String]

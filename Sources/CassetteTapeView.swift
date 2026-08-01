@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Retro palette — deliberately NOT themed (ported 1:1 from CassetteTape.kt).
+/// Retro palette — deliberately NOT themed.
 enum Retro {
     static let shellTop = Color(hex: 0x5A4B3D)
     static let shellMid = Color(hex: 0x3B3128)

@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// The account popup from the home header, ported from AccountSettings.kt: a
+/// The account popup from the home header: a
 /// card pinned near the top (72pt down, 16pt sides, 28pt radius) over a dimmed
 /// tap-to-dismiss backdrop.
 struct AccountPopup: View {

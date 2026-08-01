@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Look & Feel, ported from LookAndFeelScreen.kt: one pinned phone-frame
+/// Look & Feel: one pinned phone-frame
 /// preview whose interior follows the active tab, an amber pill tab strip, and
 /// the controls for that tab underneath. Changing anything updates the preview
 /// and the real app at once.
@@ -28,7 +28,7 @@ struct LookAndFeelView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Android sizes the frame at 48% of the screen, clamped 260–480.
+ // The frame is 48% of the screen height, clamped 260–480.
             let frameHeight = min(max(geo.size.height * 0.48, 260), 480)
 
             ScrollView {
@@ -63,7 +63,7 @@ struct LookAndFeelView: View {
     @AppStorage("playerDesign") private var playerDesignRaw = PlayerDesign.classic.rawValue
 
     /// Player shows the REAL design gallery preview; Lyrics its sample page;
-    /// Theme, Mini and Home all show the home mock — exactly as on Android.
+ /// Theme, Mini and Home all show the home mock — exactly as.
     @ViewBuilder private var preview: some View {
         switch tab {
         case .player:

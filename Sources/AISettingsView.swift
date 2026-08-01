@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings → Lyrics → AI translation, ported from `AiSettings.kt`.
+/// Settings → Lyrics → AI translation.
 struct AISettingsView: View {
     @Environment(\.palette) private var palette
     @ObservedObject private var prefs = AIPrefs.shared

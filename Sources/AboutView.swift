@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// About, ported from AboutScreen.kt: the themed brand hero, the developer card
-/// with avatar and socials, and the Buy-me-a-coffee QR — same person, same
-/// links, same QR as the Android app.
+/// About: the themed brand hero, the developer card
+/// with avatar and socials, and the Buy-me-a-coffee QR.
 struct AboutView: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
@@ -53,7 +52,7 @@ struct AboutView: View {
     // MARK: Hero
 
     private var hero: some View {
-        // The gradient follows the theme accent, as Android's does.
+ // The gradient follows the theme accent, as the does.
         let start = palette.accent
         let end = start.mixed(with: .black, 0.24)
         let ink: Color = start.isLight ? .black : .white

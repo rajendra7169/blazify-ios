@@ -117,7 +117,7 @@ struct SettingsToggle: View {
     }
 }
 
-/// A row whose value is a slider, for the settings Android puts in a dialog but
+/// A row whose value is a slider, for the settings we put in a dialog but
 /// that read better inline (speed, crossfade length).
 struct SettingsSlider: View {
     @Environment(\.palette) private var palette

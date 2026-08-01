@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Faithful port of Android's `ThemePhonePreview`: a miniature of the real home
+/// A miniature of the real home
 /// — header with the actual logo, greeting card with the hero spilling out of
 /// its top, search pill with mic, mood chips, Quick picks rows, the REAL
 /// mini-player (art + title from what's playing, drawn in the chosen design and
 /// background) and the nav bar in the chosen style. Used by the Theme, Mini and
-/// Home tabs, exactly as on Android.
+/// Home tabs, exactly as.
 struct LookFeelThemePreview: View {
     @Environment(\.palette) private var palette
     @ObservedObject var player: Player
@@ -38,7 +38,7 @@ struct LookFeelThemePreview: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
-        // Room for the frame's notch, which the Kotlin frame draws above this.
+ // Room for the frame's notch, which the frame draws above this.
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.scaffold)
@@ -174,7 +174,7 @@ struct LookFeelThemePreview: View {
     }
 
     private var songRows: some View {
-        // Art size follows the grid-size setting, as the Kotlin preview does.
+ // Art size follows the grid-size setting, as the preview does.
         let artSize: CGFloat = look.gridItemSize == .big ? 28 : 23
         let artTints: [Color] = [palette.accent.opacity(0.35),
                                  palette.accent.opacity(0.2),

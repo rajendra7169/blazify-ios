@@ -9,7 +9,7 @@ struct ReleaseInfo: Identifiable {
     let body: String     // markdown
 }
 
-/// Fetches release notes from GitHub — the slim iOS counterpart of Updater.kt.
+/// Fetches release notes from GitHub.
 enum Changelog {
     /// The repo is private today, so this returns nothing yet; the page shows
     /// its empty state. Flip the repo public and the notes appear — no code
@@ -38,7 +38,7 @@ enum Changelog {
     }
 }
 
-/// Changelog, ported from ChangelogScreen.kt: a sheet with the big centred
+/// Changelog: a sheet with the big centred
 /// title, a wavy accent divider, one card per release (version chip · date ·
 /// markdown notes) and the "View on GitHub" floating button.
 struct ChangelogView: View {

@@ -24,7 +24,7 @@ final class ListenTogether: ObservableObject {
     @Published private(set) var members: [Member] = []
     @Published private(set) var pendingJoins: [Member] = []
     @Published var username = UserDefaults.standard.string(forKey: "ltUsername") ?? "Blazify listener"
-    /// Connection events, newest last — Android's "View logs".
+ /// Connection events, newest last, shown under "View logs".
     @Published private(set) var logs: [String] = []
     /// Names you've blocked from your rooms.
     @Published private(set) var blocked: [String] =
@@ -46,7 +46,7 @@ final class ListenTogether: ObservableObject {
     /// Guard so following a host action doesn't echo straight back out.
     private var applyingRemote = false
 
-    /// Blazify Android's default room server.
+ /// Blazify the default room server.
     static let defaultServer = "wss://metroserverx.meowery.eu/ws"
 
     /// Whatever the Together settings say, falling back to the default.

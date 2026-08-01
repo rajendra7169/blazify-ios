@@ -2,11 +2,11 @@ import Combine
 import CryptoKit
 import Foundation
 
-/// Last.fm scrobbling, ported from the Android `lastfm` module. Credentials are
-/// yours: Android reads them from a build secret that isn't set in this repo, so
+/// Last.fm scrobbling. The credentials are yours: no API key is baked into
+/// this repo, so
 /// rather than ship an empty integration the key and secret are entered in
 /// Settings and kept in the Keychain, next to the YouTube cookie.
-/// Android's rules: at least 30 s long, scrobbled at half the track or four
+/// The rules: at least 30 s long, scrobbled at half the track or four
 /// minutes in, whichever comes first. Kept outside the main-actor class so the
 /// player's time observer can read them without hopping actors.
 enum LastFMRules {
@@ -115,7 +115,7 @@ final class LastFM: ObservableObject {
 
     /// `api_sig` is an md5 of every parameter sorted by name, concatenated
     /// key-then-value, with the shared secret on the end — exactly what
-    /// `Map.apiSig` does in the Kotlin.
+ /// `Map.apiSig` does.
     private func signature(_ params: [String: String]) -> String {
         guard let secret else { return "" }
         let joined = params.sorted { $0.key < $1.key }

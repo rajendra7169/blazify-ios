@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Pulsing placeholder blocks used while a screen loads, matching Android's
+/// Pulsing placeholder blocks used while a screen loads, matching the
 /// ShimmerHost: a 700ms alpha pulse between 0.25 and 0.6.
 struct SkeletonBox: View {
     var width: CGFloat?

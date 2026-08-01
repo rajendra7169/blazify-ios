@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-/// Google/YouTube-Music sign-in in a WKWebView — the same flow as Blazify Android.
+/// Google / YouTube Music sign-in in a WKWebView.
 /// On landing back on music.youtube.com with a valid session we capture the cookie
 /// + visitorData + dataSyncId, validate via account_menu, and persist.
 struct LoginView: View {

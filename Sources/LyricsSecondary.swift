@@ -78,8 +78,8 @@ final class LyricsSecondary: ObservableObject {
     }
 }
 
-/// Latin transliteration. iOS does this natively, so unlike Android there's no
-/// library and no network — `StringTransform.toLatin` covers Cyrillic, Greek,
+/// Latin transliteration. iOS does this natively, so there's no library and no
+/// network — `StringTransform.toLatin` covers Cyrillic, Greek,
 /// Japanese, Korean, Chinese, Arabic, Hebrew, Thai and Devanagari.
 enum Romanize {
     static func toLatin(_ text: String) -> String? {
@@ -111,7 +111,7 @@ enum Romanize {
     ]
 }
 
-/// Settings → Lyrics → Romanization, ported from `RomanizationSettings.kt`.
+/// Settings → Lyrics → Romanization.
 final class RomanizePrefs: ObservableObject {
     static let shared = RomanizePrefs()
 

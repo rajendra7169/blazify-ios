@@ -1,7 +1,7 @@
 import Combine
 import SwiftUI
 
-/// Settings → Content, ported from `ContentSettings.kt`. The language and
+/// Settings → Content. The language and
 /// country here are the `hl` / `gl` every InnerTube request carries, so changing
 /// them really does change what YouTube returns.
 final class ContentPrefs: ObservableObject {

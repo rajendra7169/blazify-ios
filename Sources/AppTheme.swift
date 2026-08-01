@@ -13,10 +13,10 @@ enum DarkMode: String, CaseIterable {
     }
 }
 
-/// App-wide appearance, mirroring Android's DynamicThemeKey / DarkModeKey /
+/// App-wide appearance, mirroring the DynamicThemeKey / DarkModeKey /
 /// PureBlackKey.
 ///
-/// Android derives a whole Material scheme from one seed colour using HCT tonal
+/// A whole Material scheme can be derived from one seed colour using HCT tonal
 /// palettes. We do the same shape — a low-chroma neutral ramp for surfaces and a
 /// higher-chroma ramp for the accent — approximated in HSB, which lands very
 /// close for the dark scheme this app actually ships.
@@ -115,7 +115,7 @@ final class AppTheme: ObservableObject {
     var onSurface: Color { onSurface(resolvedDark) }
     var onSurfaceVariant: Color { onSurfaceVariant(resolvedDark) }
 
-    // Tonal ramps. Tones follow the Material 2025 spec values Android uses.
+ // Tonal ramps. Tones follow the Material 2025 spec values.
 
     /// Page background — tone 4 dark / 98 light, black when pure black.
     func scaffold(_ dark: Bool) -> Color {
@@ -195,7 +195,7 @@ struct Palette: Equatable {
     }
 
     /// The greeting-card / hero gradient, seeded by the current accent so it
-    /// tracks album art the way Android's `colorScheme.primary` does.
+ /// tracks album art, the way a Material primary colour does.
     var heroGradient: LinearGradient {
         LinearGradient(colors: [accent, accent.tone(dark ? 55 : 48, chroma: 0.95)],
                        startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -210,7 +210,7 @@ private struct PaletteKey: EnvironmentKey {
 }
 
 /// Height taken by the mini-player + tab bar, so scrolling content can clear
-/// them — the equivalent of Android's `LocalPlayerAwareWindowInsets`.
+/// them — a player-aware window inset.
 private struct PlayerInsetKey: EnvironmentKey {
     static let defaultValue: CGFloat = 0
 }

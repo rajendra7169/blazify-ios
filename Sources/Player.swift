@@ -386,7 +386,7 @@ final class Player: ObservableObject {
         loadCurrent()
     }
 
-    /// Slot a song in right after the current one — Android's "Play next".
+ /// Slot a song in right after the current one — "Play next".
     func playNext(_ track: Track) {
         guard hasTrack else {
             play([track], startAt: 0)
@@ -458,7 +458,7 @@ final class Player: ObservableObject {
 
     @Published var sleepEndDate: Date?         // countdown target; nil = off
     @Published var sleepAtEndOfSong = false
-    /// Stop after this many more songs (Android's "+/- N songs" option).
+ /// Stop after this many more songs (the "+/- N songs" option).
     @Published var sleepSongsRemaining: Int?
     private var sleepTimer: Timer?
 
@@ -570,7 +570,7 @@ final class Player: ObservableObject {
 
         if !next() {
             // Queue's empty. Autoplay keeps going with songs related to the last
-            // one — Android's auto radio queue — otherwise settle on paused at
+ // one — the auto radio queue — otherwise settle on paused at
             // the end instead of showing "playing" forever.
             if PlaybackPrefs.shared.autoplay, PlaybackPrefs.shared.autoRadioQueue,
                let last = current, !last.videoId.isEmpty {
@@ -750,7 +750,7 @@ final class Player: ObservableObject {
         }
 
         // Playback speed keeps pitch by default (spectral is the good algorithm;
-        // varispeed is the chipmunk one Android calls "varispeed").
+ // varispeed is the chipmunk one).
         item.audioTimePitchAlgorithm = PlaybackPrefs.shared.preservePitch
             ? .timeDomain : .varispeed
 
@@ -1028,7 +1028,7 @@ final class Player: ObservableObject {
     private var scrobbleStart = Date()
     private var scrobbled = false
 
-    /// Last.fm's rule, the same one the Android module uses: songs of at least
+ /// Last.fm's rule: songs of at least
     /// 30 s, scrobbled at half their length or four minutes in, whichever first.
     private func considerScrobble() {
         guard !scrobbled, let track = current,

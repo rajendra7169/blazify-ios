@@ -49,7 +49,7 @@ struct HomeView: View {
                             SkeletonRail()
                         } else {
                             // Locally-derived rails first, reshuffled on every load —
-                            // this is what makes the feed differ each time, as Android's
+ // this is what makes the feed differ each time, as the
                             // `.shuffled()` sections do.
                             ForEach(localSections) { section in
                                 if section.isSongs {
@@ -72,8 +72,8 @@ struct HomeView: View {
                             }
 
                             // Reaching this marker means we're near the end: pull the
-                            // next page of shelves in, the way Android watches the last
-                            // visible index. The `.id` makes SwiftUI build a *new*
+ // next page of shelves in, by watching the last visible
+                            // index. The `.id` makes SwiftUI build a *new*
                             // marker per token — otherwise the old one stays on screen,
                             // never re-appears, and loading stops after one page.
                             if let token = feed.continuation {
@@ -184,7 +184,7 @@ struct HomeView: View {
     /// Rails generated from a handful of *randomly chosen* songs you like. Each
     /// seed's Related page gives fresh songs, and the section is titled after the
     /// seed — so both the content and the headings change on every refresh, which
-    /// is what Android's Daily Discover and "Similar to X" do.
+ /// is what Daily Discover and "Similar to X" do.
     /// Pick the seeds on the main actor — `favoriteTracks` and the PlayHistory
     /// cache are both main-thread state, so the async fan-out must not touch them.
     @MainActor
@@ -227,7 +227,7 @@ struct HomeView: View {
     }
 
     /// Rails built from what you've actually listened to, shuffled so the home
-    /// feed looks different every time — Android's Quick picks / Keep listening
+ /// feed looks different every time — Quick picks / Keep listening
     /// / Forgotten favourites, which are all `.shuffled().take(n)` locally.
     private static func buildLocalSections(player: Player) -> [HomeSection] {
         var out: [HomeSection] = []
@@ -251,7 +251,7 @@ struct HomeView: View {
                                    items: keep.map(\.asHomeItem), isSongs: false))
         }
 
-        // Liked a while ago but not played recently — Android's forgotten favourites.
+ // Liked a while ago but not played recently.
         let recentIds = Set(PlayHistory.recent.prefix(20).map(\.videoId))
         let forgotten = catalogue(player.favoriteTracks)
             .filter { !recentIds.contains($0.videoId) }
@@ -415,7 +415,7 @@ struct HomeView: View {
                 .foregroundStyle(palette.onSurfaceVariant)
                 .lineLimit(1)
             Spacer(minLength: 0)
-            // Song recognition, exactly where Android's header puts the mic.
+ // Song recognition, exactly where the header puts the mic.
             Button { showRecognition = true } label: {
                 Image(systemName: "mic.fill")
                     .font(.system(size: 18))

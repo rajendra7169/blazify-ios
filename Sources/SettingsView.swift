@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings, ported from SettingsScreen.kt: profile header, a search field that
+/// Settings: profile header, a search field that
 /// filters the top-level rows, quick toggles for theme mode / dynamic / pure
 /// black, then the grouped sections.
 struct SettingsView: View {
@@ -342,7 +342,7 @@ struct SettingsView: View {
         }
     }
 
-    /// Auto -> Dark -> Light, as the Android quick toggle does.
+ /// Auto -> Dark -> Light, cycled by the quick toggle.
     private func cycleDarkMode() {
         switch theme.darkMode {
         case .auto: theme.setDarkMode(.on)

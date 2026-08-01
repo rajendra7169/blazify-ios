@@ -3,7 +3,7 @@ import Combine
 import MediaToolbox
 import SwiftUI
 
-/// The named curves, ported from the Android equaliser's presets. Values are
+/// The named curves. Values are
 /// per-band gain in dB across the ten ISO centres.
 enum EQPreset: String, CaseIterable, Identifiable {
     case flat, bass, vocal, treble, rock, jazz, electronic, acoustic, custom
@@ -24,7 +24,7 @@ enum EQPreset: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Deliberately gentle — nothing here exceeds +6 dB. Android's presets push
+ /// Deliberately gentle — nothing here exceeds +6 dB. the presets push
     /// far harder, which is most of why they sound like they're breaking.
     var gains: [Double] {
         switch self {
@@ -42,8 +42,8 @@ enum EQPreset: String, CaseIterable, Identifiable {
 
 /// Settings → Equaliser. One published `enabled` flag is the whole truth: the
 /// audio tap is installed for the life of every item and simply runs at unity
-/// when off. Nothing else can turn it on — which is the Android bug this
-/// deliberately designs out.
+/// when off. Nothing else can turn it on, which designs out a whole class of
+/// "the equaliser did nothing" bug.
 final class Equalizer: ObservableObject {
     static let shared = Equalizer()
 

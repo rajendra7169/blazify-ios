@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// How a song list is ordered. Mirrors Android's `AutoPlaylistSongSortType`.
+/// How a song list is ordered. Mirrors `AutoPlaylistSongSortType`.
 enum SongSort: String, CaseIterable, Identifiable {
     case createDate, name, artist, playTime
 
@@ -17,7 +17,7 @@ enum SongSort: String, CaseIterable, Identifiable {
     }
 }
 
-/// A capsule filter above a song list — Android's `ChipsRow`, e.g. the Songs
+/// A capsule filter above a song list, e.g. the Songs
 /// category switching between Library / Liked / Downloaded / Uploaded.
 struct SongListFilter: Identifiable, Equatable {
     let id: String
@@ -31,7 +31,7 @@ struct SongListFilter: Identifiable, Equatable {
     }
 }
 
-/// The one song-list design, ported from AutoPlaylistScreen.kt: a large centred
+/// The one song-list design: a large centred
 /// cover, the title and totals, shuffle · play · more, then a sort header and
 /// the songs. Used by every list in the app so they all look the same.
 struct SongListScreen: View {
@@ -371,7 +371,7 @@ extension Array {
 }
 
 
-/// The ⋮ menu on every song row — the same options as Android's SongMenu.
+/// The ⋮ menu on every song row.
 struct SongRowMenu: View {
     @Environment(\.palette) private var palette
     let track: Track
