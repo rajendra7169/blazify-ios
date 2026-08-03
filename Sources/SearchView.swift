@@ -293,7 +293,7 @@ struct SearchView: View {
         if !cards.isEmpty {
             if !results.isEmpty {
                 Text("Albums, artists and playlists")
-                    .font(.blaze(12, weight: .semibold))
+                    .font(.blaze(12, .semibold))
                     .foregroundStyle(palette.onSurfaceVariant)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)

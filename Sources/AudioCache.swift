@@ -141,7 +141,7 @@ final class AudioCache: ObservableObject {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
 
             guard let fresh = await YouTube.streamURL(for: id) else {
-                await MainActor.run { [weak self] in self?.inFlight.remove(id) }
+                _ = await MainActor.run { [weak self] in self?.inFlight.remove(id) }
                 return
             }
 
