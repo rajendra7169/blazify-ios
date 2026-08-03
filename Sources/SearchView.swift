@@ -18,7 +18,9 @@ struct SearchView: View {
     @State private var results: [Track] = []
     /// Albums, artists and playlists — the non-song tabs, which open a page.
     @State private var cards: [HomeItem] = []
-    @State private var scope: YouTube.SearchScope = .songs
+    // Everything to begin with. The mixed answer is the right first guess, and
+    // narrowing is what you do once you know what you did not find.
+    @State private var scope: YouTube.SearchScope = .everything
     @State private var cardRoute: HomeItem?
     @State private var artistRoute: ArtistRoute?
     /// A YouTube link pasted into the box, so a shared link is one tap away.
@@ -54,9 +56,11 @@ struct SearchView: View {
                     }
                     if searching {
                         SkeletonTrackList(rows: 8).padding(.top, 8)
-                    } else if scope == .songs, !results.isEmpty {
+                    } else if scope == .everything, !results.isEmpty || !cards.isEmpty {
+                        mixedResults
+                    } else if scope.isPlayable, !results.isEmpty {
                         resultRows
-                    } else if scope != .songs, !cards.isEmpty {
+                    } else if !scope.isPlayable, !cards.isEmpty {
                         cardRows
                     } else if didSearch, !trimmed.isEmpty {
                         Text("No results")
@@ -276,6 +280,30 @@ struct SearchView: View {
         .onTapGesture(perform: action)
     }
 
+    /// Both halves of an unfiltered search, songs above places.
+    ///
+    /// Songs first because a search is usually for something to play; the
+    /// albums, artists and playlists follow rather than being dropped, which is
+    /// the whole point of asking without a filter.
+    @ViewBuilder
+    private var mixedResults: some View {
+        if !results.isEmpty {
+            resultRows
+        }
+        if !cards.isEmpty {
+            if !results.isEmpty {
+                Text("Albums, artists and playlists")
+                    .font(.blaze(12, weight: .semibold))
+                    .foregroundStyle(palette.onSurfaceVariant)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 18)
+                    .padding(.bottom, 6)
+            }
+            cardRows
+        }
+    }
+
     private var resultRows: some View {
         ForEach(Array(results.enumerated()), id: \.element.id) { index, track in
             SongRow(track: track, player: player) {
@@ -323,7 +351,7 @@ struct SearchView: View {
         fieldFocused = false
         searching = true
         didSearch = true
-        scope = .songs
+        scope = .everything
         cards = []
         Task {
             let found = await YouTube.search(q)
@@ -480,9 +508,17 @@ extension SearchView {
         guard !q.isEmpty else { return }
         searching = true
         Task {
-            if scope == .songs {
-                let found = await YouTube.search(q)
+            if scope.isPlayable {
+                let found = await YouTube.search(q, scope: scope)
                 await MainActor.run { results = found; cards = []; searching = false }
+            } else if scope == .everything {
+                // The mixed answer holds both kinds at once, so both halves are
+                // asked for and shown together rather than one being thrown
+                // away for not matching the tab.
+                async let songs = YouTube.search(q, scope: .everything)
+                async let pages = YouTube.searchCards(q, scope: .everything)
+                let (found, browsable) = await (songs, pages)
+                await MainActor.run { results = found; cards = browsable; searching = false }
             } else {
                 let found = await YouTube.searchCards(q, scope: scope)
                 await MainActor.run { cards = found; results = []; searching = false }

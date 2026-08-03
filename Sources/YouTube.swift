@@ -19,46 +19,79 @@ enum YouTube {
     /// YouTube Music "Songs" search filter.
     private static let songsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
 
-    /// The other three search tabs. Verified live: each returns
-    /// `musicResponsiveListItemRenderer` rows carrying a browseId rather than a
-    /// videoId, so they open a page instead of playing.
+    /// Every way the catalogue will let a search be narrowed.
+    ///
+    /// `everything` sends no filter at all, which is a different request rather
+    /// than a filter meaning all — the catalogue answers an unfiltered query
+    /// with its own mixture, ranked together, and no single filter reproduces
+    /// that.
+    ///
+    /// The rest each return `musicResponsiveListItemRenderer` rows. Songs,
+    /// videos and episodes carry a videoId and play; the others carry a
+    /// browseId and open a page.
     enum SearchScope: String, CaseIterable, Identifiable {
-        case songs, albums, artists, playlists
+        case everything, songs, videos, albums, artists
+        case communityPlaylists, featuredPlaylists
+        case podcasts, episodes, profiles
 
         var id: String { rawValue }
+
         var title: String {
             switch self {
+            case .everything: return String(localized: "All")
             case .songs: return String(localized: "Songs")
+            case .videos: return String(localized: "Videos")
             case .albums: return String(localized: "Albums")
             case .artists: return String(localized: "Artists")
-            case .playlists: return String(localized: "Playlists")
+            case .communityPlaylists: return String(localized: "Community playlists")
+            case .featuredPlaylists: return String(localized: "Featured playlists")
+            case .podcasts: return String(localized: "Podcasts")
+            case .episodes: return String(localized: "Episodes")
+            case .profiles: return String(localized: "Profiles")
             }
         }
-        var params: String {
+
+        /// Nil means ask without a filter.
+        var params: String? {
             switch self {
-            case .songs: return String(localized: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D")
-            case .albums: return String(localized: "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D")
-            case .artists: return String(localized: "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D")
-            case .playlists: return String(localized: "EgWKAQIoAWoKEAkQChAFEAMQBA%3D%3D")
+            case .everything: return nil
+            case .songs: return "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+            case .videos: return "EgWKAQIQAWoKEAkQChAFEAMQBA%3D%3D"
+            case .albums: return "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D"
+            case .artists: return "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
+            case .communityPlaylists: return "EgeKAQQoAEABagoQAxAEEAoQCRAF"
+            case .featuredPlaylists: return "EgeKAQQoADgBagwQDhAKEAMQBRAJEAQ%3D"
+            case .podcasts: return "EgWKAQJQAWoKEAkQChAFEAMQBA%3D%3D"
+            case .episodes: return "EgWKAQJYAWoKEAkQChAFEAMQBA%3D%3D"
+            case .profiles: return "EgWKAQJYAWoSEAUQCRADEAQQEBAVEAoQDhAR"
             }
         }
-        /// Artists render as circles, everything else as squares.
-        var isCircular: Bool { self == .artists }
+
+        /// Whether results from this tab are songs to play rather than pages to open.
+        var isPlayable: Bool {
+            self == .songs || self == .videos || self == .episodes
+        }
+
+        /// Artists and profiles are people, and people render as circles.
+        var isCircular: Bool { self == .artists || self == .profiles }
     }
 
     /// Albums, artists and playlists — the tabs that aren't songs. Returns cards
     /// that open a page; use `search(_:)` for playable songs.
     static func searchCards(_ query: String, scope: SearchScope) async -> [HomeItem] {
-        guard scope != .songs else { return [] }
+        guard !scope.isPlayable else { return [] }
         let visitor = await visitorData()
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "context": ["client": client],
             "query": query,
-            "params": scope.params,
         ]
+        // Left out entirely for "All" — an empty params string is not the same
+        // request as no params at all.
+        if let params = scope.params { body["params"] = params }
+
         guard let json = await post(musicSearch, name: "67", version: remixVersion,
                                     userAgent: webUA, visitor: visitor, body: body)
         else { return [] }
@@ -203,16 +236,21 @@ enum YouTube {
 
     // MARK: - Search (WEB_REMIX music, on-device)
 
-    static func search(_ query: String) async -> [Track] {
+    /// Playable results — songs by default, or whichever playable tab is asked for.
+    static func search(_ query: String, scope: SearchScope = .songs) async -> [Track] {
         let visitor = await visitorData()
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "context": ["client": client],
             "query": query,
-            "params": songsFilter,
         ]
+        // Videos and episodes are their own tabs; asking for them with the songs
+        // filter would quietly hand back songs instead.
+        if let params = scope.params ?? (scope == .everything ? nil : songsFilter) {
+            body["params"] = params
+        }
         guard let json = await post(musicSearch, name: "67", version: remixVersion,
                                     userAgent: webUA, visitor: visitor, body: body)
         else { return [] }
