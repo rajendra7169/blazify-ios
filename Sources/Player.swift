@@ -616,6 +616,31 @@ final class Player: ObservableObject {
 
     // MARK: - Load / stream
 
+    /// Watch for the audio going quiet while playback is supposed to be running.
+    ///
+    /// A refused reconnection does not always reach the item as a failure — the
+    /// player simply stops receiving and waits. From the outside that is a
+    /// paused song that still says it is playing, which is the thing worth
+    /// catching.
+    private func watchForStalls() {
+        guard let player = avPlayer, let item = player.currentItem else { return }
+        stallObs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemPlaybackStalled,
+            object: item, queue: .main
+        ) { [weak self] _ in
+            guard let self, self.isPlaying else { return }
+            // Give it a moment to recover on its own before replacing the link;
+            // a brief stall on a slow connection is not a refused stream.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                guard self.isPlaying,
+                      (self.avPlayer?.currentItem?.isPlaybackLikelyToKeepUp ?? true) == false
+                else { return }
+                self.reopen()
+            }
+        }
+    }
+
     private func loadCurrent() {
         guard let track = current else { return }
         if !crossfading { cancelCrossfade() }
@@ -685,7 +710,7 @@ final class Player: ObservableObject {
                 let cacheable = Track(videoId: track.videoId, title: track.title,
                                       artist: track.artist, thumbnail: track.thumbnail,
                                       duration: stream.duration, artistId: track.artistId)
-                AudioCache.shared.cache(cacheable, from: stream.url)
+                AudioCache.shared.cache(cacheable)
                 self.warmLyrics(for: track, duration: stream.duration)
                 self.prefetchNext()
             }
@@ -716,7 +741,45 @@ final class Player: ObservableObject {
         }
     }
 
-    private func playStream(_ url: URL, realDuration: Double) {
+    /// How many times the current song has had its link replaced.
+    ///
+    /// Bounded, because a link that keeps being refused must not become an
+    /// endless round of requests — three goes, then it is a real failure.
+    private var reopenCount = 0
+    private var reopenFor: String?
+
+    /// Fetch a fresh link and carry on where the last one stopped.
+    ///
+    /// Returns whether it is being attempted, so the caller knows not to report
+    /// a failure yet.
+    @discardableResult
+    private func reopen() -> Bool {
+        guard let track = current else { return false }
+        if reopenFor != track.videoId {
+            reopenFor = track.videoId
+            reopenCount = 0
+        }
+        guard reopenCount < 3 else { return false }
+        reopenCount += 1
+
+        let resumeFrom = avPlayer?.currentTime().seconds ?? 0
+        let videoId = track.videoId
+
+        Task {
+            guard let fresh = await YouTube.streamURL(for: videoId) else { return }
+            await MainActor.run {
+                guard self.current?.videoId == videoId else { return }
+                self.playStream(fresh.url, realDuration: fresh.duration, resumeAt: resumeFrom)
+            }
+        }
+        return true
+    }
+
+    /// True while the audio has stopped arriving but playback is supposed to be
+    /// running — watched so a silent stall is repaired rather than sat through.
+    private var stallObs: NSObjectProtocol?
+
+    private func playStream(_ url: URL, realDuration: Double, resumeAt: Double = 0) {
         removeTimeObserver()
         statusObs = nil
 
@@ -740,6 +803,11 @@ final class Player: ObservableObject {
                 switch item.status {
                 case .readyToPlay: self.isLoading = false
                 case .failed:
+                    // A refused link is the ordinary failure here, not a broken
+                    // song — so fetch another and carry on from the same second
+                    // before giving up on it. Long recordings are the ones this
+                    // saves: they are the only ones that outlast one connection.
+                    if self.reopen() { return }
                     self.isLoading = false
                     self.lastError = item.error?.localizedDescription ?? "Playback failed"
                     // Don't strand the queue on one bad stream.
@@ -756,6 +824,15 @@ final class Player: ObservableObject {
 
         let p = AVPlayer(playerItem: item)
         avPlayer = p
+        // A reopened stream picks up where the refused one stopped. Starting a
+        // twenty-minute recording again from the top would be a worse failure
+        // than the one being repaired.
+        if resumeAt > 1 {
+            p.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600),
+                   toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+        if let old = stallObs { NotificationCenter.default.removeObserver(old) }
+        watchForStalls()
         applyAudioPrefs()
         // The single source of truth for the transport: whatever the player is
         // actually doing. Anything that pauses us — an interruption, a route

@@ -116,8 +116,19 @@ enum YouTube {
     }
 
     static func streamURL(for videoId: String) async -> (url: URL, duration: Double)? {
-        let hit = urlCacheLock.withLock { urlCache[videoId] }
-        if let hit, hit.expires > Date() { return (hit.url, hit.duration) }
+        // A stream link is good for one connection and one only — the first
+        // request is served and every later one is refused outright. Handing
+        // the same link out twice therefore hands out a link that cannot work,
+        // which is why a song played once would sit at 0:00 the second time.
+        //
+        // So the cache is single use and short lived: it exists to let a
+        // prefetch a few seconds ago be used now, and for nothing else.
+        let hit = urlCacheLock.withLock { () -> (url: URL, duration: Double, expires: Date)? in
+            guard let found = urlCache[videoId], found.expires > Date() else { return nil }
+            urlCache.removeValue(forKey: videoId)
+            return found
+        }
+        if let hit { return (hit.url, hit.duration) }
 
         let visitor = await visitorData()
         // Settings → Stream sources: walk the chosen order until one client
@@ -135,8 +146,11 @@ enum YouTube {
             guard let picked = await resolve(videoId, with: client, visitor: visitor,
                                              wantsLowest: wantsLowest) else { continue }
             urlCacheLock.withLock {
+                // Two minutes. Long enough to cover a prefetch followed by the
+                // song actually starting; short enough that a link is never
+                // still sitting here when it has already been spent.
                 urlCache[videoId] = (picked.url, picked.duration,
-                                     Date().addingTimeInterval(4 * 3600))
+                                     Date().addingTimeInterval(120))
             }
             return (picked.url, picked.duration)
         }

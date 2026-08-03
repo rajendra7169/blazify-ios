@@ -119,42 +119,62 @@ final class AudioCache: ObservableObject {
 
     // MARK: Filling
 
-    /// Store this track's audio in the background while it streams.
-    func cache(_ track: Track, from url: URL) {
+    /// Keep a copy of a song for next time.
+    ///
+    /// It fetches its own link rather than reusing the one being played. A
+    /// stream link serves one connection and refuses every later one, so
+    /// downloading from the link the player is using means two requests for a
+    /// link that allows one — and the loser is usually the player, which is how
+    /// a long recording ended up never starting at all.
+    func cache(_ track: Track) {
         let id = track.videoId
         guard isEnabled, limitMB != 0 else { return }
         guard !id.isEmpty, !isCached(id), !inFlight.contains(id) else { return }
         // Downloads already keep a permanent copy; don't duplicate it.
         guard Downloads.shared.localAudioURL(for: id) == nil else { return }
         inFlight.insert(id)
-        let dest = fileURL(for: id)
 
         Task.detached(priority: .background) { [weak self] in
-            var req = URLRequest(url: url)
-            req.setValue(YouTube.visionUA, forHTTPHeaderField: "User-Agent")
-
-            var didStore = false
-            if let (tmp, response) = try? await URLSession.shared.download(for: req),
-               (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 {
-                try? FileManager.default.removeItem(at: dest)
-                didStore = (try? FileManager.default.moveItem(at: tmp, to: dest)) != nil
+            // A moment first. A background download starting in the same breath
+            // as playback is competition the listener can hear.
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard let fresh = await YouTube.streamURL(for: id) else {
+                await MainActor.run { self?.inFlight.remove(id) }
+                return
             }
-            // Capture immutably: a `var` crossing into the main-actor closure is
-            // an error under the Swift 6 language mode.
-            let stored = didStore
+            await self?.store(track, from: fresh.url)
+        }
+    }
 
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.inFlight.remove(id)
-                guard stored else { return }
-                self.lastUsed[id] = Date()
-                self.tracks.removeAll { $0.videoId == id }
-                self.tracks.insert(track, at: 0)
-                self.enrich(track)
-                self.save()
-                self.evictIfNeeded()
-                self.refreshSize()
-            }
+    /// Fetch one song's audio and file it.
+    private func store(_ track: Track, from url: URL) async {
+        let id = track.videoId
+        let dest = fileURL(for: id)
+
+        var req = URLRequest(url: url)
+        req.setValue(YouTube.visionUA, forHTTPHeaderField: "User-Agent")
+
+        var didStore = false
+        if let (tmp, response) = try? await URLSession.shared.download(for: req),
+           (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 {
+            try? FileManager.default.removeItem(at: dest)
+            didStore = (try? FileManager.default.moveItem(at: tmp, to: dest)) != nil
+        }
+        // Capture immutably: a `var` crossing into the main-actor closure is
+        // an error under the Swift 6 language mode.
+        let stored = didStore
+
+        await MainActor.run { [weak self] in
+            guard let self else { return }
+            self.inFlight.remove(id)
+            guard stored else { return }
+            self.lastUsed[id] = Date()
+            self.tracks.removeAll { $0.videoId == id }
+            self.tracks.insert(track, at: 0)
+            self.enrich(track)
+            self.save()
+            self.evictIfNeeded()
+            self.refreshSize()
         }
     }
 
