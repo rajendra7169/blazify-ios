@@ -20,6 +20,14 @@ workflows:
 
       - name: Build unsigned .app
         script: |
+          # The whole log goes to a file and only a digest reaches the console.
+          # xcodebuild echoes its entire command line — every source path, every
+          # module — for each compile, which is tens of thousands of characters
+          # of noise. The log viewer then shows "the last 50 lines", all of
+          # which are that echo, and the three lines that say what is actually
+          # wrong scroll away above it. Compiler diagnostics are the point of a
+          # failed build; they should not be the hardest thing to find in it.
+          set -o pipefail
           xcodebuild \
             -project BlazifyPlayer.xcodeproj \
             -scheme BlazifyPlayer \
@@ -29,7 +37,23 @@ workflows:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build > xcodebuild.log 2>&1
+          status=$?
+
+          if [ $status -ne 0 ]; then
+            echo ""
+            echo "======================= ERRORS ======================="
+            # Diagnostics only: file, line, and what is wrong. Two lines of
+            # context after each, which is where the offending source line and
+            # the caret marker live.
+            grep -n -A 2 -E "(error|warning): " xcodebuild.log \
+              | grep -v "^.*note: " \
+              | head -120 \
+              || echo "(no diagnostics found — see the xcodebuild.log artifact)"
+            echo "======================================================"
+            echo ""
+          fi
+          exit $status
 
       - name: Fix __LINKEDIT so third-party signing survives (iOS dyld launch fix)
         script: |
@@ -53,3 +77,6 @@ workflows:
           zip -r "$CM_BUILD_DIR/BlazifyPlayer.ipa" Payload
     artifacts:
       - BlazifyPlayer.ipa
+      # Kept whatever happens, so a failure can be read in full rather than
+      # through a console that truncates.
+      - xcodebuild.log
