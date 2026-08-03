@@ -133,48 +133,43 @@ final class AudioCache: ObservableObject {
         // Downloads already keep a permanent copy; don't duplicate it.
         guard Downloads.shared.localAudioURL(for: id) == nil else { return }
         inFlight.insert(id)
+        let dest = fileURL(for: id)
 
         Task.detached(priority: .background) { [weak self] in
             // A moment first. A background download starting in the same breath
             // as playback is competition the listener can hear.
             try? await Task.sleep(nanoseconds: 5_000_000_000)
+
             guard let fresh = await YouTube.streamURL(for: id) else {
-                await MainActor.run { self?.inFlight.remove(id) }
+                await MainActor.run { [weak self] in self?.inFlight.remove(id) }
                 return
             }
-            await self?.store(track, from: fresh.url)
-        }
-    }
 
-    /// Fetch one song's audio and file it.
-    private func store(_ track: Track, from url: URL) async {
-        let id = track.videoId
-        let dest = fileURL(for: id)
+            var req = URLRequest(url: fresh.url)
+            req.setValue(YouTube.visionUA, forHTTPHeaderField: "User-Agent")
 
-        var req = URLRequest(url: url)
-        req.setValue(YouTube.visionUA, forHTTPHeaderField: "User-Agent")
+            var didStore = false
+            if let (tmp, response) = try? await URLSession.shared.download(for: req),
+               (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 {
+                try? FileManager.default.removeItem(at: dest)
+                didStore = (try? FileManager.default.moveItem(at: tmp, to: dest)) != nil
+            }
+            // Capture immutably: a `var` crossing into the main-actor closure is
+            // an error under the Swift 6 language mode.
+            let stored = didStore
 
-        var didStore = false
-        if let (tmp, response) = try? await URLSession.shared.download(for: req),
-           (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 {
-            try? FileManager.default.removeItem(at: dest)
-            didStore = (try? FileManager.default.moveItem(at: tmp, to: dest)) != nil
-        }
-        // Capture immutably: a `var` crossing into the main-actor closure is
-        // an error under the Swift 6 language mode.
-        let stored = didStore
-
-        await MainActor.run { [weak self] in
-            guard let self else { return }
-            self.inFlight.remove(id)
-            guard stored else { return }
-            self.lastUsed[id] = Date()
-            self.tracks.removeAll { $0.videoId == id }
-            self.tracks.insert(track, at: 0)
-            self.enrich(track)
-            self.save()
-            self.evictIfNeeded()
-            self.refreshSize()
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.inFlight.remove(id)
+                guard stored else { return }
+                self.lastUsed[id] = Date()
+                self.tracks.removeAll { $0.videoId == id }
+                self.tracks.insert(track, at: 0)
+                self.enrich(track)
+                self.save()
+                self.evictIfNeeded()
+                self.refreshSize()
+            }
         }
     }
 

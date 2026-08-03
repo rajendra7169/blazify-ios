@@ -616,31 +616,6 @@ final class Player: ObservableObject {
 
     // MARK: - Load / stream
 
-    /// Watch for the audio going quiet while playback is supposed to be running.
-    ///
-    /// A refused reconnection does not always reach the item as a failure — the
-    /// player simply stops receiving and waits. From the outside that is a
-    /// paused song that still says it is playing, which is the thing worth
-    /// catching.
-    private func watchForStalls() {
-        guard let player = avPlayer, let item = player.currentItem else { return }
-        stallObs = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemPlaybackStalled,
-            object: item, queue: .main
-        ) { [weak self] _ in
-            guard let self, self.isPlaying else { return }
-            // Give it a moment to recover on its own before replacing the link;
-            // a brief stall on a slow connection is not a refused stream.
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 4_000_000_000)
-                guard self.isPlaying,
-                      (self.avPlayer?.currentItem?.isPlaybackLikelyToKeepUp ?? true) == false
-                else { return }
-                self.reopen()
-            }
-        }
-    }
-
     private func loadCurrent() {
         guard let track = current else { return }
         if !crossfading { cancelCrossfade() }
@@ -775,10 +750,6 @@ final class Player: ObservableObject {
         return true
     }
 
-    /// True while the audio has stopped arriving but playback is supposed to be
-    /// running — watched so a silent stall is repaired rather than sat through.
-    private var stallObs: NSObjectProtocol?
-
     private func playStream(_ url: URL, realDuration: Double, resumeAt: Double = 0) {
         removeTimeObserver()
         statusObs = nil
@@ -831,8 +802,6 @@ final class Player: ObservableObject {
             p.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600),
                    toleranceBefore: .zero, toleranceAfter: .zero)
         }
-        if let old = stallObs { NotificationCenter.default.removeObserver(old) }
-        watchForStalls()
         applyAudioPrefs()
         // The single source of truth for the transport: whatever the player is
         // actually doing. Anything that pauses us — an interruption, a route

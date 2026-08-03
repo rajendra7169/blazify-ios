@@ -247,8 +247,8 @@ enum YouTube {
             "query": query,
         ]
         // Videos and episodes are their own tabs; asking for them with the songs
-        // filter would quietly hand back songs instead.
-        if let params = scope.params ?? (scope == .everything ? nil : songsFilter) {
+        // filter would quietly hand back songs instead. "All" asks with none.
+        if let params = scope.params {
             body["params"] = params
         }
         guard let json = await post(musicSearch, name: "67", version: remixVersion,
