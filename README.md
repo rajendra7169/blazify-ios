@@ -160,9 +160,8 @@ this project belong to their respective owners.
 
 Released under the **[GNU General Public License v3.0](LICENSE)**.
 
-Blazify's streaming core builds on the work of the InnerTune, OuterTune and
-Metrolist projects, all licensed under GPL-3.0. The interface, theming,
-branding and feature work are original.
+Written from scratch in Swift. It shares its name, its look and its ideas with
+the Android and desktop builds of Blazify, but none of their code.
 
 <div align="center">
 
