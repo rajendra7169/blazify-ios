@@ -25,13 +25,23 @@ Blazify streams from a large online catalogue, plays the music already on your
 phone, follows the words as they are sung, and lets you restyle most of the app
 while you use it. No advertisements, no tracking, and no account required.
 
-This is the iOS build. There is also an [Android version](https://github.com/rajendra7169/blazify)
-and a [desktop version](https://github.com/rajendra7169/blazify-desktop) for
-Windows and Linux.
+**It is early.** The first build is tagged and downloadable, but this is
+`0.1.0` and it shows. See [Install](#install) for what sideloading involves.
 
-**It is not finished.** The app is substantial and usable, but there is no
-tagged release yet, so installing it means building it yourself. See
-[Install](#install) for what that involves and why.
+---
+
+## Blazify everywhere else
+
+The same player, built natively for each place you use it.
+
+| Platform | Download | Source |
+|---|---|---|
+| **Android** phones and tablets | [Blazify.apk](https://github.com/rajendra7169/blazify/releases/latest/download/Blazify.apk) | [rajendra7169/blazify](https://github.com/rajendra7169/blazify) |
+| **Windows** installer | [Blazify-setup.exe](https://github.com/rajendra7169/blazify-desktop/releases/latest/download/Blazify-setup.exe) | [rajendra7169/blazify-desktop](https://github.com/rajendra7169/blazify-desktop) |
+| **Linux** | [deb, AppImage, tar.gz](https://github.com/rajendra7169/blazify-desktop/releases/latest) | [rajendra7169/blazify-desktop](https://github.com/rajendra7169/blazify-desktop) |
+| **iPhone** sideloaded | [Blazify.ipa](https://github.com/rajendra7169/blazify-ios/releases/latest/download/Blazify.ipa) | [rajendra7169/blazify-ios](https://github.com/rajendra7169/blazify-ios) **← you are here** |
+
+Screenshots, install guides and everything else: **[blazify website](https://rajendra7169.github.io/blazify/)**
 
 ---
 
@@ -93,8 +103,8 @@ tagged release yet, so installing it means building it yourself. See
 Blazify is not on the App Store, and cannot be. Apps that stream audio from
 YouTube are removed from it.
 
-**There is no release to download yet.** When there is, it will be an unsigned
-`.ipa` on this repository's releases page, installed with
+Download **[Blazify.ipa](https://github.com/rajendra7169/blazify-ios/releases/latest/download/Blazify.ipa)**
+from the releases page. It is unsigned, so you install it with
 [SideStore](https://sidestore.io) or [AltStore](https://altstore.io).
 
 Two things to know before planning around it:
