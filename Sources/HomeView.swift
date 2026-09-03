@@ -140,10 +140,14 @@ struct HomeView: View {
         // that would have rescued it only runs once the queue empties, which
         // for one song means immediately and audibly.
         let songs = row.filter { $0.browseId == nil && !($0.videoId ?? "").isEmpty }
-        let start = songs.firstIndex { $0.videoId == vid } ?? 0
-        let tracks = songs.isEmpty ? [item.asTrack] : songs.map(\.asTrack)
-
-        player.play(tracks, startAt: songs.isEmpty ? 0 : start)
+        if songs.isEmpty {
+            // Nothing around it, so build a radio behind it instead of leaving
+            // a queue of one.
+            player.playWithRadio(item.asTrack)
+        } else {
+            let start = songs.firstIndex { $0.videoId == vid } ?? 0
+            player.play(songs.map(\.asTrack), startAt: start)
+        }
         player.showFullPlayer = true
     }
 

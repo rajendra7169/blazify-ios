@@ -219,6 +219,39 @@ final class Player: ObservableObject {
         loadCurrent()
     }
 
+    /// Start one song and build a radio behind it.
+    ///
+    /// For a song chosen on its own — from search, or from a shelf with nothing
+    /// around it — the queue would otherwise be one track long. The radio that
+    /// rescues that only runs once the queue empties, so the related tracks get
+    /// fetched at the exact moment the song ends, which is heard as a stop.
+    ///
+    /// Playing the results list instead is worse: search for a song and every
+    /// result is a version of that same song, so the queue fills with its own
+    /// remixes rather than anything to listen to next.
+    ///
+    /// So: play it now, and fill in behind it while it plays.
+    func playWithRadio(_ track: Track) {
+        play([track], startAt: 0)
+        guard PlaybackPrefs.shared.autoplay, PlaybackPrefs.shared.autoRadioQueue else { return }
+        guard !LocalMusic.isLocal(track.videoId), !track.videoId.isEmpty else { return }
+
+        Task { @MainActor in
+            let shelves = await YouTube.related(videoId: track.videoId)
+            // The person may have moved on while that was in flight; adding to
+            // a queue they have since replaced would be worse than doing nothing.
+            guard self.current?.videoId == track.videoId, self.queue.count == 1 else { return }
+            let fresh = shelves
+                .flatMap(\.items)
+                .filter { $0.browseId == nil }
+                .map(\.asTrack)
+                .filter { !$0.videoId.isEmpty && $0.videoId != track.videoId }
+            guard !fresh.isEmpty else { return }
+            self.queue.append(contentsOf: fresh)
+            self.originalQueue = self.queue
+        }
+    }
+
     /// Advance if there's somewhere to go. Returns false at the end of the
     /// queue so the caller can stop rather than sit there looking like it plays.
     @discardableResult

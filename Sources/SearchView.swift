@@ -224,7 +224,7 @@ struct SearchView: View {
         ForEach(suggestedSongs.prefix(6)) { song in
             SongRow(track: song, player: player) {
                 history.add(trimmed)
-                player.play([song], startAt: 0)
+                player.playWithRadio(song)
                 player.showFullPlayer = true
             }
             .padding(.leading, 16)
@@ -305,9 +305,12 @@ struct SearchView: View {
     }
 
     private var resultRows: some View {
-        ForEach(Array(results.enumerated()), id: \.element.id) { index, track in
+        ForEach(Array(results.enumerated()), id: \.element.id) { _, track in
             SongRow(track: track, player: player) {
-                player.play(results, startAt: index)
+                // Not the results list. Search for a song and every result is
+                // a version of that same song, so queueing them fills the queue
+                // with its own remixes instead of anything to hear next.
+                player.playWithRadio(track)
                 player.showFullPlayer = true
             }
             .padding(.leading, 16)
