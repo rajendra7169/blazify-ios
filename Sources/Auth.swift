@@ -67,6 +67,27 @@ final class Auth: ObservableObject {
         ]
     }
 
+    /// Fill in a name we are signed in without.
+    ///
+    /// A session restored from the keychain counts as signed in because the
+    /// cookie is there, whether or not the name was ever stored beside it: an
+    /// older build did not save one, and a single failed account_menu call left
+    /// it empty for good with nothing to try again. The result was somebody
+    /// signed in and greeted as Guest.
+    ///
+    /// Deliberately not called from `init`. Asking would reach back through
+    /// `Auth.shared` while that is still being constructed.
+    func refreshAccountNameIfMissing() {
+        guard isLoggedIn, (accountName ?? "").isEmpty else { return }
+        Task { @MainActor in
+            guard let info = await YouTube.accountInfo() else { return }
+            self.accountName = info.name
+            self.accountEmail = info.email
+            self.defaults.set(info.name, forKey: Keys.name)
+            self.defaults.set(info.email, forKey: Keys.email)
+        }
+    }
+
     /// Validate a freshly captured cookie via account_menu, then persist on success.
     func signIn(cookie: String, visitorData: String?, dataSyncId: String?) async -> Bool {
         self.cookie = cookie

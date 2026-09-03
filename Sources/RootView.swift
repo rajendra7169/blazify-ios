@@ -175,6 +175,8 @@ struct RootView: View {
             // Asked once the app has been opened on three separate days, and
             // never while anything is playing.
             StarPrompt.shared.onOpened(somethingIsPlaying: player.isPlaying)
+            // Signed in but nameless, from a session restored without one.
+            Auth.shared.refreshAccountNameIfMissing()
             safeBottom = UIApplication.shared.connectedScenes
                 .compactMap { ($0 as? UIWindowScene)?.keyWindow }
                 .first?.safeAreaInsets.bottom ?? 34
