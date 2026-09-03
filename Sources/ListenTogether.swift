@@ -37,7 +37,7 @@ final class ListenTogether: ObservableObject {
         case play(position: Double)
         case pause(position: Double)
         case seek(position: Double)
-        case changeTrack(Track, position: Double)
+        case changeTrack(Track, position: Double, playing: Bool)
     }
 
     private var task: URLSessionWebSocketTask?
@@ -336,6 +336,8 @@ final class ListenTogether: ObservableObject {
         guard !track.videoId.isEmpty else { return }
         applyingRemote = true
         defer { applyingRemote = false }
-        onRemote?(.changeTrack(track, position: Double(positionMs) / 1000))
+        // The room's position and whether it is paused both travel with the
+        // track. Both used to be dropped on the floor here.
+        onRemote?(.changeTrack(track, position: Double(positionMs) / 1000, playing: playing))
     }
 }

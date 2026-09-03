@@ -467,15 +467,27 @@ final class Player: ObservableObject {
             updateNowPlaying()
         case .seek(let position):
             seekSilently(to: position)
-        case .changeTrack(let track, let position):
+        case .changeTrack(let track, let position, let playing):
             guard track.videoId != current?.videoId else {
                 seekSilently(to: position)
                 return
             }
             queue = [track]
             index = 0
+            // The room is already part-way through this song. Starting at zero
+            // leaves a guest permanently behind by however long the host had
+            // been playing, and nothing here corrects drift afterwards.
+            joinAt = position
+            joinPaused = !playing
             loadCurrent()
         }
+    }
+
+    /// Read the pending start position and forget it, so a later song does not
+    /// inherit where an earlier one was joined.
+    private func takeJoinAt() -> Double {
+        defer { joinAt = 0 }
+        return joinAt
     }
 
     /// Seek without broadcasting it back to the room.
@@ -680,7 +692,7 @@ final class Player: ObservableObject {
             let dur = LocalMusic.shared.duration(for: videoId) ?? track.duration
             duration = dur
             isLoading = false
-            playStream(own, realDuration: dur)
+            playStream(own, realDuration: dur, resumeAt: takeJoinAt())
             warmLyrics(for: track, duration: dur)
             prefetchNext()
             return
@@ -689,7 +701,7 @@ final class Player: ObservableObject {
             let dur = Downloads.shared.duration(for: videoId) ?? track.duration
             duration = dur
             isLoading = false
-            playStream(local, realDuration: dur)
+            playStream(local, realDuration: dur, resumeAt: takeJoinAt())
             warmLyrics(for: track, duration: dur)
             prefetchNext()
             return
@@ -697,7 +709,7 @@ final class Player: ObservableObject {
         if let cached = AudioCache.shared.cachedURL(for: videoId), track.duration > 0 {
             duration = track.duration
             isLoading = false
-            playStream(cached, realDuration: track.duration)
+            playStream(cached, realDuration: track.duration, resumeAt: takeJoinAt())
             warmLyrics(for: track, duration: track.duration)
             prefetchNext()
             return
@@ -713,7 +725,7 @@ final class Player: ObservableObject {
                     return
                 }
                 self.duration = stream.duration
-                self.playStream(stream.url, realDuration: stream.duration)
+                self.playStream(stream.url, realDuration: stream.duration, resumeAt: self.takeJoinAt())
                 // Keep a copy so the next play needs no network.
                 let cacheable = Track(videoId: track.videoId, title: track.title,
                                       artist: track.artist, thumbnail: track.thumbnail,
@@ -753,6 +765,12 @@ final class Player: ObservableObject {
     ///
     /// Bounded, because a link that keeps being refused must not become an
     /// endless round of requests — three goes, then it is a real failure.
+    /// Where to start the next song, when a room says the rest of it is
+    /// already part-way through, and whether the room is paused there. Both are
+    /// cleared as soon as they are used.
+    private var joinAt: Double = 0
+    private var joinPaused = false
+
     private var reopenCount = 0
     private var reopenFor: String?
 
@@ -835,6 +853,9 @@ final class Player: ObservableObject {
             p.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600),
                    toleranceBefore: .zero, toleranceAfter: .zero)
         }
+        // A room can hand us a song it is not currently playing.
+        let paused = joinPaused
+        joinPaused = false
         applyAudioPrefs()
         // The single source of truth for the transport: whatever the player is
         // actually doing. Anything that pauses us — an interruption, a route
@@ -845,7 +866,7 @@ final class Player: ObservableObject {
         let target = resumePosition
         resumePosition = 0
         if target > 1, realDuration > target {
-            let wanted = playWhenReady
+            let wanted = playWhenReady && !paused
             playWhenReady = false
             p.seek(to: CMTime(seconds: target, preferredTimescale: 600)) { [weak self] _ in
                 guard let self else { return }
@@ -859,6 +880,13 @@ final class Player: ObservableObject {
             return
         }
         playWhenReady = false
+        if paused {
+            // Joined a room that is holding on this song. Load it, show it,
+            // and wait for the host rather than starting on our own.
+            isPlaying = false
+            updateNowPlaying()
+            return
+        }
         p.play()
         // Rate has to be set after play(), which resets it to 1.
         p.rate = Float(PlaybackPrefs.shared.speed)
