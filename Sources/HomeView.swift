@@ -55,7 +55,7 @@ struct HomeView: View {
                                 if section.isSongs {
                                     QuickPicksGrid(section: section, player: player)
                                 } else {
-                                    HomeRail(section: section) { tap($0) }
+                                    HomeRail(section: section) { tap($0, within: $1) }
                                 }
                             }
 
@@ -63,7 +63,7 @@ struct HomeView: View {
                                 if section.isSongs {
                                     QuickPicksGrid(section: section, player: player)
                                 } else {
-                                    HomeRail(section: section) { tap($0) }
+                                    HomeRail(section: section) { tap($0, within: $1) }
                                 }
                             }
 
@@ -126,14 +126,25 @@ struct HomeView: View {
         }
     }
 
-    private func tap(_ item: HomeItem) {
+    private func tap(_ item: HomeItem, within row: [HomeItem] = []) {
         // A playlist/album opens its detail; a bare song plays immediately.
-        if item.browseId != nil {
+        guard item.browseId == nil else {
             path.append(item)
-        } else if let vid = item.videoId, !vid.isEmpty {
-            player.play([item.asTrack], startAt: 0)
-            player.showFullPlayer = true
+            return
         }
+        guard let vid = item.videoId, !vid.isEmpty else { return }
+
+        // Queue the row it came from rather than the one card. Tapping the
+        // third song of a shelf and hearing it stop dead is the whole
+        // complaint: there was never a queue to move on to, and the radio
+        // that would have rescued it only runs once the queue empties, which
+        // for one song means immediately and audibly.
+        let songs = row.filter { $0.browseId == nil && !($0.videoId ?? "").isEmpty }
+        let start = songs.firstIndex { $0.videoId == vid } ?? 0
+        let tracks = songs.isEmpty ? [item.asTrack] : songs.map(\.asTrack)
+
+        player.play(tracks, startAt: songs.isEmpty ? 0 : start)
+        player.showFullPlayer = true
     }
 
     private func load(reshuffle: Bool = false) async {
@@ -292,7 +303,7 @@ struct HomeView: View {
                 if section.isSongs {
                     QuickPicksGrid(section: section, player: player)
                 } else {
-                    HomeRail(section: section) { tap($0) }
+                    HomeRail(section: section) { tap($0, within: $1) }
                 }
             }
         }
@@ -508,7 +519,9 @@ struct GreetingCard: View {
 struct HomeRail: View {
     @Environment(\.palette) private var palette
     let section: HomeSection
-    let onTap: (HomeItem) -> Void
+    /// The row is handed over with the card, so tapping one song can queue the
+    /// rest of what it was sitting in.
+    let onTap: (HomeItem, [HomeItem]) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -522,7 +535,7 @@ struct HomeRail: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     ForEach(section.items) { item in
-                        MusicCard(item: item) { onTap(item) }
+                        MusicCard(item: item) { onTap(item, section.items) }
                     }
                 }
                 .padding(.horizontal, 16)
