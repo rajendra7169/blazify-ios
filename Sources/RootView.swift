@@ -8,6 +8,9 @@ struct RootView: View {
     @ObservedObject private var theme = AppTheme.shared
     @ObservedObject private var look = LookFeel.shared
     @StateObject private var player = Player()
+    // A shared instance is observed, not owned; StateObject is for things a
+    // view creates.
+    @ObservedObject private var starPrompt = StarPrompt.shared
     @State private var tab: BlazeTab = LookFeel.shared.defaultTab.tab
     @Environment(\.colorScheme) private var scheme
 
@@ -169,6 +172,9 @@ struct RootView: View {
         .onAppear {
             performPendingRequest()
             PlayHistory.pruneOld()
+            // Asked once the app has been opened on three separate days, and
+            // never while anything is playing.
+            StarPrompt.shared.onOpened(somethingIsPlaying: player.isPlaying)
             safeBottom = UIApplication.shared.connectedScenes
                 .compactMap { ($0 as? UIWindowScene)?.keyWindow }
                 .first?.safeAreaInsets.bottom ?? 34
@@ -176,6 +182,13 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(
             for: UIApplication.willEnterForegroundNotification)) { _ in
             performPendingRequest()
+        }
+        .alert("Getting on with Blazify?", isPresented: $starPrompt.showing) {
+            Button("Star it") { starPrompt.open() }
+            Button("Later", role: .cancel) { starPrompt.dismiss() }
+            Button("No thanks", role: .destructive) { starPrompt.stop() }
+        } message: {
+            Text("It is made by one person and given away, with no ads and nothing tracked. A star on GitHub is most of how anyone else finds it.")
         }
         // Home Screen widget tiles arrive as blazify:// URLs.
         .onOpenURL { url in

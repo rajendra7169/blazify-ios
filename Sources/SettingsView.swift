@@ -20,6 +20,7 @@ struct SettingsView: View {
     @State private var showTogether = false
     @State private var showPrivacy = false
     @State private var showChangelog = false
+    @State private var showReport = false
     @State private var showLyrics = false
     @State private var showPlayerSettings = false
     @State private var showStreams = false
@@ -35,7 +36,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content, backup, integrations, appearance, equalizer }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content, backup, integrations, appearance, equalizer, report }
     }
 
     private struct Group: Identifiable {
@@ -94,6 +95,9 @@ struct SettingsView: View {
                 Row(icon: "info.circle", title: "About", subtitle: "Version and developer", action: .about),
                 Row(icon: "newspaper", title: "Changelog", subtitle: "What's new in each release",
                     action: .changelog),
+                Row(icon: "ladybug", title: "Report a problem",
+                    subtitle: "Something not working? Tell me about it",
+                    action: .report),
             ]),
         ]
     }
@@ -238,6 +242,22 @@ struct SettingsView: View {
             NavigationStack { EqualizerView(player: player).settingsMiniPlayer(player) }
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
+        }
+        .confirmationDialog(
+            "Report a problem",
+            isPresented: $showReport,
+            titleVisibility: .visible
+        ) {
+            // Email first: it is the only one of the three that asks nothing of
+            // somebody who just wants to say it is broken.
+            Button("Send it as an email") { BugReport.openEmail() }
+            Button("Open the issue tracker") { BugReport.openTracker() }
+            Button("Copy it to the clipboard") { BugReport.copyDetails() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            // Shown, not merely attached. Nothing about somebody's phone should
+            // leave without them having seen it first.
+            Text("Describe what happened and it goes with the details below, so nobody has to ask which version you are on.\n\n" + BugReport.details())
         }
         .sheet(isPresented: $showChangelog) {
             ChangelogView()
@@ -392,6 +412,7 @@ struct SettingsView: View {
             case .downloads: showDownloads = true
             case .storage: showStorage = true
             case .about: showAbout = true
+            case .report: showReport = true
             case .lookFeel: showLookFeel = true
             case .together: showTogether = true
             case .privacy: showPrivacy = true
