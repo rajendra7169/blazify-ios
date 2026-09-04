@@ -2,15 +2,16 @@ import Foundation
 import SwiftUI
 import UIKit
 
-/// Asking for a star, at most three times, and then never again.
+/// Asking for a star: once a day after the first launch, then weekly for two
+/// months, and then never again.
 ///
 /// The rules matter more than the feature. A prompt that keeps returning is how
 /// an app earns a bad word from somebody who actually liked it, so:
 ///
-/// - Days are counted by opening the app, not by the calendar since install.
-///   Somebody who installed it and forgot has not used it for three days.
-/// - Later means later, and the gap grows: three days, then a fortnight, then a
-///   month, after which it stops on its own.
+/// - The clock starts on first launch and the first ask is a day later, so an
+///   app opened once and abandoned never asks at all.
+/// - Later means later: a week each time, and after the last of them it stops
+///   on its own rather than carrying on.
 /// - No thanks means never, with no route back into the schedule.
 /// - It is never shown while something is playing, which the caller enforces,
 ///   because interrupting music to ask a favour is worse than not asking.
@@ -23,13 +24,14 @@ final class StarPrompt: ObservableObject {
 
     static let repo = "https://github.com/rajendra7169/blazify-ios"
 
-    private let daysBeforeFirstAsk = 3
-    private let laterGaps: [TimeInterval] = [15 * 86_400, 30 * 86_400]
-    private let maxAsks = 3
+    private let hoursBeforeFirstAsk: TimeInterval = 24 * 3_600
+    private let gapBetweenAsks: TimeInterval = 7 * 86_400
+
+    /// The first ask a day in, then one a week: the last lands just short of
+    /// two months.
+    private let maxAsks = 9
 
     private enum Key {
-        static let daysUsed = "starPromptDaysUsed"
-        static let lastDay = "starPromptLastDay"
         static let nextAt = "starPromptNextAt"
         static let asks = "starPromptAsks"
         static let done = "starPromptDone"
@@ -42,37 +44,34 @@ final class StarPrompt: ObservableObject {
 
     private init() {}
 
-    /// Records that the app was opened today, and shows the prompt if it is due.
-    /// Safe to call on every launch: the day counter moves at most once per
-    /// calendar day.
+    /// Records the launch and shows the prompt if it is due. Safe to call on
+    /// every launch: the schedule only moves when an ask is actually shown.
     func onOpened(somethingIsPlaying: Bool) {
         if defaults.bool(forKey: Key.done) || somethingIsPlaying { return }
 
-        let today = ISO8601DateFormatter.dayOnly.string(from: Date())
-        var daysUsed = defaults.integer(forKey: Key.daysUsed)
-        if defaults.string(forKey: Key.lastDay) != today {
-            daysUsed += 1
-            defaults.set(today, forKey: Key.lastDay)
-            defaults.set(daysUsed, forKey: Key.daysUsed)
-        }
-
-        guard daysUsed >= daysBeforeFirstAsk else { return }
-
         let asks = defaults.integer(forKey: Key.asks)
         guard asks < maxAsks else { return }
-        guard Date().timeIntervalSince1970 >= defaults.double(forKey: Key.nextAt) else { return }
+
+        let nextAt = defaults.double(forKey: Key.nextAt)
+        guard nextAt > 0 else {
+            // First launch. Start the clock and ask nothing yet — an app that
+            // begs for a star before it has played a song has not earned one.
+            defaults.set(Date().timeIntervalSince1970 + hoursBeforeFirstAsk, forKey: Key.nextAt)
+            return
+        }
+        guard Date().timeIntervalSince1970 >= nextAt else { return }
 
         defaults.set(asks + 1, forKey: Key.asks)
-        // The next gap is longer, and after the last one there is no next.
-        if let gap = laterGaps.indices.contains(asks) ? laterGaps[asks] : nil {
-            defaults.set(Date().timeIntervalSince1970 + gap, forKey: Key.nextAt)
-        } else {
+        // A week until the next, and after the last one there is no next.
+        if asks + 1 >= maxAsks {
             defaults.set(true, forKey: Key.done)
+        } else {
+            defaults.set(Date().timeIntervalSince1970 + gapBetweenAsks, forKey: Key.nextAt)
         }
         showing = true
     }
 
-    /// Later. It comes back once, further away, and then not at all.
+    /// Later. It comes back in a week, until the last one.
     func dismiss() {
         showing = false
     }
@@ -89,13 +88,4 @@ final class StarPrompt: ObservableObject {
             UIApplication.shared.open(url)
         }
     }
-}
-
-private extension ISO8601DateFormatter {
-    /// Just the calendar day, so "have they opened it today" is a string compare.
-    static let dayOnly: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withFullDate]
-        return f
-    }()
 }
