@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import UIKit
 
@@ -163,10 +164,32 @@ struct MarkdownBody: View {
         }
     }
 
+    /// Release notes, with the parts this cannot draw taken out.
+    ///
+    /// Notes are written for the releases page first, where GitHub renders
+    /// HTML, image badges and tables. None of that means anything here, which
+    /// knows only headings, bullets and links — so a download button arrived as
+    /// the literal text of its markdown and a `<div>` as the word "div".
+    /// Better to show the words and drop the scaffolding than to print the
+    /// scaffolding at somebody.
     private var lines: [String] {
-        text.components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        let badge = try? NSRegularExpression(pattern: #"\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)"#)
+        let image = try? NSRegularExpression(pattern: #"!\[[^\]]*\]\([^)]*\)"#)
+        let html = try? NSRegularExpression(pattern: "<[^>]+>")
+        return text.components(separatedBy: "\n").compactMap { raw -> String? in
+            var line = raw.trimmingCharacters(in: .whitespaces)
+            for expression in [badge, image, html].compactMap({ $0 }) {
+                let range = NSRange(location: 0, length: (line as NSString).length)
+                line = expression.stringByReplacingMatches(in: line, range: range, withTemplate: "")
+            }
+            line = line.trimmingCharacters(in: .whitespaces)
+            // Rules and table borders draw as rows of punctuation and say nothing.
+            let scaffolding = CharacterSet(charactersIn: "-=|: ")
+            if line.isEmpty || line.unicodeScalars.allSatisfy({ scaffolding.contains($0) }) {
+                return nil
+            }
+            return line
+        }
     }
 
     @ViewBuilder private func render(_ line: String) -> some View {
