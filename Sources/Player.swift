@@ -851,6 +851,18 @@ final class Player: ObservableObject {
             ? .timeDomain : .varispeed
 
         let p = AVPlayer(playerItem: item)
+        // Start when asked, rather than when iOS is confident it can play the
+        // whole thing through without stopping.
+        //
+        // Left to itself AVPlayer weighs how fast the stream arrives against
+        // how long the recording is, and simply waits — at rate zero, with no
+        // error and no failure — until it likes the odds. On a three minute
+        // song it never has to think about it. On a sixty-nine minute one over
+        // a throttled link it can decide the odds are never good enough, which
+        // looks exactly like a track that loaded and then refused to move: the
+        // artwork is there, the words are there, the scrubber drags, and the
+        // clock stays at 0:00 forever.
+        p.automaticallyWaitsToMinimizeStalling = false
         avPlayer = p
         // A reopened stream picks up where the refused one stopped. Starting a
         // twenty-minute recording again from the top would be a worse failure
@@ -879,8 +891,7 @@ final class Player: ObservableObject {
                 guard let self else { return }
                 self.currentTime = target
                 guard wanted else { return }
-                p.play()
-                p.rate = Float(PlaybackPrefs.shared.speed)
+                p.playImmediately(atRate: Float(PlaybackPrefs.shared.speed))
             }
             isPlaying = wanted
             updateNowPlaying()
@@ -894,9 +905,7 @@ final class Player: ObservableObject {
             updateNowPlaying()
             return
         }
-        p.play()
-        // Rate has to be set after play(), which resets it to 1.
-        p.rate = Float(PlaybackPrefs.shared.speed)
+        p.playImmediately(atRate: Float(PlaybackPrefs.shared.speed))
         isPlaying = true
         updateNowPlaying()
     }
@@ -931,6 +940,7 @@ final class Player: ObservableObject {
             item.audioTimePitchAlgorithm = PlaybackPrefs.shared.preservePitch
                 ? .timeDomain : .varispeed
             let player = AVPlayer(playerItem: item)
+            player.automaticallyWaitsToMinimizeStalling = false
             player.volume = self.avPlayer?.volume ?? 1
             // Buffer without making a sound.
             player.pause()
@@ -1024,6 +1034,7 @@ final class Player: ObservableObject {
         }
         fadeDuration = realDuration
         let incoming = AVPlayer(playerItem: item)
+        incoming.automaticallyWaitsToMinimizeStalling = false
         incoming.volume = 0
         fadePlayer = incoming
         incoming.play()

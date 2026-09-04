@@ -29,7 +29,7 @@ targets:
       path: Sources/Generated-Info.plist
       properties:
         CFBundleDisplayName: Blazify
-        CFBundleShortVersionString: "0.1"
+        CFBundleShortVersionString: "0.2"
         CFBundleVersion: "1"
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ne, hi]
@@ -49,7 +49,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rajendra.blazifyplayer
-        MARKETING_VERSION: "0.1"
+        MARKETING_VERSION: "0.2"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"   # iPhone only
         GENERATE_INFOPLIST_FILE: NO
@@ -72,14 +72,14 @@ targets:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Blazify
-        CFBundleShortVersionString: "0.1"
+        CFBundleShortVersionString: "0.2"
         CFBundleVersion: "1"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rajendra.blazifyplayer.widget
-        MARKETING_VERSION: "0.1"
+        MARKETING_VERSION: "0.2"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
