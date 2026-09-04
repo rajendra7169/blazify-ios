@@ -129,6 +129,7 @@ final class Player: ObservableObject {
         originalQueue = saved.tracks
         index = min(max(saved.index, 0), saved.tracks.count - 1)
         resumePosition = saved.position
+        resumeVideoId = saved.tracks[index].videoId
         // Fill the transport in now so the slider and times aren't blank before
         // the first tap.
         if let track = current {
@@ -138,7 +139,12 @@ final class Player: ObservableObject {
     }
 
     /// Where a restored session left off, applied once the stream is ready.
+    ///
+    /// It belongs to one song. Somebody who reopens the app and, without
+    /// touching the restored song, plays a different one must not have that
+    /// song start at the old one's position — so the id is kept and checked.
     private var resumePosition: Double = 0
+    private var resumeVideoId: String?
     /// Set when the load was triggered by the user pressing play, so the stream
     /// starts as soon as it's seeked instead of needing a second press.
     private var playWhenReady = false
@@ -863,8 +869,9 @@ final class Player: ObservableObject {
         attachObservers(to: p)
         // A session restored from disk resumes at its saved position, paused —
         // opening the app should never start music on its own.
-        let target = resumePosition
+        let target = current?.videoId == resumeVideoId ? resumePosition : 0
         resumePosition = 0
+        resumeVideoId = nil
         if target > 1, realDuration > target {
             let wanted = playWhenReady && !paused
             playWhenReady = false
