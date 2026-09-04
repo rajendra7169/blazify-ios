@@ -845,24 +845,34 @@ final class Player: ObservableObject {
             }
         }
 
+        // Nothing here ever gave up.
+        //
+        // The status handler answers `.readyToPlay` and `.failed` and ignores
+        // everything else, so an item that simply never becomes ready leaves
+        // the app waiting for it forever: no sound, no error, no message, the
+        // clock at 0:00. That is what a long recording looks like today, and
+        // whatever is really wrong with those, waiting in silence is the wrong
+        // way to fail. This says so, and says what the item was doing when it
+        // gave up, because that is the evidence the next fix needs.
+        let watched = item
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 45_000_000_000)
+            guard let self, self.avPlayer?.currentItem === watched,
+                  watched.status != .readyToPlay, self.currentTime < 1
+            else { return }
+            self.isLoading = false
+            let reason = watched.error?.localizedDescription
+                ?? "the stream never became ready"
+            self.lastError = "This track wouldn't start — \(reason). "
+                + "Long recordings are known to do this; please report it."
+        }
+
         // Playback speed keeps pitch by default (spectral is the good algorithm;
  // varispeed is the chipmunk one).
         item.audioTimePitchAlgorithm = PlaybackPrefs.shared.preservePitch
             ? .timeDomain : .varispeed
 
         let p = AVPlayer(playerItem: item)
-        // Start when asked, rather than when iOS is confident it can play the
-        // whole thing through without stopping.
-        //
-        // Left to itself AVPlayer weighs how fast the stream arrives against
-        // how long the recording is, and simply waits — at rate zero, with no
-        // error and no failure — until it likes the odds. On a three minute
-        // song it never has to think about it. On a sixty-nine minute one over
-        // a throttled link it can decide the odds are never good enough, which
-        // looks exactly like a track that loaded and then refused to move: the
-        // artwork is there, the words are there, the scrubber drags, and the
-        // clock stays at 0:00 forever.
-        p.automaticallyWaitsToMinimizeStalling = false
         avPlayer = p
         // A reopened stream picks up where the refused one stopped. Starting a
         // twenty-minute recording again from the top would be a worse failure
@@ -891,7 +901,8 @@ final class Player: ObservableObject {
                 guard let self else { return }
                 self.currentTime = target
                 guard wanted else { return }
-                p.playImmediately(atRate: Float(PlaybackPrefs.shared.speed))
+                p.play()
+                p.rate = Float(PlaybackPrefs.shared.speed)
             }
             isPlaying = wanted
             updateNowPlaying()
@@ -905,7 +916,9 @@ final class Player: ObservableObject {
             updateNowPlaying()
             return
         }
-        p.playImmediately(atRate: Float(PlaybackPrefs.shared.speed))
+        p.play()
+        // Rate has to be set after play(), which resets it to 1.
+        p.rate = Float(PlaybackPrefs.shared.speed)
         isPlaying = true
         updateNowPlaying()
     }
@@ -939,8 +952,11 @@ final class Player: ObservableObject {
             }
             item.audioTimePitchAlgorithm = PlaybackPrefs.shared.preservePitch
                 ? .timeDomain : .varispeed
+            // Ask for real buffer before this is handed over. Preparing early
+            // is only worth anything if there is something in it by the time
+            // the last song ends.
+            item.preferredForwardBufferDuration = 30
             let player = AVPlayer(playerItem: item)
-            player.automaticallyWaitsToMinimizeStalling = false
             player.volume = self.avPlayer?.volume ?? 1
             // Buffer without making a sound.
             player.pause()
@@ -1034,7 +1050,6 @@ final class Player: ObservableObject {
         }
         fadeDuration = realDuration
         let incoming = AVPlayer(playerItem: item)
-        incoming.automaticallyWaitsToMinimizeStalling = false
         incoming.volume = 0
         fadePlayer = incoming
         incoming.play()
@@ -1123,16 +1138,29 @@ final class Player: ObservableObject {
             forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
             queue: .main,
         ) { [weak self] time in
-            guard let self, !self.isSeeking else { return }
+            guard let self, player === self.avPlayer, !self.isSeeking else { return }
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
             self.considerScrobble()
             self.considerCrossfade()
             self.considerGapless()
         }
-        rateObs = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+        // `.initial` reads the truth at the moment this player takes over.
+        // Without it, attaching to a player that is already playing produces no
+        // callback at all — KVO fires on change — so the transport was left
+        // reading whatever the last writer happened to set.
+        rateObs = player.observe(\.timeControlStatus,
+                                 options: [.new, .initial]) { [weak self] observed, _ in
             DispatchQueue.main.async {
-                guard let self else { return }
-                let playing = player.timeControlStatus != .paused
+                // A player we have already handed over from fires one last
+                // callback as it stops. Clearing this observation cannot cancel
+                // a block that is already on its way to the main queue, so it
+                // arrives after the next song has started and reports the dead
+                // player's pause as ours. That is what left the button reading
+                // paused over music that was audibly playing — and, because
+                // preparing the next song is guarded on the transport, what
+                // then stopped anything being prepared at all.
+                guard let self, observed === self.avPlayer else { return }
+                let playing = observed.timeControlStatus != .paused
                 if self.isPlaying != playing {
                     self.isPlaying = playing
                     self.updateNowPlaying()
