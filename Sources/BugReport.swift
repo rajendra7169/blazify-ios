@@ -35,12 +35,15 @@ enum BugReport {
     private static func hardware() -> String {
         var info = utsname()
         uname(&info)
-        let identifier = withUnsafePointer(to: &info.machine) { pointer in
-            pointer.withMemoryRebound(to: CChar.self, capacity: MemoryLayout.size(ofValue: info.machine)) {
-                String(validatingUTF8: $0) ?? "unknown"
-            }
+        // One access to the tuple, and the length comes from the buffer rather
+        // than from a second read of the same field — asking `MemoryLayout` how
+        // big `info.machine` is while a pointer to it is already borrowed is two
+        // overlapping accesses, and Swift refuses to compile it.
+        let bytes = withUnsafeBytes(of: &info.machine) { raw in
+            Array(raw.prefix { $0 != 0 })
         }
-        return identifier
+        let name = String(decoding: bytes, as: UTF8.self)
+        return name.isEmpty ? "unknown" : name
     }
 
     private static func body() -> String {
