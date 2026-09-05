@@ -588,6 +588,48 @@ final class Player: ObservableObject {
 
     /// Advance once per track, whether triggered by the end notification or the
     /// time-observer backup.
+    /// The clock stopped at the end and nothing came to say so.
+    ///
+    /// Advancing the queue hangs entirely off AVPlayerItemDidPlayToEndTime, and
+    /// that notification does not always arrive. The end time is set from the
+    /// catalogue's own approxDurationMs, which is approximate: when it runs a
+    /// fraction past where the audio actually stops, the stream ends first, the
+    /// player sits waiting for data rather than pausing, and no notification is
+    /// posted at all. The song then rests at its final second with the pause
+    /// button still showing, for as long as anybody is willing to look at it.
+    ///
+    /// So the clock itself is watched. Sitting within a second of the end,
+    /// not moving, for two seconds together, is the end of the song whatever
+    /// the player believes.
+    private func considerStuckAtEnd() {
+        guard duration > 0, !crossfading, !endHandled else {
+            stuckSince = nil
+            return
+        }
+        guard currentTime >= duration - 1.0 else {
+            stuckSince = nil
+            lastTickTime = currentTime
+            return
+        }
+        if abs(currentTime - lastTickTime) > 0.05 {
+            lastTickTime = currentTime
+            stuckSince = Date()
+            return
+        }
+        guard let since = stuckSince else {
+            stuckSince = Date()
+            return
+        }
+        if Date().timeIntervalSince(since) >= 2 {
+            stuckSince = nil
+            trackEnded()
+        }
+    }
+
+    /// Where the clock last was, and when it stopped moving there.
+    private var lastTickTime: Double = 0
+    private var stuckSince: Date?
+
     private func trackEnded() {
         // A crossfade is already advancing the queue; the outgoing item hitting
         // its end must not advance it a second time.
@@ -1143,6 +1185,7 @@ final class Player: ObservableObject {
             self.considerScrobble()
             self.considerCrossfade()
             self.considerGapless()
+            self.considerStuckAtEnd()
         }
         // `.initial` reads the truth at the moment this player takes over.
         // Without it, attaching to a player that is already playing produces no
