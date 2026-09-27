@@ -476,6 +476,9 @@ struct GreetingCard: View {
     /// never offers the same thing twice in a row.
     @State private var speedPick: Track?
     @State private var forYouPick: Track?
+    /// YouTube's own mix for this account, fetched once so the For you button can
+    /// show a cover and start the mix on exactly that song.
+    @State private var supermix: [Track] = []
 
     private var greeting: (line1: String, line2: String) {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -525,6 +528,7 @@ struct GreetingCard: View {
             .padding(.top, 20)   // card sits higher; mascot hair reaches the wordmark
             .padding(.bottom, 8)
             .task(id: player.current?.videoId) { repick() }
+            .task(id: auth.isLoggedIn) { await loadSupermix() }
             .onAppear { repick() }
     }
 
@@ -534,7 +538,7 @@ struct GreetingCard: View {
     private var buttons: some View {
         HStack(spacing: 8) {
             if let pick = forYouPick {
-                cardButton(pick, label: "For you") { play(pick, from: forYouPool) }
+                cardButton(pick, label: "For you") { playForYou(pick) }
             }
             if let pick = speedPick {
                 cardButton(pick, label: nil) { play(pick, from: speedPool) }
@@ -596,17 +600,52 @@ struct GreetingCard: View {
             .withoutBlockedArtists()
     }
 
+    /// My Supermix when the account has one, and what has been played lately when
+    /// it does not — signed out there is no such mix, and the button still has to
+    /// start something.
     private var forYouPool: [Track] {
-        Array(PlayHistory.recent.prefix(40))
+        let mix = supermix.filter { !LocalMusic.isLocal($0.videoId) }.withoutBlockedArtists()
+        if !mix.isEmpty { return mix }
+        return Array(PlayHistory.recent.prefix(40))
             .filter { !LocalMusic.isLocal($0.videoId) }
             .withoutBlockedArtists()
     }
 
     private func repick() {
         // A pinned dial is a choice somebody made; it is offered in its own order
-        // rather than shuffled like the history behind it.
+        // rather than shuffled like the history behind it. So is the mix: YouTube
+        // put it in that order for this account.
         speedPick = dial.songs.first ?? speedPool.randomElement()
-        forYouPick = forYouPool.randomElement()
+        forYouPick = supermix.first ?? forYouPool.randomElement()
+    }
+
+    /// The mix, from the song on the cover.
+    private func playForYou(_ pick: Track) {
+        let pool = forYouPool
+        let start = pool.firstIndex { $0.videoId == pick.videoId } ?? 0
+        player.play(pool.isEmpty ? [pick] : pool, startAt: start)
+        // Next time the card offers the song after this one, so tapping it twice
+        // does not start the same mix in the same place.
+        if !supermix.isEmpty {
+            supermix = Array(supermix.dropFirst(start + 1)) + Array(supermix.prefix(start + 1))
+        }
+        repick()
+    }
+
+    /// Asked for once per sign-in. It is a whole queue of songs, and the card only
+    /// needs it when somebody presses the button — so it is fetched quietly and
+    /// the history stands in until it lands.
+    private func loadSupermix() async {
+        guard auth.isLoggedIn else {
+            supermix = []
+            repick()
+            return
+        }
+        guard supermix.isEmpty else { return }
+        let mix = await YouTube.mix(playlistId: YouTube.supermixPlaylistId)
+        guard !mix.isEmpty else { return }
+        supermix = mix
+        repick()
     }
 
     private func play(_ track: Track, from pool: [Track]) {

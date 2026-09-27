@@ -588,6 +588,99 @@ enum YouTube {
         return out
     }
 
+    /// YouTube Music's "My Supermix": the one mix drawn from all of a person's
+    /// listening at once, so Hindi, English and Nepali favourites play side by
+    /// side instead of one corner of their taste.
+    ///
+    /// The id is not the person's own — YouTube fills it from whoever is signed
+    /// in. Signed out it plays a general mix, which is why the caller falls back
+    /// to what has actually been played here.
+    static let supermixPlaylistId = "RDTMAK5uy_kset8DisdE7LSD4TNjEVvrKRTmG7a56sY"
+
+    /// The songs of a watch mix, in the order YouTube queued them.
+    static func mix(playlistId: String) async -> [Track] {
+        guard !playlistId.isEmpty else { return [] }
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
+        if let visitor { client["visitorData"] = visitor }
+        let nextURL = "https://music.youtube.com/youtubei/v1/next?prettyPrint=false"
+        // Signed in is the whole point of this mix, so the request carries the
+        // account: the same id answers a stranger with a general mix.
+        guard let json = await post(nextURL, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor,
+                                    body: ["context": ["client": client],
+                                           "playlistId": playlistId],
+                                    login: true)
+        else { return [] }
+
+        var out: [Track] = []
+        var seen = Set<String>()
+        collectPanelTracks(json, into: &out, seen: &seen)
+        return out
+    }
+
+    /// The songs of a watch queue (`playlistPanelVideoRenderer`), which is how a
+    /// mix answers — not the list rows every other screen here is built from.
+    private static func collectPanelTracks(_ node: Any, into out: inout [Track],
+                                           seen: inout Set<String>) {
+        if let dict = node as? [String: Any] {
+            if let r = dict["playlistPanelVideoRenderer"] as? [String: Any] {
+                if let vid = r["videoId"] as? String, !vid.isEmpty, seen.insert(vid).inserted {
+                    let byline = runsJoined(r["longBylineText"])
+                    let track = Track(videoId: vid,
+                                      title: runsFirst(r["title"]),
+                                      // "Artist • Album • 1.2M plays": the name is
+                                      // the first segment of it.
+                                      artist: byline.components(separatedBy: " • ").first?
+                                          .trimmingCharacters(in: .whitespaces) ?? byline,
+                                      thumbnail: panelThumb(r["thumbnail"]),
+                                      duration: seconds(runsFirst(r["lengthText"])),
+                                      artistId: panelArtistId(r["longBylineText"]),
+                                      explicit: deepContains(r["badges"], "MUSIC_EXPLICIT_BADGE"),
+                                      video: deepString(r, key: "musicVideoType")
+                                          .map { $0 != "MUSIC_VIDEO_TYPE_ATV" })
+                    if ContentPrefs.allows(track) { out.append(track) }
+                }
+                return
+            }
+            for (_, v) in dict { collectPanelTracks(v, into: &out, seen: &seen) }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectPanelTracks(v, into: &out, seen: &seen) }
+        }
+    }
+
+    /// A watch queue's thumbnails sit one level shallower than a shelf's.
+    private static func panelThumb(_ obj: Any?) -> String {
+        guard let thumbs = (obj as? [String: Any])?["thumbnails"] as? [[String: Any]]
+        else { return musicThumb(obj) }
+        let raw = thumbs.last?["url"] as? String ?? ""
+        if let r = raw.range(of: "=w[0-9]+-h[0-9]+", options: .regularExpression) {
+            return raw.replacingCharacters(in: r, with: "=w544-h544")
+        }
+        return raw
+    }
+
+    private static func panelArtistId(_ obj: Any?) -> String? {
+        guard let runs = (obj as? [String: Any])?["runs"] as? [[String: Any]] else { return nil }
+        for run in runs {
+            if let nav = run["navigationEndpoint"] as? [String: Any],
+               let browse = nav["browseEndpoint"] as? [String: Any],
+               let id = browse["browseId"] as? String, id.hasPrefix("UC") {
+                return id
+            }
+        }
+        return nil
+    }
+
+    /// "3:47" as seconds; 0 when there is no length to read.
+    private static func seconds(_ text: String) -> Double {
+        let parts = text.split(separator: ":").compactMap { Double($0) }
+        guard !parts.isEmpty else { return 0 }
+        return parts.reduce(0) { $0 * 60 + $1 }
+    }
+
     /// Every carousel shelf anywhere under this node, in order.
     private static func collectShelves(_ node: Any, into out: inout [HomeSection]) {
         if let dict = node as? [String: Any] {
