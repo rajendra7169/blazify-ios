@@ -472,10 +472,11 @@ struct GreetingCard: View {
     @ObservedObject private var dial = SpeedDial.shared
     /// The card can start something playing, so it needs the player.
     @ObservedObject var player: Player
-    /// Which song each button is offering. One pick per button, so pressing one
-    /// never moves the other.
-    @StateObject private var speedPick = CardPick()
-    @StateObject private var forYouPick = CardPick()
+    /// Which song each button is offering. One cover per button, so pressing one
+    /// never moves the other. The running order behind them is worked out in
+    /// `CardOrder`, which is tested.
+    @State private var speedCover: String?
+    @State private var forYouCover: String?
     /// YouTube's own mix for this account, fetched once so the For you button can
     /// show a cover and start the mix on exactly that song.
     @State private var supermix: [Track] = []
@@ -564,14 +565,14 @@ struct GreetingCard: View {
     /// `clear` is the room before the mascot: the label shrinks to fit rather than
     /// pushing the speed dial under her.
     private func buttons(clear: CGFloat) -> some View {
-        let forYou = forYouPick.order(forYouPool)
-        let speed = speedPick.order(speedPool)
+        let forYou = CardOrder.order(forYouPool, id: \.videoId, from: forYouCover)
+        let speed = CardOrder.order(speedPool, id: \.videoId, from: speedCover)
         return HStack(spacing: 8) {
             if let cover = forYou.first {
-                cardButton(cover, label: "For you") { play(forYou, stepping: forYouPick) }
+                cardButton(cover, label: "For you") { play(forYou, cover: $forYouCover) }
             }
             if let cover = speed.first {
-                cardButton(cover, label: nil) { play(speed, stepping: speedPick) }
+                cardButton(cover, label: nil) { play(speed, cover: $speedCover) }
             }
         }
         .frame(maxWidth: clear, alignment: .leading)
@@ -649,10 +650,10 @@ struct GreetingCard: View {
     /// it up in a list that may have moved on since it was drawn, which is how
     /// this used to play one song while showing another. Afterwards the cover
     /// steps to the next song in the same order, and only this button's does.
-    private func play(_ order: [Track], stepping pick: CardPick) {
+    private func play(_ order: [Track], cover: Binding<String?>) {
         guard !order.isEmpty else { return }
         player.play(order, startAt: 0)
-        pick.step(to: order.dropFirst().first?.videoId)
+        cover.wrappedValue = CardOrder.next(after: order, id: \.videoId)
     }
 
     /// Asked for once per sign-in. It is a whole queue of songs, and the card only
@@ -667,39 +668,6 @@ struct GreetingCard: View {
         let mix = await YouTube.mix(playlistId: YouTube.supermixPlaylistId)
         guard !mix.isEmpty else { return }
         await MainActor.run { supermix = mix }
-    }
-}
-
-/// Which song a greeting-card button starts with.
-///
-/// Every song is given a fixed random place the first time it is seen, so the
-/// order holds when its list reloads; a step moves the cover to the next song in
-/// that order. One of these per button, which is what keeps pressing one from
-/// moving the other — the same arrangement the Android card uses.
-final class CardPick: ObservableObject {
-    @Published private(set) var cover: String?
-
-    private var places: [String: Double] = [:]
-
-    private func place(_ id: String) -> Double {
-        if let known = places[id] { return known }
-        let fresh = Double.random(in: 0..<1)
-        places[id] = fresh
-        return fresh
-    }
-
-    /// `items` in their fixed order, starting from the cover song, or from where
-    /// it was. The song on the button is always the first of what this returns.
-    func order(_ items: [Track]) -> [Track] {
-        let sorted = items.sorted { place($0.videoId) < place($1.videoId) }
-        guard let cover else { return sorted }
-        let coverPlace = place(cover)
-        let start = sorted.firstIndex { place($0.videoId) >= coverPlace } ?? 0
-        return Array(sorted[start...]) + Array(sorted[..<start])
-    }
-
-    func step(to next: String?) {
-        if let next { cover = next }
     }
 }
 
