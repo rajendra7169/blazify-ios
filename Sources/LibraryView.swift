@@ -15,6 +15,8 @@ struct LibraryView: View {
     @State private var loading = false
     @State private var route: LibraryRoute?
     @State private var importingSpotify = false
+    @State private var showAccount = false
+    @State private var showLogin = false
 
     private let longRatio: CGFloat = 2.9    // full-width banners
     private let boxRatio: CGFloat = 1.5     // paired cards
@@ -24,7 +26,7 @@ struct LibraryView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    Spacer().frame(height: 8)
+                    header
 
                     banner(title: "Liked", subtitle: "\(likedTracks.count) songs",
                            thumbs: art(likedTracks),
@@ -90,23 +92,60 @@ struct LibraryView: View {
                 .playerBottomPadding()
             }
             .background(palette.scaffold.ignoresSafeArea())
-            .navigationTitle("Library")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { importingSpotify = true } label: {
-                        Image(systemName: "square.and.arrow.down")
-                            .foregroundStyle(palette.onSurface)
-                    }
-                    .accessibilityLabel("Import from Spotify")
-                }
-            }
+            // The header is drawn in the page, as it is on Android: the title, the
+            // Spotify pill and the account's own photo on one row.
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
         }
-        .sheet(isPresented: $importingSpotify) {
-            SpotifyImportSheet(player: player, onImported: { Task { await load() } })
+        .fullScreenCover(isPresented: $importingSpotify) {
+            SpotifyImportDialog(player: player, onImported: { Task { await load() } })
                 .environment(\.palette, palette)
         }
+        .fullScreenCover(isPresented: $showAccount) {
+            AccountPopup(player: player, isPresented: $showAccount)
+                .presentationBackground(.clear)
+        }
+        .sheet(isPresented: $showLogin) { LoginView() }
         .task(id: auth.isLoggedIn) { await load() }
+    }
+
+    /// Title, the Spotify pill and the account photo — the Android Library's own
+    /// top row, which this screen had only half of.
+    private var header: some View {
+        HStack(spacing: 12) {
+            Text("Library")
+                .font(.blaze(28, .bold))
+                .foregroundStyle(palette.onSurface)
+
+            Spacer(minLength: 0)
+
+            Button { importingSpotify = true } label: {
+                HStack(spacing: 8) {
+                    SpotifyMark()
+                        .frame(width: 20, height: 20)
+                    Text("Import from Spotify")
+                        .font(.blaze(13, .semibold))
+                        .foregroundStyle(palette.onSurface)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(palette.onSurface.opacity(0.06))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                if auth.isLoggedIn { showAccount = true } else { showLogin = true }
+            } label: {
+                AccountAvatar(size: 32)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
     }
 
     /// Cover URLs for a card's collage. Resolved rather than raw: a stored

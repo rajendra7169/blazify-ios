@@ -9,7 +9,7 @@ private let spotifyGreen = Color(hex: 0x1ED760)
 /// travel from Spotify's mark to Blazify's, and the count says how far along it
 /// is. At the end it says plainly how many were found and how many were not,
 /// rather than leaving somebody to count.
-struct SpotifyImportSheet: View {
+struct SpotifyImportDialog: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var player: Player
@@ -28,67 +28,77 @@ struct SpotifyImportSheet: View {
     private var looksRight: Bool { SpotifyPlaylist.parseLink(link) != nil }
 
     var body: some View {
-        VStack(spacing: 16) {
-            TravellingSongs(
-                running: running,
-                finished: outcome != nil,
-                fraction: total > 0 ? Double(done) / Double(total) : 0)
+        ZStack {
+            // Tapping away closes it, unless the work is already under way: half of
+            // it is network calls that cannot be taken back.
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .onTapGesture { if !running { dismiss() } }
 
-            Text("Import from Spotify")
-                .font(.blaze(22, .bold))
-                .foregroundStyle(palette.onSurface)
+            VStack(spacing: 14) {
+                TravellingSongs(
+                    running: running,
+                    finished: outcome != nil,
+                    fraction: total > 0 ? Double(done) / Double(total) : 0)
 
-            if let result = outcome {
-                finished(result)
-            } else if running {
-                progress
-            } else {
-                form
+                Text("Import from Spotify")
+                    .font(.blaze(22, .bold))
+                    .foregroundStyle(palette.onSurface)
+                    .multilineTextAlignment(.center)
+
+                if let result = outcome {
+                    finished(result)
+                } else if running {
+                    progress
+                } else {
+                    form
+                }
+
+                buttons.padding(.top, 2)
             }
-
-            buttons
+            .padding(24)
+            .frame(maxWidth: 360)
+            .background(palette.surfaceHigh)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .shadow(color: .black.opacity(0.45), radius: 24, y: 10)
+            .padding(.horizontal, 24)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity)
-        .presentationBackground(.regularMaterial)
-        .presentationDetents([.medium, .large])
-        // Half the work is network calls that cannot be taken back; closing the
-        // sheet mid-import is refused rather than left running invisibly.
-        .interactiveDismissDisabled(running)
+        .presentationBackground(.clear)
     }
 
     // MARK: - The three states
 
     private var form: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: "link")
-                    .foregroundStyle(palette.onSurfaceVariant)
-                TextField("Spotify playlist link", text: $link)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .foregroundStyle(palette.onSurface)
-                    .onChange(of: link) { failure = nil }
-                if link.isEmpty {
-                    // The clipboard is read on the tap, never while drawing: a
-                    // body that reads it puts the system's paste notice on screen
-                    // every time the view refreshes.
-                    Button("Paste") {
-                        if let pasted = UIPasteboard.general.string { link = pasted }
+            VStack(spacing: 8) {
+                HStack(spacing: 14) {
+                    Image(systemName: "link.badge.plus")
+                        .font(.system(size: 18))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                    TextField("Spotify playlist link", text: $link)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .font(.blaze(16))
+                        .foregroundStyle(palette.onSurface)
+                        .onChange(of: link) { failure = nil }
+                    if link.isEmpty {
+                        // The clipboard is read on the tap, never while drawing: a
+                        // body that reads it puts the system's paste notice on screen
+                        // every time the view refreshes.
+                        Button("Paste") {
+                            if let pasted = UIPasteboard.general.string { link = pasted }
+                        }
+                        .font(.blaze(13, .semibold))
+                        .foregroundStyle(palette.accent)
                     }
-                    .font(.blaze(13, .semibold))
-                    .foregroundStyle(palette.accent)
                 }
+                Rectangle()
+                    .fill(!link.isEmpty && !looksRight
+                          ? Color.red.opacity(0.7) : palette.onSurface.opacity(0.35))
+                    .frame(height: 1)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(palette.onSurface.opacity(0.08))
-            .clipShape(Capsule())
-            .overlay(
-                Capsule().stroke(
-                    !link.isEmpty && !looksRight ? Color.red.opacity(0.7) : .clear,
-                    lineWidth: 1))
+            .padding(.top, 4)
 
             if let failure {
                 note(failure, color: .red)
@@ -129,37 +139,35 @@ struct SpotifyImportSheet: View {
     }
 
     private var buttons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
             if let result = outcome {
                 if !result.songs.isEmpty {
-                    pill("Play", filled: false) {
+                    textButton("Play", enabled: true) {
                         player.play(result.songs, startAt: 0)
                         dismiss()
                     }
                 }
-                pill("Done", filled: true) { dismiss() }
+                textButton("OK", enabled: true) { dismiss() }
             } else {
-                pill("Cancel", filled: false) { dismiss() }
-                    .disabled(running)
-                    .opacity(running ? 0.5 : 1)
-                pill("Import", filled: true) { start() }
-                    .disabled(!looksRight || running || !auth.isLoggedIn)
-                    .opacity(!looksRight || running || !auth.isLoggedIn ? 0.5 : 1)
+                textButton("Cancel", enabled: !running) { dismiss() }
+                textButton("Import", enabled: looksRight && !running && auth.isLoggedIn) { start() }
             }
         }
     }
 
-    private func pill(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
+    /// The flat text buttons the Android dialogs use, in the corner of the card.
+    private func textButton(_ title: String, enabled: Bool,
+                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.blaze(15, .semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(filled ? palette.accent : palette.onSurface.opacity(0.10))
-                .foregroundStyle(filled ? .black : palette.onSurface)
-                .clipShape(Capsule())
+                .foregroundStyle(enabled ? palette.accent : palette.onSurfaceVariant.opacity(0.5))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private func note(_ text: String, color: Color? = nil) -> some View {
@@ -285,7 +293,7 @@ private struct TravellingSongs: View {
 }
 
 /// Spotify's mark, drawn rather than shipped: three waves on a green circle.
-private struct SpotifyMark: View {
+struct SpotifyMark: View {
     var body: some View {
         Canvas { context, canvas in
             let side = min(canvas.width, canvas.height)

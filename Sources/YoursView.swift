@@ -23,10 +23,15 @@ struct YoursView: View {
     @State private var trendingSongs: [Track] = []
     @State private var trendingArtists: [HomeItem] = []
     /// Fresh favourites: the last month's most-played, minus the all-time top.
+    ///
+    /// Songs of your own are left out. They have no catalogue art and no radio
+    /// behind them, so a rail of them looked like the Downloads list with the
+    /// covers missing — which is exactly what it was.
     private var recommended: [Track] {
         let top = Set(PlayHistory.mostPlayed(.all, limit: 6).map(\.videoId))
         return PlayHistory.mostPlayed(.month1, limit: 20)
-            .filter { !top.contains($0.videoId) }
+            .filter { !top.contains($0.videoId) && !LocalMusic.isLocal($0.videoId) }
+            .withoutBlockedArtists()
             .prefix(15).map { $0 }
     }
 
@@ -126,10 +131,9 @@ struct YoursView: View {
             Button {
                 if auth.isLoggedIn { showAccount = true } else { showLogin = true }
             } label: {
-                Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
-                    .font(.blaze(26))
-                    .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
+                AccountAvatar(size: 32)
             }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -143,7 +147,8 @@ struct YoursView: View {
             LazyHStack(spacing: 12) {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { i, track in
                     BlazeMusicCard(title: track.title, subtitle: track.artist,
-                                   thumbnail: track.thumbnail) {
+                                   thumbnail: track.artURL(size: 544)?.absoluteString
+                                       ?? track.thumbnail) {
                         player.play(tracks, startAt: i)
                         player.showFullPlayer = true
                     }
@@ -224,7 +229,8 @@ struct YoursView: View {
                 ForEach(Array(0..<max(songs.count, people.count)), id: \.self) { i in
                     if i < songs.count {
                         BlazeMusicCard(title: songs[i].title, subtitle: songs[i].artist,
-                                       thumbnail: songs[i].thumbnail) {
+                                       thumbnail: songs[i].artURL(size: 544)?.absoluteString
+                                           ?? songs[i].thumbnail) {
                             player.play(songs, startAt: i)
                             player.showFullPlayer = true
                         }

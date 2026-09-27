@@ -141,13 +141,20 @@ struct VideoArtView: UIViewRepresentable {
         private let tolerance: Double = 0.35
 
         func attach(to view: PlayerContainerView, video: SongVideo) {
-            let player = AVPlayer(url: video.url)
+            // The same user-agent the song is fetched with. Without it googlevideo
+            // refuses the stream and the picture stays black — the song plays on,
+            // so there is nothing on screen to say what went wrong.
+            let asset = AVURLAsset(url: video.url,
+                                   options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
+            let player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
             player.isMuted = true            // the song is the sound
             player.actionAtItemEnd = .none
             self.player = player
             self.current = video
             view.playerLayer.player = player
             view.playerLayer.videoGravity = .resizeAspectFill
+            // Nothing is heard from it, so it starts the moment it can.
+            player.play()
 
             // A cut of its own just loops; there is nothing to stay in step with.
             NotificationCenter.default.addObserver(

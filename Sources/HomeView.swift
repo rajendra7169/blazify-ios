@@ -490,28 +490,28 @@ struct GreetingCard: View {
         }
     }
 
+    /// How wide the mascot's half of the card is. The words run under her and fade
+    /// out; the buttons stop before her, which is what keeps them inside the card.
+    private let photoWidth: CGFloat = 200
+
     var body: some View {
         RoundedRectangle(cornerRadius: 20)
             .fill(palette.heroGradient)
             .frame(height: 160)
-            .overlay(alignment: .topLeading) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(greeting.line1)
-                        .font(.system(size: 24, weight: .bold))
-                    Text(greeting.line2)
-                        .font(.system(size: 24, weight: .bold))
-                    Text(auth.accountName ?? "Music Lover")
-                        .font(.system(size: 22, weight: .bold))
-                        .opacity(0.95)
-                        .lineLimit(1)
-                        .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1)
-                        .padding(.top, 2)
-                    buttons.padding(.top, 8)
+            .overlay(alignment: .leading) {
+                GeometryReader { geo in
+                    let clear = max(geo.size.width - photoWidth - 20, 120)
+                    VStack(alignment: .leading, spacing: 6) {
+                        // Long words stay on their line and fade out behind her
+                        // rather than wrapping, exactly as they do on Android.
+                        words(geo.size.width)
+                        buttons(clear: clear).padding(.top, 8)
+                    }
+                    // Sits on the accent gradient, so it stays white in both themes.
+                    .foregroundStyle(.white)
+                    .padding(.leading, 20)
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
                 }
-                // Sits on the accent gradient, so it stays white in both themes.
-                .foregroundStyle(.white)
-                .padding(20)
-                .frame(maxWidth: 250, alignment: .leading)
             }
             // Mascot: taller than the card so it overflows the top; bleeds off the
             // right edge; drop shadow gives the 3D "popping out" look.
@@ -532,10 +532,40 @@ struct GreetingCard: View {
             .onAppear { repick() }
     }
 
+    /// The greeting, then the name — each on one line, fading out where the
+    /// mascot begins instead of wrapping onto another line.
+    private func words(_ cardWidth: CGFloat) -> some View {
+        let fadeFrom = max(cardWidth - photoWidth - 4, 100)
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(greeting.line1)
+                .font(.system(size: 24, weight: .bold))
+            Text(greeting.line2)
+                .font(.system(size: 24, weight: .bold))
+            Text(auth.accountName ?? "Music Lover")
+                .font(.system(size: 22, weight: .bold))
+                .opacity(0.95)
+                .padding(.top, 2)
+        }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+        .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1)
+        .frame(width: cardWidth - 20, alignment: .leading)
+        .mask(
+            LinearGradient(stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: fadeFrom / (cardWidth - 20)),
+                .init(color: .clear, location: min((fadeFrom + 40) / (cardWidth - 20), 1)),
+            ], startPoint: .leading, endPoint: .trailing),
+        )
+    }
+
     /// Two small covers that play something, where the tagline was — so the card
     /// keeps its height. A cover says "this plays"; a worded pill read as a label
     /// nobody would think to press.
-    private var buttons: some View {
+    ///
+    /// `clear` is the room before the mascot: the label shrinks to fit rather than
+    /// pushing the speed dial under her.
+    private func buttons(clear: CGFloat) -> some View {
         HStack(spacing: 8) {
             if let pick = forYouPick {
                 cardButton(pick, label: "For you") { playForYou(pick) }
@@ -544,6 +574,7 @@ struct GreetingCard: View {
                 cardButton(pick, label: nil) { play(pick, from: speedPool) }
             }
         }
+        .frame(maxWidth: clear, alignment: .leading)
     }
 
     /// The cover, then the words — or the cover on its own, which is the whole
@@ -574,7 +605,8 @@ struct GreetingCard: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                        .fixedSize()
+                        // On a narrow phone the words give way before the button does.
+                        .minimumScaleFactor(0.7)
                         .padding(.leading, 8)
                         .padding(.trailing, 12)
                 }

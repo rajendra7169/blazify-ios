@@ -203,43 +203,47 @@ struct SearchView: View {
         let seed = Color(hex: mood.colorARGB & 0xFFFFFF)
         let covers = browseArt.art[BrowseArt.key(mood)] ?? []
         return Button { moodRoute = mood } label: {
-            ZStack(alignment: .bottomLeading) {
+            ZStack(alignment: .topLeading) {
                 LinearGradient(colors: [seed.mixed(with: .white, 0.24), seed,
                                         seed.mixed(with: .black, 0.18)],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
 
-                // Drawn back to front: the last one leans furthest away.
-                ZStack {
+                // The fan hangs off the bottom-right corner, the first card in front
+                // and leaning out, the others spread behind it. Drawn back to front,
+                // and trimmed by the tile's own corner.
+                ZStack(alignment: .bottomTrailing) {
+                    Color.clear
                     ForEach(Array(covers.prefix(3).enumerated()).reversed(), id: \.offset) { i, cover in
                         let place = Self.fan[i]
                         RemoteImage(url: URL(string: cover), size: 56) { Color.black.opacity(0.15) }
                             .frame(width: 56, height: 56)
                             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
                             .rotationEffect(.degrees(place.angle))
                             .offset(x: place.x, y: place.y)
-                            .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
 
                 Text(mood.title)
                     .font(.blaze(14, .bold))
                     .foregroundStyle(seed.isLight ? .black : .white)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
+                    .frame(maxWidth: covers.isEmpty ? .infinity : 110, alignment: .leading)
                     .padding(14)
             }
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .bottomLeading)
+            .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
     }
 
-    /// Where each fanned cover sits and how far it leans.
+    /// Where each fanned cover sits and how far it leans, measured from the tile's
+    /// bottom-right corner — the same places the Android tiles use.
     private static let fan: [(x: CGFloat, y: CGFloat, angle: Double)] = [
-        (x: 14, y: -14, angle: 16),
-        (x: -14, y: -10, angle: 2),
-        (x: -40, y: -16, angle: -12),
+        (x: 14, y: 14, angle: 16),
+        (x: -14, y: 10, angle: 2),
+        (x: -40, y: 16, angle: -12),
     ]
 
     // MARK: Typing — songs first, then queries

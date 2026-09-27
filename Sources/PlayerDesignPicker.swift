@@ -625,13 +625,28 @@ private struct CassettePreview: View {
 
 private struct VideoArtPreview: View {
     @ObservedObject var player: Player
+    /// The same lookup the player itself uses, so the mock shows the moving
+    /// picture rather than a still with a play mark stamped on it. The answer is
+    /// cached per song, so asking here costs nothing extra.
+    @StateObject private var videoLoader = SongVideoLoader()
 
     var body: some View {
         ZStack {
             GeometryReader { g in
-                RemoteImage(url: player.current?.artURL(size: 720)) { ArtPlaceholder() }
-                    .frame(width: g.size.width, height: g.size.height)
-                    .clipped()
+                ZStack {
+                    RemoteImage(url: player.current?.artURL(size: 720)) { Color.black }
+                        .frame(width: g.size.width, height: g.size.height)
+                        .clipped()
+
+                    if let v = videoLoader.video {
+                        VideoArtView(video: v,
+                                     position: player.currentTime,
+                                     isPlaying: player.isPlaying)
+                            .frame(width: g.size.width, height: g.size.height)
+                            .clipped()
+                    }
+                }
+                .animation(.easeInOut(duration: 0.5), value: videoLoader.video)
             }
 
             LinearGradient(stops: [
@@ -640,12 +655,6 @@ private struct VideoArtPreview: View {
                 .init(color: .black.opacity(0.55), location: 0.65),
                 .init(color: .black.opacity(0.92), location: 1.0),
             ], startPoint: .top, endPoint: .bottom)
-
-            // A still cannot show that it moves, so it is marked as a video.
-            Image(systemName: "play.rectangle.fill")
-                .font(.system(size: 26))
-                .foregroundStyle(.white.opacity(0.85))
-                .shadow(color: .black.opacity(0.6), radius: 4)
 
             VStack(spacing: 0) {
                 Text("Now Playing")
@@ -662,6 +671,16 @@ private struct VideoArtPreview: View {
             .padding(.horizontal, 14)
             .padding(.top, 34)
         }
+        .task(id: player.current?.videoId) { loadVideo() }
+        .onAppear { loadVideo() }
+    }
+
+    /// The same rule the player uses: a video is heavy, so it waits for an
+    /// unmetered connection unless it has been asked for on mobile data.
+    private func loadVideo() {
+        let allowed = Reachability.shared.isUnmetered || PlaybackPrefs.shared.videoOnMobile
+        let height = Reachability.shared.isUnmetered ? 720 : 360
+        videoLoader.load(for: player.current, allowed: allowed, maxHeight: height)
     }
 }
 

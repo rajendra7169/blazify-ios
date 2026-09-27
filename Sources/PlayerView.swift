@@ -243,18 +243,26 @@ struct PlayerView: View {
     @ViewBuilder private var videoArtBackground: some View {
         GeometryReader { geo in
             ZStack {
+                // The artwork fills the same place, always: while the video is
+                // being found, while it is loading, and for a song that has none.
+                // It is the cover underneath — never the app's own flame, which is
+                // what a song's picture is not.
+                RemoteImage(url: player.current?.artURL(size: 1280)) {
+                    Color.black
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+
                 if let v = videoLoader.video {
                     VideoArtView(video: v,
                                  position: player.currentTime,
                                  isPlaying: player.isPlaying)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
-                } else {
-                    RemoteImage(url: player.current?.artURL(size: 1280)) { ArtPlaceholder() }
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
+                        .transition(.opacity)
                 }
             }
+            .animation(.easeInOut(duration: 0.6), value: videoLoader.video)
             .overlay(
                 LinearGradient(stops: [
                     .init(color: .black.opacity(0.40), location: 0.0),

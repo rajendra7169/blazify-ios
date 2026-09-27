@@ -91,8 +91,8 @@ struct LibraryCollectionView: View {
                 }
             }
         }
-        .sheet(isPresented: $importingSpotify) {
-            SpotifyImportSheet(player: player, onImported: { Task { await load() } })
+        .fullScreenCover(isPresented: $importingSpotify) {
+            SpotifyImportDialog(player: player, onImported: { Task { await load() } })
                 .environment(\.palette, palette)
         }
         .safeAreaInset(edge: .top, spacing: 0) {
