@@ -34,7 +34,7 @@ struct HomeView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     header
                     // Both are optional from Look & Feel > Home.
-                    if look.showHomeGreeting { GreetingCard() }
+                    if look.showHomeGreeting { GreetingCard(player: player) }
                     if look.showHomeSearchBar { searchPill }
 
                     if !net.isOnline {
@@ -473,6 +473,12 @@ struct SearchRoute: Hashable {}
 struct GreetingCard: View {
     @Environment(\.palette) private var palette
     @ObservedObject private var auth = Auth.shared
+    /// The card can start something playing, so it needs the player.
+    @ObservedObject var player: Player
+    /// Which song each button is offering. Re-picked on every tap so the card
+    /// never offers the same thing twice in a row.
+    @State private var speedPick: Track?
+    @State private var forYouPick: Track?
 
     private var greeting: (line1: String, line2: String) {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -500,10 +506,7 @@ struct GreetingCard: View {
                         .lineLimit(1)
                         .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1)
                         .padding(.top, 2)
-                    Text("Enjoy the music 🎵")
-                        .font(.system(size: 13, weight: .medium))
-                        .opacity(0.85)
-                        .padding(.top, 2)
+                    buttons.padding(.top, 8)
                 }
                 // Sits on the accent gradient, so it stays white in both themes.
                 .foregroundStyle(.white)
@@ -524,6 +527,69 @@ struct GreetingCard: View {
             .padding(.horizontal, 16)
             .padding(.top, 20)   // card sits higher; mascot hair reaches the wordmark
             .padding(.bottom, 8)
+            .task(id: player.current?.videoId) { repick() }
+            .onAppear { repick() }
+    }
+
+    /// Two small covers that play something. They sit where the tagline was, so
+    /// the card is the same height as before — and a cover reads as a button in
+    /// a way another line of words never did.
+    private var buttons: some View {
+        HStack(spacing: 8) {
+            if let pick = forYouPick {
+                pickButton(pick, label: "For you") { play(pick, from: forYouPool) }
+            }
+            if let pick = speedPick {
+                pickButton(pick, label: nil) { play(pick, from: speedPool) }
+            }
+        }
+    }
+
+    private func pickButton(_ track: Track, label: String?, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                RemoteImage(url: track.artURL(size: 96), size: 30) {
+                    RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.25))
+                }
+                .frame(width: 30, height: 30)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                if let label {
+                    Text(label)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, label == nil ? 5 : 8)
+            .padding(.vertical, 5)
+            .background(.white.opacity(0.22))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: .black.opacity(0.28), radius: 5, y: 2)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label ?? "Play \(track.title)")
+    }
+
+    /// What you have played most, and what you have played lately — the nearest
+    /// thing this app knows to a pinned row and a mix made for you.
+    private var speedPool: [Track] {
+        PlayHistory.mostPlayed(.all, limit: 40).filter { !LocalMusic.isLocal($0.videoId) }
+    }
+
+    private var forYouPool: [Track] {
+        PlayHistory.recent.prefix(40).filter { !LocalMusic.isLocal($0.videoId) }
+    }
+
+    private func repick() {
+        speedPick = speedPool.randomElement()
+        forYouPick = forYouPool.randomElement()
+    }
+
+    private func play(_ track: Track, from pool: [Track]) {
+        let queue = pool.isEmpty ? [track] : pool
+        let start = queue.firstIndex(where: { $0.videoId == track.videoId }) ?? 0
+        player.play(queue, startAt: start)
+        repick()
     }
 }
 
