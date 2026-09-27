@@ -288,7 +288,7 @@ struct PlayerView: View {
 
     private var fullArtBackground: some View {
         GeometryReader { geo in
-            RemoteImage(url: player.current?.artURL(size: 1280)) { ArtPlaceholder() }
+            RemoteImage(url: player.current?.artURL(size: 1280)) { Color.black }
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
                 .overlay(

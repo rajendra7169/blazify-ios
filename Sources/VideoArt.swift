@@ -58,9 +58,16 @@ actor SongVideos {
 
     private static func find(_ track: Track, maxHeight: Int,
                              candidates: Int, sameCutSeconds: Double) async -> SongVideo? {
-        // The artist's official video — a fan upload or a lyric video is not the song's
+        // A song that is itself a video already is the picture to show, and its own sound.
+        if track.isVideo, !LocalMusic.isLocal(track.videoId) {
+            guard let url = await YouTube.videoStreamURL(for: track.videoId, maxHeight: maxHeight)
+            else { return nil }
+            return SongVideo(videoId: track.videoId, url: url, synced: true)
+        }
+
+        // Otherwise the artist's official video — a fan upload or a lyric video is not the song's
         // picture. The same cut as the song follows it in step; a different cut runs on its own.
-        guard !track.title.isEmpty else { return nil }
+        guard !track.title.isEmpty, !LocalMusic.isLocal(track.videoId) else { return nil }
         let query = track.artist.isEmpty ? track.title : "\(track.title) \(track.artist)"
         let results = await YouTube.search(query, scope: .videos)
         let official = Array(results.prefix(candidates))

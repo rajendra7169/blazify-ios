@@ -692,7 +692,7 @@ private struct FullArtPreview: View {
             // Explicit size: RemoteImage fills to its natural size otherwise and
             // would burst out of the phone frame.
             GeometryReader { g in
-                RemoteImage(url: player.current?.artURL(size: 720)) { ArtPlaceholder() }
+                RemoteImage(url: player.current?.artURL(size: 720)) { Color.black }
                     .frame(width: g.size.width, height: g.size.height)
                     .clipped()
             }
