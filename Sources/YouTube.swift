@@ -236,11 +236,15 @@ enum YouTube {
 
             // The biggest picture that still fits the cap — anything taller is
             // data spent on detail this screen cannot show.
+            //
+            // H.264 only. An mp4 can also carry AV1, which most iPhones cannot
+            // decode: the sound plays on and the picture stays black, which is
+            // the worst way for this to fail.
             var best: [String: Any]?
             var bestHeight = -1
             for f in formats {
                 let mime = f["mimeType"] as? String ?? ""
-                guard mime.hasPrefix("video/mp4"),
+                guard mime.hasPrefix("video/mp4"), mime.contains("avc1"),
                       let u = f["url"] as? String, !u.isEmpty,
                       let height = f["height"] as? Int, height <= maxHeight
                 else { continue }

@@ -553,8 +553,8 @@ struct GreetingCard: View {
         .mask(
             LinearGradient(stops: [
                 .init(color: .black, location: 0),
-                .init(color: .black, location: fadeFrom / (cardWidth - 20)),
-                .init(color: .clear, location: min((fadeFrom + 40) / (cardWidth - 20), 1)),
+                .init(color: .black, location: min(fadeFrom / max(cardWidth - 20, 1), 0.95)),
+                .init(color: .clear, location: min((fadeFrom + 40) / max(cardWidth - 20, 1), 1)),
             ], startPoint: .leading, endPoint: .trailing),
         )
     }
