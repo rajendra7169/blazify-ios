@@ -384,9 +384,19 @@ struct HomeView: View {
             Button {
                 if auth.isLoggedIn { showAccount = true } else { showLogin = true }
             } label: {
-                Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
-                    .font(.system(size: 26))
-                    .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
+                // Whoever is signed in, shown as themselves. The silhouette is
+                // for a guest, or for the moment before the picture arrives.
+                if let photo = auth.accountPhoto, let url = URL(string: photo) {
+                    RemoteImage(url: url, size: 30) {
+                        Circle().fill(palette.accent.opacity(0.25))
+                    }
+                    .frame(width: 30, height: 30)
+                    .clipShape(Circle())
+                } else {
+                    Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                        .font(.system(size: 26))
+                        .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
+                }
             }
             Spacer()
             HStack(spacing: 8) {

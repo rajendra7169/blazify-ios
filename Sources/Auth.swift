@@ -11,6 +11,9 @@ final class Auth: ObservableObject {
     @Published private(set) var isLoggedIn = false
     @Published private(set) var accountName: String?
     @Published private(set) var accountEmail: String?
+    /// The signed-in channel's picture. Kept beside the name so Home and
+    /// settings can show a face instead of a silhouette.
+    @Published private(set) var accountPhoto: String?
 
     // Credentials (read from any thread by YouTube.post()).
     private(set) var cookie: String?
@@ -25,6 +28,7 @@ final class Auth: ObservableObject {
         dataSyncId = defaults.string(forKey: Keys.dataSync)
         accountName = defaults.string(forKey: Keys.name)
         accountEmail = defaults.string(forKey: Keys.email)
+        accountPhoto = defaults.string(forKey: Keys.photo)
         isLoggedIn = !(cookie ?? "").isEmpty
     }
 
@@ -34,6 +38,7 @@ final class Auth: ObservableObject {
         static let dataSync = "yt_dataSyncId"
         static let name = "yt_accountName"
         static let email = "yt_accountEmail"
+        static let photo = "yt_accountPhoto"
     }
 
     private var cookieMap: [String: String] {
@@ -78,13 +83,17 @@ final class Auth: ObservableObject {
     /// Deliberately not called from `init`. Asking would reach back through
     /// `Auth.shared` while that is still being constructed.
     func refreshAccountNameIfMissing() {
-        guard isLoggedIn, (accountName ?? "").isEmpty else { return }
+        // The picture counts as missing too: sessions signed in before there
+        // was one to store have a name and no face.
+        guard isLoggedIn, (accountName ?? "").isEmpty || (accountPhoto ?? "").isEmpty else { return }
         Task { @MainActor in
             guard let info = await YouTube.accountInfo() else { return }
             self.accountName = info.name
             self.accountEmail = info.email
+            self.accountPhoto = info.photo
             self.defaults.set(info.name, forKey: Keys.name)
             self.defaults.set(info.email, forKey: Keys.email)
+            self.defaults.set(info.photo, forKey: Keys.photo)
         }
     }
 
@@ -102,6 +111,7 @@ final class Auth: ObservableObject {
         await MainActor.run {
             self.accountName = info.name
             self.accountEmail = info.email
+            self.accountPhoto = info.photo
             self.isLoggedIn = true
         }
         Keychain.set(cookie, for: Keys.cookie)
@@ -109,6 +119,7 @@ final class Auth: ObservableObject {
         defaults.set(dataSyncId, forKey: Keys.dataSync)
         defaults.set(info.name, forKey: Keys.name)
         defaults.set(info.email, forKey: Keys.email)
+        defaults.set(info.photo, forKey: Keys.photo)
         return true
     }
 
@@ -128,10 +139,11 @@ final class Auth: ObservableObject {
         cookie = nil
         dataSyncId = nil
         Keychain.set(nil, for: Keys.cookie)
-        for key in [Keys.dataSync, Keys.name, Keys.email] { defaults.removeObject(forKey: key) }
+        for key in [Keys.dataSync, Keys.name, Keys.email, Keys.photo] { defaults.removeObject(forKey: key) }
         Task { @MainActor in
             self.accountName = nil
             self.accountEmail = nil
+            self.accountPhoto = nil
             self.isLoggedIn = false
         }
     }

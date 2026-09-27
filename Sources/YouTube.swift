@@ -906,6 +906,9 @@ enum YouTube {
     struct AccountInfo {
         let name: String
         let email: String?
+        /// The channel's own picture, so the app can show who is signed in
+        /// rather than a grey silhouette.
+        let photo: String?
     }
 
     /// Signed-in account details via account_menu — also the login-validity check.
@@ -931,7 +934,11 @@ enum YouTube {
         let name = runsFirst(account["accountName"])
         guard !name.isEmpty else { return nil }
         let email = runsFirst(account["email"])
-        return AccountInfo(name: name, email: email.isEmpty ? nil : email)
+        let photo = (
+            (account["accountPhoto"] as? [String: Any])?["thumbnails"] as? [[String: Any]]
+        )?.last?["url"] as? String
+        return AccountInfo(name: name, email: email.isEmpty ? nil : email,
+                           photo: (photo ?? "").isEmpty ? nil : photo)
     }
 
     // MARK: - Like / library writes (signed-in)

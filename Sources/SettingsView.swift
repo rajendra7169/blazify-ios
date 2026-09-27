@@ -291,10 +291,19 @@ struct SettingsView: View {
             if auth.isLoggedIn { showAccount = true } else { showLogin = true }
         } label: {
             HStack(spacing: 14) {
-                Circle().fill(palette.accent)
-                    .frame(width: 46, height: 46)
-                    .overlay(Image(systemName: "person.fill")
-                        .font(.blaze(22)).foregroundStyle(.black))
+                // The signed-in channel's own picture, falling back to the
+                // silhouette for a guest or before it has been fetched.
+                Group {
+                    if let photo = auth.accountPhoto, let url = URL(string: photo) {
+                        RemoteImage(url: url, size: 46) { Circle().fill(palette.accent) }
+                    } else {
+                        Circle().fill(palette.accent)
+                            .overlay(Image(systemName: "person.fill")
+                                .font(.blaze(22)).foregroundStyle(.black))
+                    }
+                }
+                .frame(width: 46, height: 46)
+                .clipShape(Circle())
                 VStack(alignment: .leading, spacing: 2) {
                     Text(auth.accountName ?? "Guest")
                         .font(.blaze(16, .bold))
