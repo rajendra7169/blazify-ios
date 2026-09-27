@@ -175,7 +175,6 @@ struct PlayerView: View {
             case .ring:
                 RingPlayerLayout(
                     player: player,
-                    onCollapse: { dismiss() },
                     onOpenTheme: { showDesign = true },
                     onOpenQueue: { showQueue = true },
                     onOpenSleep: { showSleep = true },

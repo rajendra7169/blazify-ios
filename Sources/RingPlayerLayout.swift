@@ -1,12 +1,12 @@
 import SwiftUI
+import UIKit
 
-/// RING design: its own top bar, a draggable
-/// progress ring around circular art, queue·title·heart row, the transport in
-/// repeat · prev · PLAY · next · shuffle order, then a sleep/more row and the
-/// "Show Lyrics" card pinned to the bottom.
+/// RING design: "Now Playing" over a ring that carries the times in the gap at
+/// its top, the song's name on the left with its own keys beside it, the usual
+/// transport, the words as they are sung, and the same four keys every other
+/// design ends with.
 struct RingPlayerLayout: View {
     @ObservedObject var player: Player
-    var onCollapse: () -> Void
     var onOpenTheme: () -> Void
     var onOpenQueue: () -> Void
     var onOpenSleep: () -> Void
@@ -18,16 +18,21 @@ struct RingPlayerLayout: View {
         VStack(spacing: 0) {
             topBar
 
-            // Ring stage.
+            // The ring is the only seek surface here, so the times belong to it
+            // rather than to a slider underneath that says the same thing twice.
+            times
+            Spacer().frame(height: 6)
+
             GeometryReader { geo in
                 let side = min(geo.size.width, geo.size.height) * 0.92
                 SeekableAlbumRing(
                     artURL: player.current?.artURL(size: 1080),
-                    progress: player.progress,
+                    progress: scrub ?? player.progress,
                     ringColor: player.artColor,
                     trackColor: .white.opacity(0.16),
                     thumbColor: player.artColor,
                 ) { f in
+                    scrub = nil
                     player.seek(to: f)
                 }
                 .frame(width: side, height: side)
@@ -35,98 +40,83 @@ struct RingPlayerLayout: View {
             }
             .padding(.horizontal, 32)
 
-            Spacer().frame(height: 8)
-            infoRow
-            Spacer().frame(height: 6)
-
-            SlimSlider(
-                value: Binding(get: { scrub ?? player.progress }, set: { scrub = $0 }),
-                active: player.artColor,
-                duration: player.duration,
-                isPlaying: player.isPlaying,
-            ) { v in
-                player.seek(to: v)
-                scrub = nil
-            }
-            .padding(.horizontal, 32)
-
-            HStack {
-                Text(timeString((scrub ?? player.progress) * player.duration))
-                Spacer()
-                Text(timeString(player.duration))
-            }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 36)
-
             Spacer().frame(height: 10)
+            titleRow
+            Spacer().frame(height: 14)
             transport
-            Spacer(minLength: 12)
-            bottomOverlay
+            Spacer(minLength: 10)
+            RingLyricsLines(player: player, onTap: onShowLyrics)
+            Spacer().frame(height: 8)
+            bottomRow
+            Spacer().frame(height: 10)
         }
         .foregroundStyle(.white)
     }
 
-    // MARK: Top bar
+    // MARK: Top bar — the heading only
 
     private var topBar: some View {
-        HStack(spacing: 0) {
-            ringIcon("chevron.down", size: 28, box: 46, action: onCollapse)
-            VStack(spacing: 2) {
-                Text("Now Playing")
-                    .font(.system(size: 16, weight: .bold))
-                    .lineLimit(1)
-                if let from = player.current?.artist, !from.isEmpty {
-                    Text(from)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 8)
-            ringIcon("paintpalette", size: 24, box: 42, action: onOpenTheme)
-        }
-        .padding(.horizontal, 6)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-    }
-
-    // MARK: Queue · title/artist · favourite
-
-    private var infoRow: some View {
-        HStack(spacing: 0) {
-            ringIcon("list.bullet", size: 26, box: 44, action: onOpenQueue)
-            VStack(spacing: 2) {
-                Text(player.current?.title ?? "")
-                    .font(.system(size: 16, weight: .bold))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-                Text(player.current?.artist ?? "")
-                    .font(.system(size: 12))
+        VStack(spacing: 2) {
+            Text("Now Playing")
+                .font(.system(size: 16, weight: .bold))
+                .lineLimit(1)
+            if let from = player.current?.artist, !from.isEmpty {
+                Text(from)
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity)
             }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 12)
-            Button { player.toggleFavorite() } label: {
-                Image(systemName: player.isCurrentFavorite ? "heart.fill" : "heart")
-                    .font(.system(size: 26))
-                    .foregroundStyle(player.isCurrentFavorite ? .red : .white)
-                    .frame(width: 44, height: 44)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: The times, in the gap above the ring
+
+    private var times: some View {
+        HStack(spacing: 6) {
+            Text(timeString((scrub ?? player.progress) * player.duration))
+                .foregroundStyle(player.artColor)
+            Text("—").foregroundStyle(.white.opacity(0.5))
+            Text(player.duration > 0 ? timeString(player.duration) : "--:--")
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: Title on the left, its keys on the right
+
+    private var titleRow: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(player.current?.title ?? "")
+                    .font(.system(size: 18, weight: .bold))
+                    .lineLimit(1)
+                Text(player.current?.artist ?? "")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            ringIcon(player.isCurrentFavorite ? "heart.fill" : "heart", size: 22, box: 40,
+                     tint: player.isCurrentFavorite ? .red : .white) { player.toggleFavorite() }
+            ringIcon("paintpalette", size: 22, box: 40, action: onOpenTheme)
+            ringIcon("ellipsis", size: 22, box: 40, action: onMore)
         }
         .padding(.horizontal, 32)
     }
 
-    // MARK: Transport — repeat · prev · PLAY · next · shuffle
+    // MARK: Transport — shuffle · prev · PLAY · next · repeat
 
     private var transport: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            ringIcon(player.repeatMode == .one ? "repeat.1" : "repeat", size: 24, box: 42,
-                     tint: player.repeatMode != .off ? Blaze.amber : .white) { player.cycleRepeat() }
+            ringIcon("shuffle", size: 24, box: 42,
+                     tint: player.isShuffled ? Blaze.amber : .white) { player.toggleShuffle() }
             Spacer(minLength: 0)
             ringIcon("backward.end.fill", size: 34, box: 52) { player.prev() }
             Spacer(minLength: 0)
@@ -136,31 +126,57 @@ struct RingPlayerLayout: View {
                     .foregroundStyle(.white)
                     .frame(width: 66, height: 66)
                     .background(player.artColor)
-                    .clipShape(Circle())
+                    // Square-ish while it plays, round while it waits, the way
+                    // the other designs move.
+                    .clipShape(RoundedRectangle(cornerRadius: player.isPlaying ? 22 : 33))
+                    .animation(.easeOut(duration: 0.15), value: player.isPlaying)
             }
             Spacer(minLength: 0)
             ringIcon("forward.end.fill", size: 34, box: 52) { player.next() }
             Spacer(minLength: 0)
-            ringIcon("shuffle", size: 24, box: 42,
-                     tint: player.isShuffled ? Blaze.amber : .white) { player.toggleShuffle() }
+            ringIcon(player.repeatMode == .one ? "repeat.1" : "repeat", size: 24, box: 42,
+                     tint: player.repeatMode != .off ? Blaze.amber : .white) { player.cycleRepeat() }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 32)
     }
 
-    // MARK: Bottom overlay (sleep · more, then the lyrics card)
+    // MARK: The four keys every design ends with
 
-    private var bottomOverlay: some View {
-        VStack(spacing: 8) {
-            HStack {
-                ringIcon(player.sleepActive ? "moon.zzz.fill" : "moon.zzz", size: 24, box: 42,
-                         tint: player.sleepActive ? Blaze.amber : .white, action: onOpenSleep)
-                Spacer()
-                ringIcon("ellipsis", size: 24, box: 42, action: onMore)
+    private var bottomRow: some View {
+        HStack(spacing: 0) {
+            key("list.bullet", "Queue", action: onOpenQueue)
+            VStack(spacing: 4) {
+                RoutePicker(tint: UIColor.white.withAlphaComponent(0.85),
+                            activeTint: UIColor(Blaze.amber))
+                    .frame(width: 26, height: 26)
+                Text("AirPlay").font(.system(size: 11)).lineLimit(1)
             }
-            .padding(.horizontal, 32)
+            .foregroundStyle(.white.opacity(0.85))
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("AirPlay and Bluetooth")
+            key(player.sleepActive ? "moon.zzz.fill" : "moon.zzz", sleepLabel,
+                active: player.sleepActive, action: onOpenSleep)
+            key("quote.bubble", "Lyrics", action: onShowLyrics)
+        }
+        .padding(.horizontal, 20)
+    }
 
-            RingLyricsCard(player: player, onTap: onShowLyrics)
+    private var sleepLabel: String {
+        if player.sleepAtEndOfSong { return "End of song" }
+        if let r = player.sleepRemaining { return timeString(r) }
+        return "Sleep timer"
+    }
+
+    private func key(_ icon: String, _ label: String,
+                     active: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 20))
+                Text(label).font(.system(size: 11)).lineLimit(1)
+            }
+            .foregroundStyle(active ? Blaze.amber : .white.opacity(0.85))
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -174,6 +190,7 @@ struct RingPlayerLayout: View {
         }
     }
 }
+
 
 /// Circular art wrapped in a tap/drag-seekable progress ring with a knob.
 struct SeekableAlbumRing: View {
@@ -249,8 +266,10 @@ struct SeekableAlbumRing: View {
     }
 }
 
-/// The bottom "Show Lyrics" card — previous / current / next synced line.
-struct RingLyricsCard: View {
+/// The words as they are sung, on the player itself — no card, no heading, no
+/// arrow. A song with no words gives the space back rather than showing an
+/// empty box. Tap or swipe up for the whole song.
+struct RingLyricsLines: View {
     @ObservedObject var player: Player
     let onTap: () -> Void
     @ObservedObject private var clock: PlaybackClock
@@ -264,46 +283,55 @@ struct RingLyricsCard: View {
     @State private var lines: [LyricLine] = []
     @State private var loading = true
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Show Lyrics")
-                    .font(.system(size: 14, weight: .bold))
-                Spacer()
-                Image(systemName: "chevron.up").font(.system(size: 18))
-            }
-            Spacer().frame(height: 10)
+    /// One height whatever it is showing, so the transport above it does not
+    /// jump every time a line changes.
+    private let areaHeight: CGFloat = 88
 
+    var body: some View {
+        Group {
             if loading {
                 LyricsSkeleton()
-            } else if let i = activeIndex {
+                    .padding(.horizontal, 32)
+                    .frame(height: areaHeight)
+            } else if lines.isEmpty {
+                // Nothing to show: give the room back to the ring.
+                Color.clear.frame(height: 0)
+            } else {
                 VStack(spacing: 4) {
-                    Text(i > 0 ? lines[i - 1].text : " ")
+                    let i = activeIndex
+                    Text(i != nil && i! > 0 ? lines[i! - 1].text : " ")
                         .font(.system(size: 14))
                         .foregroundStyle(.white.opacity(0.45))
                         .lineLimit(1)
-                    Text(lines[i].text.isEmpty ? "♪" : lines[i].text)
-                        .font(.system(size: 14, weight: .bold))
+                    Text(currentLine)
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(player.artColor)
                         .lineLimit(2)
-                    Text(i + 1 < lines.count ? lines[i + 1].text : " ")
+                    Text(i != nil && i! + 1 < lines.count ? lines[i! + 1].text : " ")
                         .font(.system(size: 14))
                         .foregroundStyle(.white.opacity(0.45))
                         .lineLimit(1)
                 }
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
+                .frame(height: areaHeight)
+                .padding(.horizontal, 24)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onTap)
+                .gesture(
+                    DragGesture(minimumDistance: 20)
+                        .onEnded { g in if g.translation.height < -20 { onTap() } },
+                )
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 14)
-        .padding(.bottom, 22)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.black.opacity(0.55))
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22))
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
         .task(id: player.current?.videoId) { await load() }
+    }
+
+    /// Before the first line has its turn there is still a song playing, so the
+    /// space shows the note and what is coming rather than nothing at all.
+    private var currentLine: String {
+        guard let i = activeIndex else { return "♪" }
+        return lines[i].text.isEmpty ? "♪" : lines[i].text
     }
 
     /// The genuine track length. `Track.duration` is 0 for songs parsed out of
