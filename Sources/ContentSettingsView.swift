@@ -7,6 +7,8 @@ import SwiftUI
 struct ContentSettingsView: View {
     @ObservedObject private var prefs = ContentPrefs.shared
     @State private var showLanguage = false
+    @State private var showBlocked = false
+    @ObservedObject private var blocked = BlockedArtists.shared
     @State private var showCountry = false
 
     var body: some View {
@@ -24,6 +26,13 @@ struct ContentSettingsView: View {
             }
 
             SettingsGroup(title: "Filters") {
+                SettingsLink(symbol: "nosign", title: "Blocked artists",
+                             subtitle: blocked.entries.isEmpty
+                                 ? "No one is blocked"
+                                 : "\(blocked.entries.count) blocked") {
+                    showBlocked = true
+                }
+                SettingsDivider()
                 SettingsToggle(symbol: "e.square", title: "Hide explicit",
                                subtitle: "Leave explicit songs out of results and feeds",
                                isOn: $prefs.hideExplicit)
@@ -63,6 +72,9 @@ struct ContentSettingsView: View {
                              options: ContentPrefs.countries.map(\.code),
                              label: ContentPrefs.name(ofCountry:),
                              selection: $prefs.country)
+        }
+        .sheet(isPresented: $showBlocked) {
+            NavigationStack { BlockedArtistsView() }
         }
     }
 }

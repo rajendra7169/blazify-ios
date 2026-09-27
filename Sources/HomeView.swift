@@ -251,7 +251,9 @@ struct HomeView: View {
         // aren't part of the catalogue and can't seed a radio. They get their
         // own shelf, and only when there's no network to fill Home with.
         func catalogue(_ tracks: [Track]) -> [Track] {
-            tracks.filter { !LocalMusic.isLocal($0.videoId) }
+            // Local files can't seed a radio, and a blocked artist shouldn't be
+            // handed back on the very screen they were turned away from.
+            tracks.filter { !LocalMusic.isLocal($0.videoId) }.withoutBlockedArtists()
         }
 
         let quick = catalogue(PlayHistory.mostPlayed(.month1, limit: 40)).shuffled().prefix(20)
@@ -575,6 +577,21 @@ struct GreetingCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label ?? "Play \(track.title)")
+    }
+
+    /// What you have played most, and what you have played lately — the nearest
+    /// thing this app knows to a pinned row and a mix made for you. Local files
+    /// can't seed a queue, and a blocked artist doesn't get offered.
+    private var speedPool: [Track] {
+        PlayHistory.mostPlayed(.all, limit: 40)
+            .filter { !LocalMusic.isLocal($0.videoId) }
+            .withoutBlockedArtists()
+    }
+
+    private var forYouPool: [Track] {
+        Array(PlayHistory.recent.prefix(40))
+            .filter { !LocalMusic.isLocal($0.videoId) }
+            .withoutBlockedArtists()
     }
 
     private func repick() {

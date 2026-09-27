@@ -445,6 +445,24 @@ struct SongRowMenu: View {
                 } label: {
                     Label("View artist", systemImage: "person")
                 }
+                // The artist credited on this row, so a whole artist can go
+                // from here rather than song by song.
+                if !track.artist.isEmpty {
+                    let name = track.artist
+                        .components(separatedBy: CharacterSet(charactersIn: ",&"))
+                        .first?.trimmingCharacters(in: .whitespaces) ?? track.artist
+                    let blocked = BlockedArtists.shared.isBlocked(id: track.artistId, name: name)
+                    Button(role: blocked ? nil : .destructive) {
+                        if blocked {
+                            BlockedArtists.shared.unblock(id: track.artistId, name: name)
+                        } else {
+                            BlockedArtists.shared.block(id: track.artistId, name: name)
+                        }
+                    } label: {
+                        Label(blocked ? "Unblock \(name)" : "Block \(name)",
+                              systemImage: blocked ? "person.crop.circle.badge.checkmark" : "nosign")
+                    }
+                }
                 Button { share() } label: {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }

@@ -390,7 +390,8 @@ struct SearchView: View {
         Task {
             let found = await YouTube.search(q)
             await MainActor.run {
-                results = found
+                // An artist you have turned away does not come back through search.
+                results = found.withoutBlockedArtists()
                 searching = false
             }
         }
@@ -544,7 +545,7 @@ extension SearchView {
         Task {
             if scope.isPlayable {
                 let found = await YouTube.search(q, scope: scope)
-                await MainActor.run { results = found; cards = []; searching = false }
+                await MainActor.run { results = found.withoutBlockedArtists(); cards = []; searching = false }
             } else if scope == .everything {
                 // The mixed answer holds both kinds at once, so both halves are
                 // asked for and shown together rather than one being thrown
