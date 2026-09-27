@@ -25,6 +25,8 @@ struct RootView: View {
     }
 
     @State private var showRecognition = false
+    /// A playlist somebody shared with a link, waiting to be kept or waved off.
+    @State private var sharedPlaylist: PlaylistLink.Shared?
     /// Tabs built so far — we don't pay for a tab until it's opened, but once
     /// it's open it stays alive so its scroll position and data survive.
     @State private var visited: Set<BlazeTab> = [LookFeel.shared.defaultTab.tab]
@@ -67,6 +69,22 @@ struct RootView: View {
     /// Act on whatever Siri or a Shortcut asked for. Intents can't touch the
     /// player directly — it's a `@StateObject` owned by this view — so they
     /// leave a request and we perform it here.
+    private var keepPlaylistBinding: Binding<Bool> {
+        Binding(get: { sharedPlaylist != nil }, set: { if !$0 { sharedPlaylist = nil } })
+    }
+
+    /// Rebuilds the shared playlist on the account, song by song. It needs an
+    /// account to write to, which is the one thing a link cannot bring with it.
+    private func keepSharedPlaylist() {
+        guard let shared = sharedPlaylist else { return }
+        sharedPlaylist = nil
+        guard Auth.shared.isLoggedIn else { return }
+        Task {
+            guard let id = await YouTube.createPlaylist(title: shared.name) else { return }
+            _ = await YouTube.addToPlaylist(playlistId: id, videoIds: shared.songIds)
+        }
+    }
+
     private func performPendingRequest() {
         guard let request = BlazifyRequest.take() else { return }
         switch request {
@@ -194,9 +212,23 @@ struct RootView: View {
         }
         // Home Screen widget tiles arrive as blazify:// URLs.
         .onOpenURL { url in
+            // A shared playlist offers itself before anything else — it is the
+            // only link that asks a question rather than just doing something.
+            if let shared = PlaylistLink.parse(url) {
+                sharedPlaylist = shared
+                return
+            }
             guard let request = BlazifyLink.request(for: url) else { return }
             request.store()
             performPendingRequest()
+        }
+        .alert("Keep this playlist?", isPresented: keepPlaylistBinding) {
+            Button("Not now", role: .cancel) { sharedPlaylist = nil }
+            Button("Save") { keepSharedPlaylist() }
+        } message: {
+            if let shared = sharedPlaylist {
+                Text("\"\(shared.name)\" has \(shared.songIds.count) song\(shared.songIds.count == 1 ? "" : "s").")
+            }
         }
         .environment(\.palette, palette)
         .environment(\.playerBottomInset, bottomInset)

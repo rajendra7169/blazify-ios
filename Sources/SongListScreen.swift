@@ -56,6 +56,7 @@ struct SongListScreen: View {
     @State private var searching = false
     @State private var query = ""
     @State private var showMenu = false
+    @State private var showShare = false
     @StateObject private var rows = VisibleRows()
     /// The song whose ⋮ menu asked for Add to playlist.
     @State private var playlistTrack: Track?
@@ -175,6 +176,10 @@ struct SongListScreen: View {
             .animation(.easeOut(duration: 0.18), value: rows.contains(player.current?.videoId))
         }
         }
+        .sheet(isPresented: $showShare) {
+            SharePlaylistSheet(name: title, songIds: source.map(\.videoId))
+                .environment(\.palette, palette)
+        }
         .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle(searching ? "" : title)
         .navigationBarTitleDisplayMode(.inline)
@@ -199,6 +204,11 @@ struct SongListScreen: View {
                 Button("Download all") { Downloads.shared.downloadAll(source) }
             }
             Button("Export playlist") { export() }
+            // Only a playlist of your own can be handed over this way — the link
+            // carries song ids, and a filtered view is not a playlist.
+            if !source.isEmpty {
+                Button("Share as a link") { showShare = true }
+            }
             Button("Cancel", role: .cancel) {}
         }
         .sheet(item: $playlistTrack) { AddToPlaylistSheet(track: $0) }
