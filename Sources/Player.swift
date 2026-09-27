@@ -290,7 +290,7 @@ final class Player: ObservableObject {
     @discardableResult
     func next(auto: Bool = false) -> Bool {
         // Moved on by hand: the count belonged to the song that was playing.
-        if !auto { repeatCurrentSong(0) }
+        if !auto { repeatCurrentSong(times: 0) }
         if index < queue.count - 1 {
             index += 1
             loadCurrent()
@@ -662,7 +662,7 @@ final class Player: ObservableObject {
             // more times asked for still stands.
             seek(to: 0)
         } else {
-            repeatCurrentSong(0)
+            repeatCurrentSong(times: 0)
             index -= 1
             loadCurrent()
         }
