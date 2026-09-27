@@ -880,6 +880,12 @@ final class Player: ObservableObject {
         pendingPlayNextIds.removeAll { $0 == track.videoId }
         if !crossfading { cancelCrossfade() }
         discardPrepared()
+        // The song that was playing stops now, not when the new link arrives.
+        // Resolving a stream takes a moment, and waiting for it left the old song
+        // playing over a tap that looked as though it had done nothing at all —
+        // and if the new link never came, it simply played on. A crossfade is
+        // exempt: there the outgoing song is meant to still be heard.
+        if !crossfading { avPlayer?.pause() }
         // Last.fm: announce the song now, and arm the scrobble for later.
         scrobbleStart = Date()
         scrobbled = false

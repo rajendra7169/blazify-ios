@@ -65,6 +65,13 @@ struct PlayerSettingsView: View {
                 }
             }
 
+            SettingsGroup(title: "Video") {
+                SettingsToggle(symbol: "antenna.radiowaves.left.and.right",
+                               title: "Video on mobile data",
+                               subtitle: "The Video Art player fetches a picture as well as the song. Off, it shows the cover instead until you are on Wi-Fi.",
+                               isOn: $prefs.videoOnMobile)
+            }
+
             SettingsGroup(title: "Skipping") {
                 SettingsToggle(symbol: "forward.frame",
                                title: "Skip the parts that are not the song",

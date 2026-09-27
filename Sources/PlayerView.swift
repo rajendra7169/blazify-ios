@@ -33,6 +33,12 @@ struct PlayerView: View {
     @State private var lyricsMode = false
     @State private var immersive = false
     @State private var dragOffset: CGFloat = 0
+    /// Offered once, the first time the Video design meets mobile data: the cover
+    /// is showing instead of the video, and this is where to say that videos may
+    /// play on data after all.
+    @State private var askVideoOnMobile = false
+    @ObservedObject private var prefs = PlaybackPrefs.shared
+    @ObservedObject private var net = Reachability.shared
 
     private var design: PlayerDesign { PlayerDesign(rawValue: designRaw) ?? .classic }
 
@@ -263,19 +269,47 @@ struct PlayerView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.6), value: videoLoader.video)
+            // The picture is left alone down to the middle of the screen and only
+            // then fades into the page the controls sit on — the same stage fade
+            // the Android Video design uses. Dimming it from the top, as the still
+            // artwork is dimmed, was throwing a veil over the one design whose
+            // whole point is the picture.
             .overlay(
                 LinearGradient(stops: [
-                    .init(color: .black.opacity(0.40), location: 0.0),
-                    .init(color: .clear, location: 0.35),
-                    .init(color: .black.opacity(0.55), location: 0.60),
-                    .init(color: .black.opacity(0.80), location: 0.80),
-                    .init(color: .black.opacity(0.95), location: 1.0),
+                    .init(color: .clear, location: 0.0),
+                    .init(color: .clear, location: 0.50),
+                    .init(color: .black.opacity(0.55), location: 0.68),
+                    .init(color: .black.opacity(0.92), location: 0.85),
+                    .init(color: .black, location: 1.0),
                 ], startPoint: .top, endPoint: .bottom),
             )
         }
         .ignoresSafeArea()
         .task(id: player.current?.videoId) { loadVideo() }
-        .onAppear { loadVideo() }
+        .onChange(of: prefs.videoOnMobile) { loadVideo() }
+        .onChange(of: net.isUnmetered) { loadVideo() }
+        .onAppear {
+            loadVideo()
+            offerVideoOnMobile()
+        }
+        .alert("Videos on mobile data", isPresented: $askVideoOnMobile) {
+            Button("Not now", role: .cancel) {}
+            Button("Play videos") { prefs.videoOnMobile = true }
+        } message: {
+            Text("The Video player fetches a picture as well as the song, which costs far "
+                 + "more data. On mobile data it shows the cover instead. You can change "
+                 + "this any time in Settings › Player and audio.")
+        }
+    }
+
+    /// Asked once, and only where it matters: the Video design, on a connection
+    /// that charges by the megabyte, with the switch still off.
+    private func offerVideoOnMobile() {
+        guard design == .video, !net.isUnmetered, !prefs.videoOnMobile else { return }
+        let key = "videoOnMobileAsked"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        askVideoOnMobile = true
     }
 
     /// A video is far heavier than a picture, so it waits for an unmetered
