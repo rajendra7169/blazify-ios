@@ -1,18 +1,20 @@
 import Foundation
 
+/// How far a result's length may differ from Spotify's before it is somebody
+/// else's song. At file scope because the matching runs off the main actor.
+private let toleranceSeconds = 8.0
+
+/// Searches in flight at once: enough to be quick, few enough to stay polite.
+private let atOnce = 4
+
 /// Rebuilds a Spotify playlist here.
 ///
 /// Spotify's tracks are names, not addresses: nothing in one library points at
 /// anything in the other. So each one is searched for by title and artist and
 /// accepted only when the length agrees too — the wrong song under the right
 /// name is worse than an honest gap, and a gap is reported rather than hidden.
+@MainActor
 enum SpotifyImport {
-    /// How far a result's length may differ from Spotify's before it is somebody else's song.
-    private static let toleranceSeconds = 8.0
-
-    /// Searches in flight at once: enough to be quick, few enough to stay polite.
-    private static let atOnce = 4
-
     struct Outcome {
         let name: String
         /// The new playlist on the account, or nil when it could not be created.
@@ -43,7 +45,7 @@ enum SpotifyImport {
     /// the account. `onProgress` is called as each search finishes.
     static func run(
         link: String,
-        onProgress: @MainActor (_ done: Int, _ total: Int) -> Void = { _, _ in }
+        onProgress: (_ done: Int, _ total: Int) -> Void = { _, _ in }
     ) async throws -> Outcome {
         guard Auth.shared.isLoggedIn else { throw Failure.notSignedIn }
 
@@ -74,11 +76,11 @@ enum SpotifyImport {
     /// requests in one breath, which is how a client starts being refused.
     private static func search(
         _ tracks: [SpotifyPlaylist.Track],
-        onProgress: @MainActor (_ done: Int, _ total: Int) -> Void
+        onProgress: (_ done: Int, _ total: Int) -> Void
     ) async throws -> [Track?] {
         var found = [Track?](repeating: nil, count: tracks.count)
         var done = 0
-        await onProgress(0, tracks.count)
+        onProgress(0, tracks.count)
 
         await withTaskGroup(of: (Int, Track?).self) { group in
             var next = 0
@@ -93,7 +95,7 @@ enum SpotifyImport {
             while let (index, match) = await group.next() {
                 found[index] = match
                 done += 1
-                await onProgress(done, tracks.count)
+                onProgress(done, tracks.count)
                 // One in, one out: the next search starts only as a slot frees up.
                 if next < tracks.count {
                     let index = next, track = tracks[next]
@@ -109,7 +111,7 @@ enum SpotifyImport {
         return found
     }
 
-    private static func match(_ track: SpotifyPlaylist.Track) async -> Track? {
+    nonisolated private static func match(_ track: SpotifyPlaylist.Track) async -> Track? {
         let query = [track.title, track.artists]
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             .joined(separator: " ")
@@ -121,7 +123,7 @@ enum SpotifyImport {
     ///
     /// A track Spotify has no length for (it happens) is matched on names alone,
     /// since there is nothing to compare.
-    static func pick(from results: [Track], for track: SpotifyPlaylist.Track) -> Track? {
+    nonisolated static func pick(from results: [Track], for track: SpotifyPlaylist.Track) -> Track? {
         guard !results.isEmpty else { return nil }
         guard track.durationSeconds > 0 else { return results.first }
         let wanted = Double(track.durationSeconds)
