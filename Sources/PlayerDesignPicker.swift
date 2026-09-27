@@ -323,16 +323,18 @@ private struct PreviewFavorite: View {
 
 private struct PreviewQueuePeek: View {
     var body: some View {
-        HStack {
-            ForEach([("list.bullet", "Queue"), ("moon.zzz", "Sleep timer"),
-                     ("text.alignleft", "Lyrics")], id: \.0) { icon, label in
-                Spacer()
-                HStack(spacing: 4) {
+        // All four keys the player really ends with, each over its own name.
+        // AirPlay was missing here, so the picture promised three keys and the
+        // player gave four.
+        HStack(spacing: 0) {
+            ForEach([("list.bullet", "Queue"), ("airplayaudio", "AirPlay"),
+                     ("moon.zzz", "Sleep timer"), ("text.alignleft", "Lyrics")], id: \.0) { icon, label in
+                VStack(spacing: 2) {
                     Image(systemName: icon).font(.system(size: 11))
-                    Text(label).font(.system(size: 9)).lineLimit(1)
+                    Text(label).font(.system(size: 8)).lineLimit(1)
                 }
                 .foregroundStyle(.white)
-                Spacer()
+                .frame(maxWidth: .infinity)
             }
         }
         .padding(.top, 4)
@@ -393,15 +395,21 @@ private struct RingPreview: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "chevron.down").font(.system(size: 17))
-                Text("Now Playing")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 6)
-                Image(systemName: "paintpalette").font(.system(size: 15))
+            Text("Now Playing")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+
+            Spacer().frame(height: 4)
+            // The times live in the gap above the ring; there is no slider.
+            HStack(spacing: 4) {
+                Text(timeString(player.progress * player.duration))
+                    .foregroundStyle(player.artColor)
+                Text("—").foregroundStyle(.white.opacity(0.5))
+                Text(player.duration > 0 ? timeString(player.duration) : "--:--")
+                    .foregroundStyle(.white.opacity(0.7))
             }
-            .foregroundStyle(.white)
+            .font(.system(size: 9, weight: .semibold))
 
             Spacer()
             GeometryReader { g in
@@ -420,51 +428,41 @@ private struct RingPreview: View {
             .aspectRatio(1.4, contentMode: .fit)
             Spacer()
 
-            HStack {
-                Image(systemName: "list.bullet").font(.system(size: 15)).foregroundStyle(.white)
-                Spacer()
+            // Name on the left, its three keys on the right.
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(player.current?.title ?? "")
+                        .font(.system(size: 11, weight: .bold)).lineLimit(1)
+                    Text(player.current?.artist ?? "")
+                        .font(.system(size: 9)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 PreviewFavorite(player: player)
+                Image(systemName: "paintpalette").font(.system(size: 13))
+                Image(systemName: "ellipsis").font(.system(size: 13))
             }
+            .foregroundStyle(.white)
             .padding(.horizontal, 4)
 
-            Spacer().frame(height: 6)
-            PreviewSlider(player: player)
             Spacer().frame(height: 8)
             PreviewTransport(player: player)
             Spacer().frame(height: 8)
 
-            HStack {
-                Image(systemName: "moon.zzz").font(.system(size: 14))
-                Spacer()
-                Image(systemName: "ellipsis").font(.system(size: 14))
-            }
-            .foregroundStyle(.white)
-
-            Spacer().frame(height: 8)
-
-            // Lyrics card — bleeds to the bottom edge (no bottom padding).
-            VStack(spacing: 0) {
-                HStack {
-                    Text("Show Lyrics").font(.system(size: 11, weight: .bold))
-                    Spacer()
-                    Image(systemName: "chevron.up").font(.system(size: 12))
-                }
-                .foregroundStyle(.white)
-                Spacer().frame(height: 6)
+            // The words, on the player itself — no card and no heading.
+            VStack(spacing: 2) {
                 Text("In the stillness of the night")
-                    .font(.system(size: 9)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
-                Spacer().frame(height: 2)
+                    .font(.system(size: 9)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
                 Text("I feel the weight, the empty sight")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(player.artColor).lineLimit(1)
-                Spacer().frame(height: 2)
                 Text("Whispers in my mind, they call")
-                    .font(.system(size: 9)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                    .font(.system(size: 9)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
-            .padding(12)
-            .background(Color.black.opacity(0.45))
-            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 16, topTrailingRadius: 16))
+
+            Spacer().frame(height: 6)
+            PreviewQueuePeek()
+            Spacer().frame(height: 6)
         }
         .padding(.horizontal, 14)
         .padding(.top, 34)   // clear the Dynamic Island pill
@@ -523,17 +521,24 @@ private struct CassettePreview: View {
             .padding(.horizontal, 6)
             Spacer()
 
-            VStack(spacing: 3) {
-                Text(player.current?.title ?? "Song title")
-                    .font(.system(size: 13, weight: .bold)).foregroundStyle(.white).lineLimit(1)
-                Text(player.current?.artist ?? "Artist")
-                    .font(.system(size: 10)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+            // Name on the left with its raised keys, as the player has it.
+            HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(player.current?.title ?? "Song title")
+                        .font(.system(size: 12, weight: .bold)).foregroundStyle(.white).lineLimit(1)
+                    Text(player.current?.artist ?? "Artist")
+                        .font(.system(size: 9)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                titleKey("heart")
+                titleKey("paintpalette")
+                titleKey("ellipsis")
             }
 
             Spacer().frame(height: 8)
 
             // Waveform card — 24 bars in the gallery (36 in the real player).
-            HStack(spacing: 8) {
+            VStack(spacing: 0) {
                 Canvas { ctx, size in
                     let n = 24
                     let gap = size.width / CGFloat(n)
@@ -551,7 +556,6 @@ private struct CassettePreview: View {
                     }
                 }
                 .frame(height: 22)
-                Image(systemName: "heart").font(.system(size: 13)).foregroundStyle(ink)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -577,11 +581,10 @@ private struct CassettePreview: View {
             Spacer().frame(height: 10)
 
             HStack(spacing: 0) {
-                segment("text.alignleft", bg: player.artColor, tint: .white)
-                segment("list.bullet", bg: Color(hex: 0x2A241E), tint: cream)
-                segment("moon.zzz", bg: Color(hex: 0x2A241E), tint: cream)
-                segment("paintpalette", bg: Color(hex: 0x2A241E), tint: cream)
-                segment("ellipsis", bg: Color(hex: 0x2A241E), tint: cream)
+                segment("list.bullet", "Queue", tint: ink)
+                segment("airplayaudio", "AirPlay", tint: ink)
+                segment("moon.zzz", "Sleep", tint: ink)
+                segment("text.alignleft", "Lyrics", tint: player.artColor)
             }
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
@@ -597,12 +600,24 @@ private struct CassettePreview: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    private func segment(_ icon: String, bg: Color, tint: Color) -> some View {
+    private func segment(_ icon: String, _ label: String, tint: Color) -> some View {
+        VStack(spacing: 2) {
+            Image(systemName: icon).font(.system(size: 11))
+            Text(label).font(.system(size: 8, weight: .medium)).lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .frame(maxWidth: .infinity)
+        .frame(height: 36)
+        .background(cream)
+    }
+
+    private func titleKey(_ icon: String) -> some View {
         Image(systemName: icon)
-            .font(.system(size: 12))
-            .foregroundStyle(tint)
-            .frame(width: 40, height: 34)
-            .background(bg)
+            .font(.system(size: 11))
+            .foregroundStyle(ink)
+            .frame(width: 26, height: 22)
+            .background(cream)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
     }
 }
 
