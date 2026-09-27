@@ -637,15 +637,19 @@ struct GreetingCard: View {
     /// the history stands in until it lands.
     private func loadSupermix() async {
         guard auth.isLoggedIn else {
-            supermix = []
-            repick()
+            await MainActor.run {
+                supermix = []
+                repick()
+            }
             return
         }
         guard supermix.isEmpty else { return }
         let mix = await YouTube.mix(playlistId: YouTube.supermixPlaylistId)
         guard !mix.isEmpty else { return }
-        supermix = mix
-        repick()
+        await MainActor.run {
+            supermix = mix
+            repick()
+        }
     }
 
     private func play(_ track: Track, from pool: [Track]) {

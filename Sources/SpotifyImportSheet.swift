@@ -70,10 +70,15 @@ struct SpotifyImportSheet: View {
                     .keyboardType(.URL)
                     .foregroundStyle(palette.onSurface)
                     .onChange(of: link) { failure = nil }
-                if let pasted = UIPasteboard.general.string, SpotifyPlaylist.parseLink(pasted) != nil, link.isEmpty {
-                    Button("Paste") { link = pasted }
-                        .font(.blaze(13, .semibold))
-                        .foregroundStyle(palette.accent)
+                if link.isEmpty {
+                    // The clipboard is read on the tap, never while drawing: a
+                    // body that reads it puts the system's paste notice on screen
+                    // every time the view refreshes.
+                    Button("Paste") {
+                        if let pasted = UIPasteboard.general.string { link = pasted }
+                    }
+                    .font(.blaze(13, .semibold))
+                    .foregroundStyle(palette.accent)
                 }
             }
             .padding(.horizontal, 16)
@@ -173,9 +178,9 @@ struct SpotifyImportSheet: View {
         // view state, and the searches are network calls that suspend anyway.
         Task { @MainActor in
             do {
-                let result = try await SpotifyImport.run(link: link) { finished, count in
-                    done = finished
-                    total = count
+                let result = try await SpotifyImport.run(link: link) { soFar, all in
+                    done = soFar
+                    total = all
                 }
                 outcome = result
                 onImported()
@@ -201,9 +206,9 @@ private struct TravellingSongs: View {
     private let base: CGFloat = 56
 
     var body: some View {
-        let shift = finished ? 1 : fraction
-        let spotifySize = base * (1 - 0.18 * shift)
-        let blazifySize = base * (1 + 0.20 * shift)
+        let shift: Double = finished ? 1 : fraction
+        let spotifySize = base * CGFloat(1 - 0.18 * shift)
+        let blazifySize = base * CGFloat(1 + 0.20 * shift)
 
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !running)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate

@@ -51,6 +51,9 @@ final class Player: ObservableObject {
     /// have to be told about time that never played.
     private var sponsorSegments: [SponsorBlock.Segment] = []
     private var sponsorTask: Task<Void, Never>?
+    /// The last stretch jumped, so a clock that reports the old second once more
+    /// while the seek lands cannot count the same jump twice.
+    private var lastSponsorSkip: (end: Double, at: Date)?
     @Published private(set) var sponsorSkipped = 0.0
     @Published var showFullPlayer = false
     @Published var lastError: String?
@@ -655,10 +658,12 @@ final class Player: ObservableObject {
     }
 
     func prev() {
-        repeatCurrentSong(0)
         if currentTime > 3 || index == 0 {
+            // Back to the top of the same song, which is not leaving it — a few
+            // more times asked for still stands.
             seek(to: 0)
         } else {
+            repeatCurrentSong(0)
             index -= 1
             loadCurrent()
         }
@@ -703,6 +708,7 @@ final class Player: ObservableObject {
         sponsorTask?.cancel()
         sponsorSegments = []
         sponsorSkipped = 0
+        lastSponsorSkip = nil
         guard PlaybackPrefs.shared.sponsorBlock,
               !LocalMusic.isLocal(videoId),
               !YouTube.isLive(videoId)
@@ -726,6 +732,9 @@ final class Player: ObservableObject {
     private func considerSponsorSkip() {
         guard !sponsorSegments.isEmpty, isPlaying, !isSeeking else { return }
         guard let segment = SponsorBlock.segment(in: sponsorSegments, at: currentTime) else { return }
+        if let last = lastSponsorSkip, last.end == segment.end,
+           Date().timeIntervalSince(last.at) < 2 { return }
+        lastSponsorSkip = (segment.end, Date())
         sponsorSkipped += segment.end - currentTime
         seekSilently(to: segment.end)
     }
