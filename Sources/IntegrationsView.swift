@@ -1,15 +1,18 @@
 import SwiftUI
 
-/// Settings → Integrations. Only Last.fm: Discord Rich Presence needs a socket
-/// held open in the background, which iOS suspends, so it would only ever work
-/// while you were staring at the app.
+/// Settings → Integrations: Last.fm and ListenBrainz. Discord Rich Presence
+/// needs a socket held open in the background, which iOS suspends, so it would
+/// only ever work while you were staring at the app.
 struct IntegrationsView: View {
     @Environment(\.palette) private var palette
     @ObservedObject private var lastfm = LastFM.shared
+    @ObservedObject private var listenBrainz = ListenBrainz.shared
 
     @State private var apiKey = ""
     @State private var secret = ""
     @State private var showKeys = false
+    @State private var showToken = false
+    @State private var token = ""
 
     var body: some View {
         SettingsPage(title: "Integrations") {
@@ -52,6 +55,40 @@ struct IntegrationsView: View {
                 }
             }
 
+            SettingsGroup(title: "ListenBrainz") {
+                if listenBrainz.isConnected {
+                    SettingsLink(symbol: "person.crop.circle.badge.checkmark",
+                                 title: listenBrainz.username ?? "Connected",
+                                 subtitle: "Tap to forget this token") {
+                        listenBrainz.forget()
+                    }
+                    SettingsDivider()
+                    SettingsToggle(symbol: "waveform.badge.magnifyingglass",
+                                   title: "Send my listens",
+                                   subtitle: "An open listening history you own and can take with you",
+                                   isOn: $listenBrainz.scrobbling)
+                } else {
+                    SettingsLink(symbol: "key", title: "User token",
+                                 subtitle: listenBrainz.checking ? "Checking the token…" : "Not set yet") {
+                        showToken = true
+                    }
+                    SettingsDivider()
+                    SettingsLink(symbol: "arrow.up.forward.square", title: "Get a token",
+                                 subtitle: "Opens your ListenBrainz settings page") {
+                        if let url = URL(string: "https://listenbrainz.org/settings/") {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+            }
+
+            if let status = listenBrainz.status {
+                Text(status)
+                    .font(.blaze(13, .medium))
+                    .foregroundStyle(palette.accent)
+                    .padding(.horizontal, 6)
+            }
+
             if let status = lastfm.status {
                 Text(status)
                     .font(.blaze(13, .medium))
@@ -67,12 +104,56 @@ struct IntegrationsView: View {
                 .foregroundStyle(palette.onSurfaceVariant)
                 .padding(.horizontal, 6)
 
+            Text("ListenBrainz asks for nothing but the user token from its own "
+                 + "settings page. It is kept in the Keychain, and forgetting it "
+                 + "stops anything being sent from this phone.")
+                .font(.blaze(12))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .padding(.horizontal, 6)
+
             Text("Discord Rich Presence isn't here: it needs a connection held "
                  + "open in the background, which iOS suspends, so it would only "
                  + "show while the app was on screen.")
                 .font(.blaze(12))
                 .foregroundStyle(palette.onSurfaceVariant.opacity(0.8))
                 .padding(.horizontal, 6)
+        }
+        .sheet(isPresented: $showToken) {
+            NavigationStack {
+                Form {
+                    Section("ListenBrainz") {
+                        SecureField("User token", text: $token)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    .listRowBackground(palette.surface)
+                    Section {
+                        Text("Copy the user token from your ListenBrainz settings "
+                             + "page and paste it here. It is checked before "
+                             + "anything is sent.")
+                            .font(.blaze(12))
+                            .foregroundStyle(palette.onSurfaceVariant)
+                    }
+                    .listRowBackground(palette.surface)
+                }
+                .scrollContentBackground(.hidden)
+                .background(palette.scaffold.ignoresSafeArea())
+                .navigationTitle("User token")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Check and save") {
+                            let typed = token
+                            token = ""
+                            showToken = false
+                            Task { await listenBrainz.connect(token: typed) }
+                        }
+                        .tint(palette.accent)
+                        .disabled(token.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            }
+            .presentationDetents([.medium])
         }
         .sheet(isPresented: $showKeys) {
             NavigationStack {

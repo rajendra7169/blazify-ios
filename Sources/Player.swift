@@ -805,6 +805,7 @@ final class Player: ObservableObject {
         scrobbleStart = Date()
         scrobbled = false
         Task { await LastFM.shared.nowPlaying(track) }
+        Task { await ListenBrainz.shared.nowPlaying(track) }
         duration = track.duration
         currentTime = 0
         // Only now that the position is reset — saving earlier stored the
@@ -1238,6 +1239,7 @@ final class Player: ObservableObject {
         scrobbleStart = Date()
         scrobbled = false
         Task { await LastFM.shared.nowPlaying(track) }
+        Task { await ListenBrainz.shared.nowPlaying(track) }
 
         endHandled = false
         isLoading = false
@@ -1324,6 +1326,7 @@ final class Player: ObservableObject {
         scrobbled = true
         let started = scrobbleStart
         Task { await LastFM.shared.scrobble(track, startedAt: started) }
+        Task { await ListenBrainz.shared.scrobble(track, startedAt: started) }
     }
 
     /// The playing song's loudness, if YouTube told us when resolving the stream.
