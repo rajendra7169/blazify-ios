@@ -12,6 +12,7 @@ struct SearchView: View {
     /// the nav bar is hidden either way, so we need our own way back.
     var pushed = false
     @ObservedObject private var history = SearchHistory.shared
+    @ObservedObject private var browseArt = BrowseArt.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var query = ""
@@ -86,7 +87,10 @@ struct SearchView: View {
         .navigationDestination(item: $artistRoute) {
             ArtistView(browseId: $0.browseId, player: player)
         }
-        .task { if moods.isEmpty { moods = await YouTube.moods() } }
+        .task {
+            if moods.isEmpty { moods = await YouTube.moods() }
+            browseArt.warm(for: moods)
+        }
     }
 
     // MARK: Field
@@ -158,13 +162,13 @@ struct SearchView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 10)
 
- // Chips, as the recent-search row does — ✕ removes one.
-            FlowChips(items: Array(history.queries.prefix(12))) { entry in
+            // Two rows that run off to the side, rather than wrapping down the
+            // page — recent searches used to eat the screen before Browse.
+            RecentSearchRows(queries: Array(history.queries.prefix(20))) { entry in
                 run(entry)
             } onDelete: { entry in
                 history.remove(entry)
             }
-            .padding(.horizontal, 16)
             .padding(.bottom, 18)
         }
 
@@ -192,24 +196,51 @@ struct SearchView: View {
     }
 
     /// A browse tile sized by the grid, so it can't use the fixed-width card.
+    ///
+    /// Up to three covers are fanned in the corner like a hand of cards, so the tile
+    /// shows what is behind it rather than being a flat rectangle of colour.
     private func browseTile(_ mood: MoodItem) -> some View {
         let seed = Color(hex: mood.colorARGB & 0xFFFFFF)
+        let covers = browseArt.art[BrowseArt.key(mood)] ?? []
         return Button { moodRoute = mood } label: {
-            Text(mood.title)
-                .font(.blaze(14, .bold))
-                .foregroundStyle(seed.isLight ? .black : .white)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, minHeight: 84, alignment: .bottomLeading)
-                .padding(14)
-                .background(
-                    LinearGradient(colors: [seed.mixed(with: .white, 0.24), seed],
-                                   startPoint: .top, endPoint: .bottom),
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            ZStack(alignment: .bottomLeading) {
+                LinearGradient(colors: [seed.mixed(with: .white, 0.24), seed,
+                                        seed.mixed(with: .black, 0.18)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+
+                // Drawn back to front: the last one leans furthest away.
+                ZStack {
+                    ForEach(Array(covers.prefix(3).enumerated()).reversed(), id: \.offset) { i, cover in
+                        let place = Self.fan[i]
+                        RemoteImage(url: URL(string: cover), size: 56) { Color.black.opacity(0.15) }
+                            .frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .rotationEffect(.degrees(place.angle))
+                            .offset(x: place.x, y: place.y)
+                            .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+
+                Text(mood.title)
+                    .font(.blaze(14, .bold))
+                    .foregroundStyle(seed.isLight ? .black : .white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .padding(14)
+            }
+            .frame(maxWidth: .infinity, minHeight: 92, alignment: .bottomLeading)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
     }
+
+    /// Where each fanned cover sits and how far it leans.
+    private static let fan: [(x: CGFloat, y: CGFloat, angle: Double)] = [
+        (x: 14, y: -14, angle: 16),
+        (x: -14, y: -10, angle: 2),
+        (x: -40, y: -16, angle: -12),
+    ]
 
     // MARK: Typing — songs first, then queries
 
@@ -531,6 +562,72 @@ extension SearchView {
 }
 
 /// A wrapping row of removable chips, used for the recent-search row.
+/// Recent searches as two rows you push sideways, at most twenty.
+///
+/// Each chip goes into whichever row is shorter, so the two stay level — the same
+/// packing a staggered grid does, done by hand because SwiftUI has no such grid.
+struct RecentSearchRows: View {
+    @Environment(\.palette) private var palette
+    let queries: [String]
+    let onTap: (String) -> Void
+    let onDelete: (String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: 6) {
+                        ForEach(row, id: \.self) { chip(for: $0) }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        // Two chips and the gap between them.
+        .frame(height: 72)
+    }
+
+    /// Shorter row wins the next chip, measured by how wide its words run.
+    private var rows: [[String]] {
+        var top: [String] = []
+        var bottom: [String] = []
+        var topWidth = 0
+        var bottomWidth = 0
+        for q in queries {
+            let w = q.count + 6
+            if topWidth <= bottomWidth {
+                top.append(q); topWidth += w
+            } else {
+                bottom.append(q); bottomWidth += w
+            }
+        }
+        return bottom.isEmpty ? [top] : [top, bottom]
+    }
+
+    private func chip(for entry: String) -> some View {
+        HStack(spacing: 6) {
+            Text(entry)
+                .font(.blaze(13, .medium))
+                .foregroundStyle(palette.onSurface)
+                .lineLimit(1)
+                .fixedSize()
+            Button { onDelete(entry) } label: {
+                Image(systemName: "xmark")
+                    .font(.blaze(10, .bold))
+                    .foregroundStyle(palette.onSurfaceVariant)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 7)
+        .background(palette.onSurface.opacity(0.06))
+        .clipShape(Capsule())
+        .contentShape(Capsule())
+        .onTapGesture { onTap(entry) }
+    }
+}
+
 struct FlowChips: View {
     @Environment(\.palette) private var palette
     let items: [String]
