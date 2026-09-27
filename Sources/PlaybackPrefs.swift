@@ -47,6 +47,10 @@ final class PlaybackPrefs: ObservableObject {
     @Published var shufflePlaylistFirst: Bool { didSet { save(shufflePlaylistFirst, "shufflePlaylistFirst") } }
     @Published var autoSkipOnError: Bool { didSet { save(autoSkipOnError, "autoSkipNextOnError") } }
 
+    /// Video Art is a video, which costs far more than a picture — off on mobile
+    /// data until it is asked for.
+    @Published var videoOnMobile: Bool { didSet { save(videoOnMobile, "videoOnMobile") } }
+
     // Misc
     @Published var autoDownloadOnLike: Bool { didSet { save(autoDownloadOnLike, "autoDownloadOnLike") } }
     @Published var keepScreenOn: Bool { didSet { save(keepScreenOn, "keepScreenOn") } }
@@ -85,6 +89,7 @@ final class PlaybackPrefs: ObservableObject {
         rememberShuffleRepeat = flag("rememberShuffleAndRepeat", true)
         shufflePlaylistFirst = flag("shufflePlaylistFirst", false)
         autoSkipOnError = flag("autoSkipNextOnError", true)
+        videoOnMobile = flag("videoOnMobile", false)
 
         autoDownloadOnLike = flag("autoDownloadOnLike", false)
         keepScreenOn = flag("keepScreenOn", false)

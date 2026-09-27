@@ -18,11 +18,6 @@ struct RingPlayerLayout: View {
         VStack(spacing: 0) {
             topBar
 
-            // The ring is the only seek surface here, so the times belong to it
-            // rather than to a slider underneath that says the same thing twice.
-            times
-            Spacer().frame(height: 6)
-
             GeometryReader { geo in
                 let side = min(geo.size.width, geo.size.height) * 0.92
                 SeekableAlbumRing(
@@ -31,6 +26,9 @@ struct RingPlayerLayout: View {
                     ringColor: player.artColor,
                     trackColor: .white.opacity(0.16),
                     thumbColor: player.artColor,
+                    // The times sit in a gap cut into the top of the ring — the ring
+                    // is the only seek surface here, so they belong to it.
+                    topLabel: AnyView(times),
                 ) { f in
                     scrub = nil
                     player.seek(to: f)
@@ -73,7 +71,7 @@ struct RingPlayerLayout: View {
         .padding(.bottom, 6)
     }
 
-    // MARK: The times, in the gap above the ring
+    // MARK: The times, in the gap cut into the top of the ring
 
     private var times: some View {
         HStack(spacing: 6) {
@@ -84,7 +82,7 @@ struct RingPlayerLayout: View {
                 .foregroundStyle(.white.opacity(0.7))
         }
         .font(.system(size: 13, weight: .semibold))
-        .frame(maxWidth: .infinity)
+        .fixedSize()
     }
 
     // MARK: Title on the left, its keys on the right
@@ -201,9 +199,21 @@ struct SeekableAlbumRing: View {
     let thumbColor: Color
     var stroke: CGFloat = 7        // gallery previews use 5
     var artPadding: CGFloat = 18   // gallery previews use 9
+    /// Shown in a gap cut into the top of the ring — the elapsed and total time.
+    /// The ring then runs from the gap's right edge round to its left edge.
+    var topLabel: AnyView?
     let onSeek: (Double) -> Void
 
     @State private var dragFraction: Double?
+    @State private var labelWidth: CGFloat = 0
+
+    /// How much of the circle the gap eats, as a fraction, from the label's width.
+    private func gapFraction(_ side: CGFloat) -> Double {
+        guard topLabel != nil, labelWidth > 0, side > 0 else { return 0 }
+        let circumference = Double.pi * Double(side - stroke)
+        guard circumference > 0 else { return 0 }
+        return min(Double(labelWidth + 12 + stroke) / circumference, 0.33)
+    }
 
     var body: some View {
         let shown = min(max(dragFraction ?? progress, 0), 1)
@@ -223,18 +233,24 @@ struct SeekableAlbumRing: View {
                 let r = d / 2
                 let center = CGPoint(x: w / 2, y: h / 2)
 
+                let gap = gapFraction(min(w, h))
+                let span = 1 - gap          // what is left of the circle to draw on
+                let start = gap / 2         // the gap is centred at the top
+
                 ZStack {
                     Circle()
+                        .trim(from: start, to: 1 - start)
                         .stroke(trackColor, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
                         .padding(stroke / 2)
                     Circle()
-                        .trim(from: 0, to: max(shown, 0.0001))
+                        .trim(from: start, to: start + max(shown * span, 0.0001))
                         .stroke(ringColor, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                         .padding(stroke / 2)
 
                     // Knob: white dot with a coloured core.
-                    let a = (-90.0 + 360.0 * shown) * .pi / 180.0
+                    let a = (-90.0 + 360.0 * (start + shown * span)) * .pi / 180.0
                     let knob = CGPoint(x: center.x + r * cos(a), y: center.y + r * sin(a))
                     Circle().fill(.white)
                         .frame(width: stroke * 1.8, height: stroke * 1.8)
@@ -247,22 +263,39 @@ struct SeekableAlbumRing: View {
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { g in
-                            dragFraction = Self.angleFraction(g.location, w, h)
+                            dragFraction = Self.seekFraction(g.location, w, h, gap)
                         }
                         .onEnded { g in
-                            let f = Self.angleFraction(g.location, w, h)
+                            let f = Self.seekFraction(g.location, w, h, gap)
                             dragFraction = nil
                             onSeek(f)
                         },
                 )
             }
+
+            if let topLabel {
+                topLabel
+                    .background(
+                        GeometryReader { g in
+                            Color.clear.onAppear { labelWidth = g.size.width }
+                                .onChange(of: g.size.width) { labelWidth = g.size.width }
+                        },
+                    )
+                    // Centred on the ring's line, not hanging below it.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .offset(y: -stroke / 2)
+            }
         }
     }
 
-    /// 0 = 12 o'clock, increasing clockwise.
-    private static func angleFraction(_ p: CGPoint, _ w: CGFloat, _ h: CGFloat) -> Double {
+    /// 0 = 12 o'clock, increasing clockwise, then folded back into the part of
+    /// the circle the ring actually occupies once the gap is cut out of it.
+    private static func seekFraction(_ p: CGPoint, _ w: CGFloat, _ h: CGFloat, _ gap: Double) -> Double {
         let angle = atan2(Double(p.y - h / 2), Double(p.x - w / 2)) * 180 / .pi
-        return ((angle + 90 + 360).truncatingRemainder(dividingBy: 360)) / 360
+        let raw = ((angle + 90 + 360).truncatingRemainder(dividingBy: 360)) / 360
+        let span = 1 - gap
+        guard span > 0 else { return 0 }
+        return min(max((raw - gap / 2) / span, 0), 1)
     }
 }
 

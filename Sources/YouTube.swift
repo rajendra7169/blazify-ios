@@ -191,6 +191,46 @@ enum YouTube {
     }
 
     /// One client's attempt at a playable audio URL.
+    /// A picture-only stream for the Video Art player: the same answer the song
+    /// comes from, read for its video rather than its sound. Adaptive video has
+    /// no audio in it at all, which is exactly right — the song is the sound and
+    /// this only has to be looked at.
+    static func videoStreamURL(for videoId: String, maxHeight: Int) async -> URL? {
+        let visitor = await visitorData()
+        let clients = await MainActor.run { StreamPrefs.shared.order }
+
+        for client in clients {
+            var context = client.context
+            if let visitor { context["visitorData"] = visitor }
+            let body: [String: Any] = [
+                "context": ["client": context],
+                "videoId": videoId,
+                "contentCheckOk": true, "racyCheckOk": true,
+            ]
+            guard let json = await post(musicPlayer, name: client.number, version: client.version,
+                                        userAgent: client.userAgent, visitor: visitor, body: body),
+                  (json["playabilityStatus"] as? [String: Any])?["status"] as? String == "OK",
+                  let streaming = json["streamingData"] as? [String: Any],
+                  let formats = streaming["adaptiveFormats"] as? [[String: Any]]
+            else { continue }
+
+            // The biggest picture that still fits the cap — anything taller is
+            // data spent on detail this screen cannot show.
+            var best: [String: Any]?
+            var bestHeight = -1
+            for f in formats {
+                let mime = f["mimeType"] as? String ?? ""
+                guard mime.hasPrefix("video/mp4"),
+                      let u = f["url"] as? String, !u.isEmpty,
+                      let height = f["height"] as? Int, height <= maxHeight
+                else { continue }
+                if height > bestHeight { bestHeight = height; best = f }
+            }
+            if let best, let u = best["url"] as? String, let url = URL(string: u) { return url }
+        }
+        return nil
+    }
+
     private static func resolve(_ videoId: String, with client: StreamClient,
                                 visitor: String?,
                                 wantsLowest: Bool) async -> (url: URL, duration: Double)? {

@@ -22,6 +22,7 @@ struct PlayerView: View {
     @State private var scrub: Double?
     @State private var showQueue = false
     @State private var showSleep = false
+    @StateObject private var videoLoader = SongVideoLoader()
     @State private var showDesign = false
     @State private var showMenu = false
     @State private var showEqualizer = false
@@ -77,6 +78,10 @@ struct PlayerView: View {
 
                 if design == .fullArt, !lyricsMode {
                     fullArtBackground
+                }
+
+                if design == .video, !lyricsMode {
+                    videoArtBackground
                 }
 
                 content
@@ -205,7 +210,7 @@ struct PlayerView: View {
                     )
                     .padding(.horizontal, 32)
                 }
-            case .fullArt:
+            case .fullArt, .video:
                 standardLayout { Color.clear }
             }
         }
@@ -232,6 +237,46 @@ struct PlayerView: View {
     }
 
     // MARK: Full-art background (5-stop scrim, ported exactly)
+
+    /// The song's own video behind the player, muted and in step. The still
+    /// artwork stands in while it is being looked up, or when there is none.
+    @ViewBuilder private var videoArtBackground: some View {
+        GeometryReader { geo in
+            ZStack {
+                if let v = videoLoader.video {
+                    VideoArtView(video: v,
+                                 position: player.currentTime,
+                                 isPlaying: player.isPlaying)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                } else {
+                    RemoteImage(url: player.current?.artURL(size: 1280)) { ArtPlaceholder() }
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                }
+            }
+            .overlay(
+                LinearGradient(stops: [
+                    .init(color: .black.opacity(0.40), location: 0.0),
+                    .init(color: .clear, location: 0.35),
+                    .init(color: .black.opacity(0.55), location: 0.60),
+                    .init(color: .black.opacity(0.80), location: 0.80),
+                    .init(color: .black.opacity(0.95), location: 1.0),
+                ], startPoint: .top, endPoint: .bottom),
+            )
+        }
+        .ignoresSafeArea()
+        .task(id: player.current?.videoId) { loadVideo() }
+        .onAppear { loadVideo() }
+    }
+
+    /// A video is far heavier than a picture, so it waits for an unmetered
+    /// connection unless it has been asked for on mobile data.
+    private func loadVideo() {
+        let allowed = Reachability.shared.isUnmetered || PlaybackPrefs.shared.videoOnMobile
+        let height = Reachability.shared.isUnmetered ? 720 : 360
+        videoLoader.load(for: player.current, allowed: allowed, maxHeight: height)
+    }
 
     private var fullArtBackground: some View {
         GeometryReader { geo in

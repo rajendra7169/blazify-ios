@@ -183,6 +183,7 @@ struct DesignLivePreview: View {
             case .record: RecordPreview(player: player)
             case .cassette: CassettePreview(player: player)
             case .fullArt: FullArtPreview(player: player)
+            case .video: VideoArtPreview(player: player)
             }
         }
     }
@@ -400,16 +401,6 @@ private struct RingPreview: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
 
-            Spacer().frame(height: 4)
-            // The times live in the gap above the ring; there is no slider.
-            HStack(spacing: 4) {
-                Text(timeString(player.progress * player.duration))
-                    .foregroundStyle(player.artColor)
-                Text("—").foregroundStyle(.white.opacity(0.5))
-                Text(player.duration > 0 ? timeString(player.duration) : "--:--")
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-            .font(.system(size: 9, weight: .semibold))
 
             Spacer()
             GeometryReader { g in
@@ -421,6 +412,17 @@ private struct RingPreview: View {
                     trackColor: .white.opacity(0.20),
                     thumbColor: player.artColor,
                     stroke: 5, artPadding: 9,
+                    topLabel: AnyView(
+                        HStack(spacing: 3) {
+                            Text(timeString(player.progress * player.duration))
+                                .foregroundStyle(player.artColor)
+                            Text("—").foregroundStyle(.white.opacity(0.5))
+                            Text(player.duration > 0 ? timeString(player.duration) : "--:--")
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .font(.system(size: 8, weight: .semibold))
+                        .fixedSize(),
+                    ),
                 ) { player.seek(to: $0) }
                 .frame(width: side, height: side)
                 .frame(width: g.size.width, height: g.size.height, alignment: .center)
@@ -618,6 +620,48 @@ private struct CassettePreview: View {
             .frame(width: 26, height: 22)
             .background(cream)
             .clipShape(RoundedRectangle(cornerRadius: 7))
+    }
+}
+
+private struct VideoArtPreview: View {
+    @ObservedObject var player: Player
+
+    var body: some View {
+        ZStack {
+            GeometryReader { g in
+                RemoteImage(url: player.current?.artURL(size: 720)) { ArtPlaceholder() }
+                    .frame(width: g.size.width, height: g.size.height)
+                    .clipped()
+            }
+
+            LinearGradient(stops: [
+                .init(color: .black.opacity(0.30), location: 0.0),
+                .init(color: .clear, location: 0.35),
+                .init(color: .black.opacity(0.55), location: 0.65),
+                .init(color: .black.opacity(0.92), location: 1.0),
+            ], startPoint: .top, endPoint: .bottom)
+
+            // A still cannot show that it moves, so it is marked as a video.
+            Image(systemName: "play.rectangle.fill")
+                .font(.system(size: 26))
+                .foregroundStyle(.white.opacity(0.85))
+                .shadow(color: .black.opacity(0.6), radius: 4)
+
+            VStack(spacing: 0) {
+                Text("Now Playing")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                PreviewMetaRow(player: player)
+                Spacer().frame(height: 8)
+                PreviewTransport(player: player)
+                Spacer().frame(height: 6)
+                PreviewQueuePeek()
+                Spacer().frame(height: 6)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 34)
+        }
     }
 }
 

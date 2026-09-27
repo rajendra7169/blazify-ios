@@ -50,16 +50,17 @@ struct CassettePlayerLayout: View {
             CassetteTitleKeys(player: player, onTheme: onTheme, onMore: onMore)
                 .padding(.horizontal, 32)
 
-            Spacer().frame(height: 12)
+            Spacer().frame(height: 14)
             RetroWaveformCard(player: player).padding(.horizontal, 32)
-            Spacer().frame(height: 14)
+            Spacer().frame(height: 20)
             RetroTransportRow(player: player).padding(.horizontal, 32)
-            Spacer().frame(height: 14)
+            // The keys and the row underneath were almost touching.
+            Spacer().frame(height: 26)
             RetroBottomRow(accent: player.artColor, sleepActive: player.sleepActive,
                            sleepLabel: sleepLabel,
                            onLyrics: onLyrics, onQueue: onQueue, onSleep: onSleep)
                 .padding(.horizontal, 32)
-            Spacer().frame(height: 16)
+            Spacer().frame(height: 20)
         }
         .foregroundStyle(.white)
     }

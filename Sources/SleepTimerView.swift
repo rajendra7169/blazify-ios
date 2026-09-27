@@ -40,10 +40,10 @@ struct SleepTimerView: View {
                     .onChange(of: geo.size.height) { sheetHeight = geo.size.height }
             },
         )
-        .background(palette.surface)
-        // One surface for the whole sheet — the safe-area edges were painting
-        // their own colours before, so the top, middle and bottom disagreed.
-        .presentationBackground(palette.surface)
+        // Glass, like the AirPlay picker beside it on the same row — that one is
+        // drawn by the system and cannot be restyled, so this matches it rather
+        // than the two disagreeing.
+        .presentationBackground(.regularMaterial)
         .presentationDetents([.height(sheetHeight)])
     }
 
