@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// CASSETTE design. It replaces the
 /// standard chrome entirely: the cream waveform card is the only seek surface (and
@@ -11,6 +12,12 @@ struct CassettePlayerLayout: View {
     var onSleep: () -> Void
     var onTheme: () -> Void
     var onMore: () -> Void
+
+    private var sleepLabel: String {
+        if player.sleepAtEndOfSong { return "End of song" }
+        if let r = player.sleepRemaining { return timeString(r) }
+        return "Sleep timer"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,8 +44,37 @@ struct CassettePlayerLayout: View {
             .padding(.horizontal, 32)
             .frame(maxHeight: .infinity)
 
-            // Title / artist.
-            VStack(spacing: 2) {
+            // Title on the left with its own keys beside it, the way every
+            // other design now reads. The heart came up here from the waveform
+            // card, where it was the only design keeping it.
+            CassetteTitleKeys(player: player, onTheme: onTheme, onMore: onMore)
+                .padding(.horizontal, 32)
+
+            Spacer().frame(height: 12)
+            RetroWaveformCard(player: player).padding(.horizontal, 32)
+            Spacer().frame(height: 14)
+            RetroTransportRow(player: player).padding(.horizontal, 32)
+            Spacer().frame(height: 14)
+            RetroBottomRow(accent: player.artColor, sleepActive: player.sleepActive,
+                           sleepLabel: sleepLabel,
+                           onLyrics: onLyrics, onQueue: onQueue, onSleep: onSleep)
+                .padding(.horizontal, 32)
+            Spacer().frame(height: 16)
+        }
+        .foregroundStyle(.white)
+    }
+}
+
+/// The song's name on the left, with its own raised keys beside it: keep, theme,
+/// and the rest of the menu — the same three the other designs put by the title.
+struct CassetteTitleKeys: View {
+    @ObservedObject var player: Player
+    var onTheme: () -> Void
+    var onMore: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(player.current?.title ?? "")
                     .font(.system(size: 16, weight: .bold))
                     .lineLimit(1)
@@ -47,74 +83,71 @@ struct CassettePlayerLayout: View {
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
             }
-            .padding(.horizontal, 32)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer().frame(height: 12)
-            RetroWaveformCard(player: player).padding(.horizontal, 32)
-            Spacer().frame(height: 14)
-            RetroTransportRow(player: player).padding(.horizontal, 32)
-            Spacer().frame(height: 14)
-            RetroBottomRow(accent: player.artColor, sleepActive: player.sleepActive,
-                           onLyrics: onLyrics, onQueue: onQueue, onSleep: onSleep,
-                           onTheme: onTheme, onMore: onMore)
-                .padding(.horizontal, 32)
-            Spacer().frame(height: 16)
+            key(player.isCurrentFavorite ? "heart.fill" : "heart",
+                tint: player.isCurrentFavorite ? .red : Retro.ink) { player.toggleFavorite() }
+            key("paintpalette", action: onTheme)
+            key("ellipsis", action: onMore)
         }
-        .foregroundStyle(.white)
+    }
+
+    private func key(_ icon: String, tint: Color = Retro.ink,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 17))
+                .foregroundStyle(tint)
+                .frame(width: 38, height: 34)
+                .background(Retro.cream)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+        }
+        .buttonStyle(.plain)
     }
 }
 
-/// Cream card holding the times, the 36-bar waveform (tap AND drag to seek), and
-/// the favourite heart.
+/// Cream card holding the times and the 36-bar waveform (tap AND drag to seek).
 struct RetroWaveformCard: View {
     @ObservedObject var player: Player
 
     private let barCount = 36
 
     var body: some View {
-        HStack(spacing: 10) {
-            VStack(spacing: 4) {
-                HStack {
-                    Text(timeString(player.currentTime))
-                    Spacer()
-                    Text(player.duration > 0 ? timeString(player.duration) : "")
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Retro.ink)
+        VStack(spacing: 4) {
+            HStack {
+                Text(timeString(player.currentTime))
+                Spacer()
+                Text(player.duration > 0 ? timeString(player.duration) : "")
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Retro.ink)
 
-                GeometryReader { geo in
-                    Canvas { ctx, size in
-                        let frac = player.progress
-                        let gap = size.width / CGFloat(barCount)
-                        let barW = gap * 0.55
-                        for i in 0..<barCount {
-                            let wave = abs(sin(Double(i) * 1.7) * 0.5 + sin(Double(i) * 0.53 + 1.3) * 0.5)
-                            let barH = size.height * min(max(0.30 + 0.65 * CGFloat(wave), 0.15), 1)
-                            let x = gap * CGFloat(i) + (gap - barW) / 2
-                            let played = (Double(i) + 0.5) / Double(barCount) <= frac
-                            ctx.fill(
-                                Path(roundedRect: CGRect(x: x, y: (size.height - barH) / 2,
-                                                         width: barW, height: barH),
-                                     cornerRadius: barW / 2),
-                                with: .color(played ? player.artColor : Retro.ink.opacity(0.25)))
-                        }
+            GeometryReader { geo in
+                Canvas { ctx, size in
+                    let frac = player.progress
+                    let gap = size.width / CGFloat(barCount)
+                    let barW = gap * 0.55
+                    for i in 0..<barCount {
+                        let wave = abs(sin(Double(i) * 1.7) * 0.5 + sin(Double(i) * 0.53 + 1.3) * 0.5)
+                        let barH = size.height * min(max(0.30 + 0.65 * CGFloat(wave), 0.15), 1)
+                        let x = gap * CGFloat(i) + (gap - barW) / 2
+                        let played = (Double(i) + 0.5) / Double(barCount) <= frac
+                        ctx.fill(
+                            Path(roundedRect: CGRect(x: x, y: (size.height - barH) / 2,
+                                                     width: barW, height: barH),
+                                 cornerRadius: barW / 2),
+                            with: .color(played ? player.artColor : Retro.ink.opacity(0.25)))
                     }
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { g in seek(g.location.x, geo.size.width) }
-                            .onEnded { g in seek(g.location.x, geo.size.width) },
-                    )
                 }
-                .frame(height: 40)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { g in seek(g.location.x, geo.size.width) }
+                        .onEnded { g in seek(g.location.x, geo.size.width) },
+                )
             }
-
-            Button { player.toggleFavorite() } label: {
-                Image(systemName: player.isCurrentFavorite ? "heart.fill" : "heart")
-                    .font(.system(size: 22))
-                    .foregroundStyle(player.isCurrentFavorite ? .red : Retro.ink)
-                    .frame(width: 26, height: 26)
-            }
+            .frame(height: 40)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -196,34 +229,44 @@ struct RetroKey<Content: View>: View {
 struct RetroBottomRow: View {
     let accent: Color
     let sleepActive: Bool
+    /// What the sleep key says: the time left, "End of song", or its name.
+    let sleepLabel: String
     var onLyrics: () -> Void
     var onQueue: () -> Void
     var onSleep: () -> Void
-    var onTheme: () -> Void
-    var onMore: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            segment("text.alignleft", bg: accent, tint: .white, action: onLyrics)
-            segment("list.bullet", bg: Retro.darkKey, tint: Retro.cream, action: onQueue)
-            segment(sleepActive ? "moon.zzz.fill" : "moon.zzz",
-                    bg: Retro.darkKey, tint: sleepActive ? accent : Retro.cream, action: onSleep)
-            segment("paintpalette", bg: Retro.darkKey, tint: Retro.cream, action: onTheme)
-            segment("ellipsis", bg: Retro.darkKey, tint: Retro.cream, action: onMore)
+            segment("list.bullet", "Queue", action: onQueue)
+            VStack(spacing: 3) {
+                RoutePicker(tint: UIColor(Retro.ink), activeTint: UIColor(accent))
+                    .frame(width: 22, height: 22)
+                Text("AirPlay").font(.system(size: 10, weight: .medium)).lineLimit(1)
+            }
+            .foregroundStyle(Retro.ink)
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(Retro.cream)
+            .accessibilityLabel("AirPlay and Bluetooth")
+            segment(sleepActive ? "moon.zzz.fill" : "moon.zzz", sleepLabel,
+                    tint: sleepActive ? accent : Retro.ink, action: onSleep)
+            segment("text.alignleft", "Lyrics", tint: accent, action: onLyrics)
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
     }
 
-    private func segment(_ icon: String, bg: Color, tint: Color,
+    private func segment(_ icon: String, _ label: String, tint: Color = Retro.ink,
                          action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 19))
-                .foregroundStyle(tint)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(bg)
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 18))
+                Text(label).font(.system(size: 10, weight: .medium)).lineLimit(1)
+            }
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(Retro.cream)
         }
         .buttonStyle(.plain)
     }
