@@ -63,6 +63,9 @@ Screenshots, install guides and everything else: **[blazify website](https://raj
 | **Queue** | Reorder, save as a playlist, or start a radio from anything |
 | **Background audio** | Keeps playing with the screen off, with lock-screen controls |
 | **Sleep timer** | Including an end-of-track option |
+| **Live broadcasts** | A station that is on air plays as one, with a LIVE mark where a song shows its time |
+| **Play a few times** | Repeat the song a set number of times, then carry on with the queue |
+| **Skip what is not the song** | SponsorBlock's community marks, asked for by a few characters of a hash so the server is never told what you are playing |
 
 ### 🎚️ Sound
 
@@ -85,7 +88,7 @@ Screenshots, install guides and everything else: **[blazify website](https://raj
 
 | Feature | What it does |
 |---|---|
-| **Player designs** | Vinyl turntable, cassette tape, ring, and more |
+| **Player designs** | Vinyl turntable, cassette tape, ring, video art, and more |
 | **Colour from artwork** | The interface takes its colour from what is playing |
 | **Live preview** | Change the look and watch it change as you pick |
 | **Home widget** | A separate widget target |
@@ -96,9 +99,15 @@ Screenshots, install guides and everything else: **[blazify website](https://raj
 |---|---|
 | **Listen Together** | Play in sync with friends |
 | **Sign in with Google** | Optional. Brings your YouTube Music library and playlists |
+| **Speed dial** | Pin the songs and playlists you reach for to the top of Home |
+| **For you** | Starts your account's own YouTube Music Supermix |
+| **Import from Spotify** | Rebuild a shared Spotify playlist here, each song matched on name and length |
+| **Share a playlist** | Hand one over as a link or a square to scan. The songs travel in the link itself |
+| **Blocked artists** | Turn an artist away and they stay out of Home, search and radio |
 | **Backup & restore** | Your whole library in one file |
 | **Music recognition** | Name what is playing in the room |
 | **last.fm** | Scrobble what you play, with your own credentials |
+| **ListenBrainz** | An open listening history you own, with your own token |
 | **Listening stats** | What you actually played, and how much |
 | **Siri intents** | App intents for voice control |
 
