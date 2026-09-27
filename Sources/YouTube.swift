@@ -227,8 +227,14 @@ enum YouTube {
                 "videoId": videoId,
                 "contentCheckOk": true, "racyCheckOk": true,
             ]
-            guard let json = await post(musicPlayer, name: client.number, version: client.version,
-                                        userAgent: client.userAgent, visitor: visitor, body: body),
+            var answer = await post(musicPlayer, name: client.number, version: client.version,
+                                    userAgent: client.userAgent, visitor: visitor, body: body)
+            if refusedWithoutSignIn(answer), Auth.shared.isLoggedIn {
+                answer = await post(musicPlayer, name: client.number, version: client.version,
+                                    userAgent: client.userAgent, visitor: visitor,
+                                    body: body, login: true)
+            }
+            guard let json = answer,
                   (json["playabilityStatus"] as? [String: Any])?["status"] as? String == "OK",
                   let streaming = json["streamingData"] as? [String: Any],
                   let formats = streaming["adaptiveFormats"] as? [[String: Any]]
@@ -255,6 +261,19 @@ enum YouTube {
         return nil
     }
 
+    /// Whether YouTube refused this because nobody was signed in.
+    ///
+    /// Its own words are "Sign in to confirm you're not a bot". The status that
+    /// carries them differs by client — LOGIN_REQUIRED on one, UNPLAYABLE on the
+    /// next — so the reason is what is read.
+    private static func refusedWithoutSignIn(_ json: [String: Any]?) -> Bool {
+        guard let status = json?["playabilityStatus"] as? [String: Any] else { return false }
+        let name = status["status"] as? String ?? ""
+        guard name == "LOGIN_REQUIRED" || name == "UNPLAYABLE" else { return false }
+        let reason = ((status["reason"] as? String) ?? "").lowercased()
+        return reason.contains("sign in") || reason.contains("log in") || reason.contains("bot")
+    }
+
     private static func resolve(_ videoId: String, with client: StreamClient,
                                 visitor: String?,
                                 wantsLowest: Bool) async -> (url: URL, duration: Double)? {
@@ -265,8 +284,20 @@ enum YouTube {
             "videoId": videoId,
             "contentCheckOk": true, "racyCheckOk": true,
         ]
-        guard let json = await post(musicPlayer, name: client.number, version: client.version,
-                                    userAgent: client.userAgent, visitor: visitor, body: body),
+        var answer = await post(musicPlayer, name: client.number, version: client.version,
+                                userAgent: client.userAgent, visitor: visitor, body: body)
+        // "Sign in to confirm you're not a bot" is YouTube asking for an account,
+        // not a statement about the song — and when somebody is signed in, we
+        // have one. The first ask stays anonymous, because most songs need no
+        // account and not every request should carry one; only a refusal of this
+        // kind brings it out. Without this, a signed-in listener was refused
+        // songs their own account can play.
+        if refusedWithoutSignIn(answer), Auth.shared.isLoggedIn {
+            answer = await post(musicPlayer, name: client.number, version: client.version,
+                                userAgent: client.userAgent, visitor: visitor,
+                                body: body, login: true)
+        }
+        guard let json = answer,
               (json["playabilityStatus"] as? [String: Any])?["status"] as? String == "OK",
               let streaming = json["streamingData"] as? [String: Any]
         else { return nil }
@@ -403,7 +434,7 @@ enum YouTube {
                     title: flexText(cols, 0),
                     artist: flexArtist(cols),
                     thumbnail: musicThumb(r["thumbnail"]),
-                    duration: 0,   // filled from AVPlayer once the stream loads
+                    duration: flexDuration(cols),   // 0 when the row carries none
                     artistId: flexArtistId(cols)
                 ))
                 if out.count >= 25 { return out }
@@ -1005,7 +1036,8 @@ enum YouTube {
                     let videoType = deepString(r, key: "musicVideoType")
                     let track = Track(videoId: v, title: flexText(cols, 0),
                                       artist: flexArtist(cols),
-                                      thumbnail: musicThumb(r["thumbnail"]), duration: 0,
+                                      thumbnail: musicThumb(r["thumbnail"]),
+                                      duration: flexDuration(cols),
                                       artistId: flexArtistId(cols),
                                       explicit: explicit,
                                       video: videoType.map { $0 != "MUSIC_VIDEO_TYPE_ATV" },
@@ -1527,17 +1559,57 @@ enum YouTube {
         return text["simpleText"] as? String ?? ""
     }
 
-    /// The secondary line is "Artist • Album • m:ss"; take the first real segment.
+    /// The artist from the secondary line.
+    ///
+    /// That line is usually "Artist • Album • m:ss", but a row that YouTube marks
+    /// with its kind reads "Song • Artist • Album" — and taking the first segment
+    /// then made the artist of half the catalogue "Song". It showed on the player,
+    /// went out in scrobbles, and went into the search that looks for the song's
+    /// video, which is why so few videos were ever found.
+    ///
+    /// So the artist is taken from the run that links to an artist's channel,
+    /// which is the one thing only an artist has. The first real segment is kept
+    /// as the fallback, for rows whose artist carries no link.
     private static func flexArtist(_ cols: [[String: Any]]) -> String {
         guard cols.indices.contains(1),
               let r = cols[1]["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any],
               let text = r["text"] as? [String: Any],
               let runs = text["runs"] as? [[String: Any]] else { return "" }
         for run in runs {
+            guard let nav = run["navigationEndpoint"] as? [String: Any],
+                  let browse = nav["browseEndpoint"] as? [String: Any],
+                  let id = browse["browseId"] as? String, id.hasPrefix("UC"),
+                  let name = run["text"] as? String,
+                  !name.trimmingCharacters(in: .whitespaces).isEmpty
+            else { continue }
+            return name.trimmingCharacters(in: .whitespaces)
+        }
+        for run in runs {
             let t = (run["text"] as? String ?? "").trimmingCharacters(in: .whitespaces)
             if !t.isEmpty && t != "•" { return t }
         }
         return ""
+    }
+
+    /// The length on a row's secondary line, when it carries one: "4:32" at the
+    /// end of "Artist • Album • 4:32". Search rows used to arrive with no length
+    /// at all, which left the Video design unable to tell the song's own video
+    /// from a different cut of it.
+    private static func flexDuration(_ cols: [[String: Any]]) -> Double {
+        guard cols.indices.contains(1),
+              let r = cols[1]["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any],
+              let text = r["text"] as? [String: Any],
+              let runs = text["runs"] as? [[String: Any]] else { return 0 }
+        for run in runs.reversed() {
+            let t = (run["text"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            let parts = t.split(separator: ":")
+            guard parts.count == 2 || parts.count == 3,
+                  parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }),
+                  let seconds = parts.compactMap({ Double($0) }).reduce(0, { $0 * 60 + $1 }) as Double?
+            else { continue }
+            return seconds
+        }
+        return 0
     }
 
     /// The artist's channel id from the secondary line's runs (UC…).
