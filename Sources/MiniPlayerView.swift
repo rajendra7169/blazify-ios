@@ -38,9 +38,14 @@ struct MiniPlayerView: View {
                     Text(track.title)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(ink).lineLimit(1)
-                    Text(track.artist)
-                        .font(.system(size: 12))
-                        .foregroundStyle(ink.opacity(0.7)).lineLimit(1)
+                    HStack(spacing: 6) {
+                        if player.liveBroadcasts.contains(track.videoId) {
+                            LiveBadge()
+                        }
+                        Text(track.artist)
+                            .font(.system(size: 12))
+                            .foregroundStyle(ink.opacity(0.7)).lineLimit(1)
+                    }
                 }
                 .padding(.leading, 16)
 

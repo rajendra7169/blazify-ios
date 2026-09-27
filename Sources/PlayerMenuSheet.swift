@@ -56,7 +56,9 @@ struct PlayerMenuSheet: View {
                         downloadState == .done ? "Remove download"
                           : downloadState == .downloading ? "Downloading…" : "Download for offline",
                         tint: downloadState == .done ? Blaze.amber : .white,
-                        disabled: downloadState == .downloading) {
+                        // A broadcast has no file to keep: it is a playlist that
+                        // keeps growing, and never the same twice.
+                        disabled: downloadState == .downloading || player.isCurrentLive) {
                         if let t = player.current { downloads.toggle(t) }
                     }
 

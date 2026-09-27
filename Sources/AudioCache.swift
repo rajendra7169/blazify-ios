@@ -130,6 +130,9 @@ final class AudioCache: ObservableObject {
         let id = track.videoId
         guard isEnabled, limitMB != 0 else { return }
         guard !id.isEmpty, !isCached(id), !inFlight.contains(id) else { return }
+        // There is nothing to keep of a broadcast: no file, no end, and it will
+        // never be the same twice.
+        guard !YouTube.isLive(id) else { return }
         // Downloads already keep a permanent copy; don't duplicate it.
         guard Downloads.shared.localAudioURL(for: id) == nil else { return }
         inFlight.insert(id)

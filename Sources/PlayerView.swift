@@ -391,26 +391,34 @@ struct PlayerView: View {
 
             Spacer().frame(height: 24)
 
-            SlimSlider(
-                value: Binding(get: { scrub ?? player.progress }, set: { scrub = $0 }),
-                active: player.artColor,
-                duration: player.duration,
-                isPlaying: player.isPlaying,
-            ) { v in
-                player.seek(to: v)
-                scrub = nil
-            }
-            .padding(.horizontal, 32)
+            // A broadcast is wherever it is right now: it gets a LIVE mark
+            // instead of a bar to drag and two times that do not exist.
+            if player.isCurrentLive {
+                LiveBadge()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 4)
+            } else {
+                SlimSlider(
+                    value: Binding(get: { scrub ?? player.progress }, set: { scrub = $0 }),
+                    active: player.artColor,
+                    duration: player.duration,
+                    isPlaying: player.isPlaying,
+                ) { v in
+                    player.seek(to: v)
+                    scrub = nil
+                }
+                .padding(.horizontal, 32)
 
-            HStack {
-                Text(timeString((scrub ?? player.progress) * player.duration))
-                Spacer()
-                Text(timeString(player.duration))
+                HStack {
+                    Text(timeString((scrub ?? player.progress) * player.duration))
+                    Spacer()
+                    Text(timeString(player.duration))
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.8))
+                .padding(.horizontal, 36)
+                .padding(.top, 6)
             }
-            .font(.system(size: 12))
-            .foregroundStyle(.white.opacity(0.8))
-            .padding(.horizontal, 36)
-            .padding(.top, 6)
         }
     }
 

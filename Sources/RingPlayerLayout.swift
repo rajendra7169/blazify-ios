@@ -74,14 +74,22 @@ struct RingPlayerLayout: View {
     // MARK: The times, in the gap cut into the top of the ring
 
     private var times: some View {
-        HStack(spacing: 6) {
-            Text(timeString((scrub ?? player.progress) * player.duration))
-                .foregroundStyle(player.artColor)
-            Text("—").foregroundStyle(.white.opacity(0.5))
-            Text(player.duration > 0 ? timeString(player.duration) : "--:--")
-                .foregroundStyle(.white.opacity(0.7))
+        SwiftUI.Group {
+            // A broadcast has no position in it and no end: the gap in the ring
+            // carries the LIVE mark rather than two times that do not exist.
+            if player.isCurrentLive {
+                LiveBadge()
+            } else {
+                HStack(spacing: 6) {
+                    Text(timeString((scrub ?? player.progress) * player.duration))
+                        .foregroundStyle(player.artColor)
+                    Text("—").foregroundStyle(.white.opacity(0.5))
+                    Text(player.duration > 0 ? timeString(player.duration) : "--:--")
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .font(.system(size: 13, weight: .semibold))
+            }
         }
-        .font(.system(size: 13, weight: .semibold))
         .fixedSize()
     }
 

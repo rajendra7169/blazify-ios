@@ -117,9 +117,15 @@ struct RetroWaveformCard: View {
     var body: some View {
         VStack(spacing: 4) {
             HStack {
-                Text(timeString(player.currentTime))
-                Spacer()
-                Text(player.duration > 0 ? timeString(player.duration) : "")
+                if player.isCurrentLive {
+                    // Even in cream and plastic, a station is on air, not at a time.
+                    LiveBadge(color: Retro.ink)
+                    Spacer()
+                } else {
+                    Text(timeString(player.currentTime))
+                    Spacer()
+                    Text(player.duration > 0 ? timeString(player.duration) : "")
+                }
             }
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(Retro.ink)

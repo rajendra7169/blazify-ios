@@ -148,6 +148,25 @@ enum YouTube {
         loudnessLock.withLock { loudnessCache[videoId] }
     }
 
+    /// Broadcasts that are on air.
+    ///
+    /// Nothing about such an item says what it is until its address is asked
+    /// for, and then everything is different: a playlist of segments instead of
+    /// a file, no length, no end, and nothing worth keeping on disk. So the
+    /// answer is remembered here for whoever needs to know.
+    private static var liveIds = Set<String>()
+    private static let liveLock = NSLock()
+
+    static func isLive(_ videoId: String) -> Bool {
+        liveLock.withLock { liveIds.contains(videoId) }
+    }
+
+    private static func mark(live videoId: String, _ live: Bool) {
+        liveLock.withLock {
+            if live { liveIds.insert(videoId) } else { liveIds.remove(videoId) }
+        }
+    }
+
     static func streamURL(for videoId: String) async -> (url: URL, duration: Double)? {
         // A stream link is good for one connection and one only — the first
         // request is served and every later one is refused outright. Handing
@@ -178,6 +197,7 @@ enum YouTube {
         for client in clients {
             guard let picked = await resolve(videoId, with: client, visitor: visitor,
                                              wantsLowest: wantsLowest) else { continue }
+            if isLive(videoId) { return (picked.url, picked.duration) }
             urlCacheLock.withLock {
                 // Two minutes. Long enough to cover a prefetch followed by the
                 // song actually starting; short enough that a link is never
@@ -244,9 +264,24 @@ enum YouTube {
         guard let json = await post(musicPlayer, name: client.number, version: client.version,
                                     userAgent: client.userAgent, visitor: visitor, body: body),
               (json["playabilityStatus"] as? [String: Any])?["status"] as? String == "OK",
-              let streaming = json["streamingData"] as? [String: Any],
-              let formats = streaming["adaptiveFormats"] as? [[String: Any]]
+              let streaming = json["streamingData"] as? [String: Any]
         else { return nil }
+
+        // A broadcast that is on air has no formats to choose between: YouTube
+        // serves it as a playlist of segments instead, which is what a 24/7
+        // station is. AVPlayer plays such a playlist natively, so it is handed
+        // over as it comes — with no length, because it has no end. Without
+        // this, a station resolved to nothing and sat at 0:00.
+        let details = json["videoDetails"] as? [String: Any]
+        if details?["isLive"] as? Bool == true,
+           let manifest = streaming["hlsManifestUrl"] as? String,
+           let url = URL(string: manifest) {
+            mark(live: videoId, true)
+            return (url, 0)
+        }
+        mark(live: videoId, false)
+
+        guard let formats = streaming["adaptiveFormats"] as? [[String: Any]] else { return nil }
 
         // Track loudness for volume normalisation. In testing only ANDROID_VR
         // reports it, so this quietly stays empty on the other clients.
@@ -268,7 +303,7 @@ enum YouTube {
         guard let best, let u = best["url"] as? String, let url = URL(string: u) else { return nil }
 
         var dur = (Double(best["approxDurationMs"] as? String ?? "") ?? 0) / 1000
-        if dur <= 0, let ls = (json["videoDetails"] as? [String: Any])?["lengthSeconds"] as? String {
+        if dur <= 0, let ls = details?["lengthSeconds"] as? String {
             dur = Double(ls) ?? 0
         }
         return (url, dur)

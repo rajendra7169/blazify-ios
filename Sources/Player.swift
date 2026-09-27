@@ -29,6 +29,18 @@ final class Player: ObservableObject {
     }
     @Published var duration = 0.0
 
+    /// Broadcasts that are on air, so the screens can mark them: nothing else
+    /// about such an item says what it is, and there is no time to show for
+    /// something that is only ever wherever it is now.
+    @Published private(set) var liveBroadcasts: Set<String> = []
+    /// When each broadcast was last picked up again, so a failing one cannot loop.
+    private var liveRestartedAt: [String: Date] = [:]
+
+    var isCurrentLive: Bool {
+        guard let id = current?.videoId else { return false }
+        return liveBroadcasts.contains(id)
+    }
+
     /// "Play this a few times": how many more times round before the queue goes
     /// on, and the repeat mode to put back when it does.
     @Published private(set) var repeatTimesLeft = 0
@@ -652,6 +664,15 @@ final class Player: ObservableObject {
         }
     }
 
+    /// Whether this broadcast may be picked up again, at most once every 30
+    /// seconds — the same guard the Android service uses.
+    private func allowLiveRestart(_ videoId: String) -> Bool {
+        let now = Date()
+        if let last = liveRestartedAt[videoId], now.timeIntervalSince(last) <= 30 { return false }
+        liveRestartedAt[videoId] = now
+        return true
+    }
+
     /// Play this song `times` more times before moving on, or stop counting when
     /// `times` is zero.
     func repeatCurrentSong(times: Int) {
@@ -676,13 +697,16 @@ final class Player: ObservableObject {
     /// time-observer backup.
     /// What the community marked as not-the-song in this one.
     ///
-    /// Nothing is asked for a file of your own: it has no video id for anybody
-    /// to have marked.
+    /// Nothing is asked for a file of your own or a broadcast: one has no video
+    /// id for anybody to have marked, and the other has no fixed timeline to mark.
     private func refreshSponsorSegments(for videoId: String) {
         sponsorTask?.cancel()
         sponsorSegments = []
         sponsorSkipped = 0
-        guard PlaybackPrefs.shared.sponsorBlock, !LocalMusic.isLocal(videoId) else { return }
+        guard PlaybackPrefs.shared.sponsorBlock,
+              !LocalMusic.isLocal(videoId),
+              !YouTube.isLive(videoId)
+        else { return }
         let categories = Set(PlaybackPrefs.shared.sponsorCategories
             .compactMap(SponsorBlock.Category.init(rawValue:)))
         guard !categories.isEmpty else { return }
@@ -767,6 +791,17 @@ final class Player: ObservableObject {
             }
             sleepSongsRemaining = next
         }
+        // A broadcast does not end. When the playlist it was handed runs out the
+        // player treats that as the song finishing and walks on to the next one,
+        // which is a station turning itself into a song. Ask for the playlist
+        // again instead — but only once in a while, so a station that is off the
+        // air cannot loop here.
+        if let id = current?.videoId, liveBroadcasts.contains(id), allowLiveRestart(id) {
+            endHandled = false
+            loadCurrent()
+            return
+        }
+
         if repeatMode == .one {
             // One of the few times asked for has just been used up. Counting it
             // here can put the repeat mode back, and this last round still plays
@@ -899,6 +934,15 @@ final class Player: ObservableObject {
                     return
                 }
                 self.duration = stream.duration
+                if YouTube.isLive(videoId) {
+                    // A station: no length, nothing to keep on disk, no words to
+                    // look up, and nothing after it to prepare — it does not end,
+                    // so a link fetched for the next song would only go stale.
+                    self.liveBroadcasts.insert(videoId)
+                    self.playStream(stream.url, realDuration: 0, resumeAt: 0)
+                    return
+                }
+                self.liveBroadcasts.remove(videoId)
                 self.playStream(stream.url, realDuration: stream.duration, resumeAt: self.takeJoinAt())
                 // Keep a copy so the next play needs no network.
                 let cacheable = Track(videoId: track.videoId, title: track.title,
