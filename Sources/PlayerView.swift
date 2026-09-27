@@ -262,7 +262,8 @@ struct PlayerView: View {
                 if let v = videoLoader.video {
                     VideoArtView(video: v,
                                  position: player.currentTime,
-                                 isPlaying: player.isPlaying)
+                                 isPlaying: player.isPlaying,
+                                 onTrouble: { videoLoader.trouble($0) })
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                         .transition(.opacity)
@@ -275,11 +276,15 @@ struct PlayerView: View {
             // artwork is dimmed, was throwing a veil over the one design whose
             // whole point is the picture.
             .overlay(
+                // Android gives the picture the top 70% of the screen and fades it
+                // out over the lower half of that — so it is clear at the top, gone
+                // by the progress bar, and the controls stand on solid black. These
+                // are those same places measured against the whole screen.
                 LinearGradient(stops: [
                     .init(color: .clear, location: 0.0),
-                    .init(color: .clear, location: 0.50),
-                    .init(color: .black.opacity(0.55), location: 0.68),
-                    .init(color: .black.opacity(0.92), location: 0.85),
+                    .init(color: .clear, location: 0.35),
+                    .init(color: .black.opacity(0.85), location: 0.60),
+                    .init(color: .black, location: 0.70),
                     .init(color: .black, location: 1.0),
                 ], startPoint: .top, endPoint: .bottom),
             )
@@ -382,6 +387,15 @@ struct PlayerView: View {
                         .font(.system(size: 16))
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
+                    // Only on the design that promised a picture, and only while
+                    // there is none: the reason, in place of a mystery.
+                    if design == .video, videoLoader.video == nil, let note = videoLoader.note {
+                        Text(note)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .lineLimit(2)
+                            .padding(.top, 2)
+                    }
                 }
                 Spacer(minLength: 0)
 

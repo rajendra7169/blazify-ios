@@ -91,24 +91,48 @@ actor SongVideos {
 final class SongVideoLoader: ObservableObject {
     @Published private(set) var video: SongVideo?
 
+    /// Why there is no picture, in a few words, or nil while one is playing.
+    ///
+    /// A player that shows the cover when it promised a video looks broken, and
+    /// "it doesn't work" is the hardest report to act on. This is the screen
+    /// saying which of the three things happened: the connection is not allowed,
+    /// nothing was found, or the picture itself would not start.
+    @Published private(set) var note: String?
+
     private var loadedFor: String?
 
     func load(for track: Track?, allowed: Bool, maxHeight: Int) {
-        guard allowed, let track else {
+        guard allowed else {
             video = nil
             loadedFor = nil
+            note = String(localized: "Videos stay off on mobile data — Settings › Player and audio")
+            return
+        }
+        guard let track else {
+            video = nil
+            loadedFor = nil
+            note = nil
             return
         }
         let key = "\(track.videoId)@\(maxHeight)"
         guard key != loadedFor else { return }
         loadedFor = key
         video = nil
+        note = String(localized: "Looking for a video…")
         Task {
             let found = await SongVideos.shared.forSong(track, maxHeight: maxHeight)
             // A later song may have overtaken this lookup while it ran.
             guard loadedFor == key else { return }
             video = found
+            note = found == nil ? String(localized: "No video found for this song") : nil
         }
+    }
+
+    /// The picture was found but would not play. The cover stays, and this says so.
+    func trouble(_ reason: String) {
+        guard video != nil else { return }
+        video = nil
+        note = reason
     }
 }
 
@@ -122,15 +146,20 @@ struct VideoArtView: UIViewRepresentable {
     /// Where the song is, in seconds.
     let position: Double
     let isPlaying: Bool
+    /// Said when the picture will not start, so the screen can explain itself
+    /// rather than showing the cover and leaving everyone to guess.
+    var onTrouble: (String) -> Void = { _ in }
 
     func makeUIView(context: Context) -> PlayerContainerView {
         let view = PlayerContainerView()
-        view.backgroundColor = .black
+        view.backgroundColor = .clear   // the cover shows through until a frame arrives
+        context.coordinator.onTrouble = onTrouble
         context.coordinator.attach(to: view, video: video)
         return view
     }
 
     func updateUIView(_ view: PlayerContainerView, context: Context) {
+        context.coordinator.onTrouble = onTrouble
         context.coordinator.update(video: video, position: position, isPlaying: isPlaying, view: view)
     }
 
@@ -143,9 +172,19 @@ struct VideoArtView: UIViewRepresentable {
     final class Coordinator {
         private var player: AVPlayer?
         private var current: SongVideo?
+        var onTrouble: (String) -> Void = { _ in }
+
+        private var statusObs: NSKeyValueObservation?
+        private var readyObs: NSKeyValueObservation?
+        private var watchdog: Task<Void, Never>?
 
         /// How far out of step the picture may drift before it is nudged.
         private let tolerance: Double = 0.35
+
+        /// How long a picture may take to show its first frame before it counts
+        /// as never having started. Generous: a video is fetched alongside the
+        /// song, and the song comes first.
+        private let patience: UInt64 = 15
 
         func attach(to view: PlayerContainerView, video: SongVideo) {
             // The same user-agent the song is fetched with. Without it googlevideo
@@ -162,6 +201,25 @@ struct VideoArtView: UIViewRepresentable {
             view.playerLayer.videoGravity = .resizeAspectFill
             // Nothing is heard from it, so it starts the moment it can.
             player.play()
+
+            // Three ways this can go wrong, and all three used to look the same
+            // from the outside: the item refuses, the layer never has a frame to
+            // show, or it simply never arrives.
+            let item = player.currentItem
+            statusObs = item?.observe(\.status, options: [.new]) { [weak self] item, _ in
+                guard item.status == .failed else { return }
+                let reason = item.error?.localizedDescription ?? "the video would not load"
+                Task { @MainActor [weak self] in self?.onTrouble(reason) }
+            }
+            readyObs = view.playerLayer.observe(\.isReadyForDisplay, options: [.new]) { [weak self] layer, _ in
+                if layer.isReadyForDisplay { self?.watchdog?.cancel() }
+            }
+            watchdog?.cancel()
+            watchdog = Task { [weak self, weak view] in
+                try? await Task.sleep(nanoseconds: (self?.patience ?? 15) * 1_000_000_000)
+                guard !Task.isCancelled, let view, !view.playerLayer.isReadyForDisplay else { return }
+                await MainActor.run { self?.onTrouble("The video never started playing") }
+            }
 
             // A cut of its own just loops; there is nothing to stay in step with.
             NotificationCenter.default.addObserver(
@@ -197,6 +255,10 @@ struct VideoArtView: UIViewRepresentable {
 
         func stop() {
             NotificationCenter.default.removeObserver(self)
+            statusObs = nil
+            readyObs = nil
+            watchdog?.cancel()
+            watchdog = nil
             player?.pause()
             player?.replaceCurrentItem(with: nil)
             player = nil
