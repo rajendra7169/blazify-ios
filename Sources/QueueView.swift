@@ -62,6 +62,16 @@ struct QueueView: View {
                             Label("Remove", systemImage: "trash")
                         }
                     }
+                    // Swipe the other way and the song comes up next, instead of
+                    // being dragged by hand past everything in between.
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            player.moveToPlayNext(from: pair.offset)
+                        } label: {
+                            Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                        }
+                        .tint(Blaze.amber)
+                    }
                 }
                 .onMove { from, to in player.moveInQueue(from: from, to: to) }
             }

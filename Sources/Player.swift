@@ -432,8 +432,55 @@ final class Player: ObservableObject {
             return
         }
         guard !admissible([track]).isEmpty else { return }
-        queue.insert(track, at: min(index + 1, queue.count))
-        originalQueue.insert(track, at: min(index + 1, originalQueue.count))
+        let at = playNextSlot()
+        queue.insert(track, at: min(at, queue.count))
+        originalQueue.insert(track, at: min(at, originalQueue.count))
+        notePlayNextPick(track.videoId)
+    }
+
+    /// Songs picked for Play next that have not had their turn yet, oldest first.
+    /// A new pick goes in behind them rather than jumping in front, so picking
+    /// three songs plays them in the order they were picked.
+    private var pendingPlayNextIds: [String] = []
+
+    /// Where the next pick belongs: after the song playing and after any earlier
+    /// picks still waiting behind it.
+    private func playNextSlot() -> Int {
+        var slot = index + 1
+        var matched = 0
+        while slot < queue.count, matched < pendingPlayNextIds.count,
+              queue[slot].videoId == pendingPlayNextIds[matched] {
+            slot += 1
+            matched += 1
+        }
+        return slot
+    }
+
+    func notePlayNextPick(_ videoId: String) {
+        pendingPlayNextIds.removeAll { $0 == videoId }
+        pendingPlayNextIds.append(videoId)
+    }
+
+    /// Moves a song already in the queue up behind the one playing — what a swipe
+    /// on a queue row does. Nothing is added, so it takes its turn behind the
+    /// picks made before it.
+    func moveToPlayNext(from: Int) {
+        guard hasTrack, queue.indices.contains(from), from != index else { return }
+        let track = queue[from]
+        pendingPlayNextIds.removeAll { $0 == track.videoId }
+        let target = playNextSlot()
+        // Already standing in that spot.
+        guard from != target else {
+            notePlayNextPick(track.videoId)
+            return
+        }
+        let to = from > target ? target : max(target - 1, index)
+        guard from != to else {
+            notePlayNextPick(track.videoId)
+            return
+        }
+        moveInQueue(from: IndexSet(integer: from), to: from > to ? to : to + 1)
+        notePlayNextPick(track.videoId)
     }
 
     /// Append songs to the end of the queue, starting playback if idle.
@@ -711,6 +758,8 @@ final class Player: ObservableObject {
 
     private func loadCurrent() {
         guard let track = current else { return }
+        // A pick that has had its turn is no longer waiting.
+        pendingPlayNextIds.removeAll { $0 == track.videoId }
         if !crossfading { cancelCrossfade() }
         discardPrepared()
         // Last.fm: announce the song now, and arm the scrobble for later.
