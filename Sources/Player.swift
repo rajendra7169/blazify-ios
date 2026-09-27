@@ -28,6 +28,13 @@ final class Player: ObservableObject {
         set { clock.currentTime = newValue }
     }
     @Published var duration = 0.0
+
+    /// What SponsorBlock says is not music in whatever is playing, and how much
+    /// of it has been jumped so far — the lyrics are timed to the song, so they
+    /// have to be told about time that never played.
+    private var sponsorSegments: [SponsorBlock.Segment] = []
+    private var sponsorTask: Task<Void, Never>?
+    @Published private(set) var sponsorSkipped = 0.0
     @Published var showFullPlayer = false
     @Published var lastError: String?
 
@@ -635,6 +642,38 @@ final class Player: ObservableObject {
 
     /// Advance once per track, whether triggered by the end notification or the
     /// time-observer backup.
+    /// What the community marked as not-the-song in this one.
+    ///
+    /// Nothing is asked for a file of your own: it has no video id for anybody
+    /// to have marked.
+    private func refreshSponsorSegments(for videoId: String) {
+        sponsorTask?.cancel()
+        sponsorSegments = []
+        sponsorSkipped = 0
+        guard PlaybackPrefs.shared.sponsorBlock, !LocalMusic.isLocal(videoId) else { return }
+        let categories = Set(PlaybackPrefs.shared.sponsorCategories
+            .compactMap(SponsorBlock.Category.init(rawValue:)))
+        guard !categories.isEmpty else { return }
+
+        sponsorTask = Task { [weak self] in
+            let found = await SponsorBlock.segments(videoId: videoId, categories: categories)
+            guard !Task.isCancelled, let self else { return }
+            await MainActor.run {
+                // Still the same song by the time the answer arrives?
+                guard self.current?.videoId == videoId else { return }
+                self.sponsorSegments = found
+            }
+        }
+    }
+
+    /// Jump past a marked stretch the moment playback reaches it.
+    private func considerSponsorSkip() {
+        guard !sponsorSegments.isEmpty, isPlaying, !isSeeking else { return }
+        guard let segment = SponsorBlock.segment(in: sponsorSegments, at: currentTime) else { return }
+        sponsorSkipped += segment.end - currentTime
+        seekSilently(to: segment.end)
+    }
+
     /// The clock stopped at the end and nothing came to say so.
     ///
     /// Advancing the queue hangs entirely off AVPlayerItemDidPlayToEndTime, and
@@ -781,6 +820,7 @@ final class Player: ObservableObject {
 
         let videoId = track.videoId
         countPlay(track)
+        refreshSponsorSegments(for: videoId)
         Task { @MainActor in ListenTogether.shared.broadcastTrack(track, position: 0) }
 
         // Your own files first — they have no network path at all — then a
@@ -1231,6 +1271,7 @@ final class Player: ObservableObject {
         ) { [weak self] time in
             guard let self, player === self.avPlayer, !self.isSeeking else { return }
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
+            self.considerSponsorSkip()
             self.considerScrobble()
             self.considerCrossfade()
             self.considerGapless()

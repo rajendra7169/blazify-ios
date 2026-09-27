@@ -51,6 +51,14 @@ final class PlaybackPrefs: ObservableObject {
     /// data until it is asked for.
     @Published var videoOnMobile: Bool { didSet { save(videoOnMobile, "videoOnMobile") } }
 
+    /// Skipping the parts of a video that are not the song, using SponsorBlock's
+    /// community marks.
+    @Published var sponsorBlock: Bool { didSet { save(sponsorBlock, "sponsorBlockEnabled") } }
+    /// Which kinds of stretch to jump, kept as SponsorBlock's own category names.
+    @Published var sponsorCategories: Set<String> {
+        didSet { save(Array(sponsorCategories), "sponsorBlockCategories") }
+    }
+
     // Misc
     @Published var autoDownloadOnLike: Bool { didSet { save(autoDownloadOnLike, "autoDownloadOnLike") } }
     @Published var keepScreenOn: Bool { didSet { save(keepScreenOn, "keepScreenOn") } }
@@ -90,6 +98,11 @@ final class PlaybackPrefs: ObservableObject {
         shufflePlaylistFirst = flag("shufflePlaylistFirst", false)
         autoSkipOnError = flag("autoSkipNextOnError", true)
         videoOnMobile = flag("videoOnMobile", false)
+        sponsorBlock = flag("sponsorBlockEnabled", false)
+        // "Anything that is not music" is what a music player is for; the rest
+        // are there for whoever wants them.
+        sponsorCategories = Set(d.stringArray(forKey: "sponsorBlockCategories")
+            ?? [SponsorBlock.Category.nonMusic.rawValue])
 
         autoDownloadOnLike = flag("autoDownloadOnLike", false)
         keepScreenOn = flag("keepScreenOn", false)

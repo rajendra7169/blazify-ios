@@ -422,8 +422,10 @@ struct LyricsPane: View {
     private func smoothedPosition(at date: Date) -> Double {
         let raw = player.isPlaying ? anchorPos + date.timeIntervalSince(anchorWall) : anchorPos
         // A positive offset means "show these words later", i.e. look further
-        // back in the lyrics than the playhead.
-        return raw - offset
+        // back in the lyrics than the playhead. Time SponsorBlock jumped comes
+        // off too: the words are timed to the song, not to the video, so a
+        // talking intro that never played would otherwise put them all early.
+        return raw - offset - player.sponsorSkipped
     }
 
     private var songId: String { player.current?.videoId ?? "" }

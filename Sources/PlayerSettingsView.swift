@@ -10,6 +10,16 @@ struct PlayerSettingsView: View {
     @ObservedObject private var prefs = PlaybackPrefs.shared
     @State private var showQuality = false
     @State private var showHistory = false
+    @State private var showSponsorCategories = false
+
+    /// What the toggle's companion row reads: the kinds of stretch chosen, or
+    /// nothing at all.
+    private var sponsorSummary: String {
+        let chosen = SponsorBlock.Category.allCases
+            .filter { prefs.sponsorCategories.contains($0.rawValue) }
+            .map(\.title)
+        return chosen.isEmpty ? String(localized: "None") : chosen.joined(separator: ", ")
+    }
 
     var body: some View {
         SettingsPage(title: "Player and audio") {
@@ -52,6 +62,18 @@ struct PlayerSettingsView: View {
                                    range: PlaybackPrefs.crossfadeRange, step: 0.5) {
                         String(format: "%.1f s", $0)
                     }
+                }
+            }
+
+            SettingsGroup(title: "Skipping") {
+                SettingsToggle(symbol: "forward.frame",
+                               title: "Skip the parts that are not the song",
+                               subtitle: "Uses SponsorBlock's community marks to jump talking, credits and sponsor breaks in music videos. Blazify asks by a few characters of a code, so the server is never told what you are playing.",
+                               isOn: $prefs.sponsorBlock)
+                if prefs.sponsorBlock {
+                    SettingsDivider()
+                    SettingsLink(symbol: "checklist", title: "What to skip",
+                                 subtitle: sponsorSummary) { showSponsorCategories = true }
                 }
             }
 
@@ -132,6 +154,11 @@ struct PlayerSettingsView: View {
                             label: { "\($0.title) — \($0.blurb)" },
                             selection: $prefs.quality)
         }
+        .sheet(isPresented: $showSponsorCategories) {
+            MultiPickerSheet(title: "What to skip",
+                             options: SponsorBlock.Category.allCases,
+                             label: \.title, chosen: $prefs.sponsorCategories)
+        }
         .sheet(isPresented: $showHistory) {
             ValuePickerSheet(title: "Keep history for",
                              options: PlaybackPrefs.historyOptions,
@@ -187,6 +214,68 @@ struct ValuePickerSheet<Value: Hashable>: View {
             .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+/// Several answers rather than one: the same list as `EnumPickerSheet`, but each
+/// row toggles and the sheet stays open until it is closed, because choosing
+/// three things one sheet at a time is nobody's idea of a setting.
+struct MultiPickerSheet<Option: Identifiable>: View where Option.ID == String {
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+
+    let title: String
+    let options: [Option]
+    let label: (Option) -> String
+    @Binding var chosen: Set<String>
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(options.enumerated()), id: \.element.id) { i, option in
+                        Button {
+                            if chosen.contains(option.id) {
+                                chosen.remove(option.id)
+                            } else {
+                                chosen.insert(option.id)
+                            }
+                        } label: {
+                            HStack {
+                                Text(label(option))
+                                    .font(.blaze(15))
+                                    .foregroundStyle(palette.onSurface)
+                                Spacer()
+                                Image(systemName: chosen.contains(option.id)
+                                      ? "checkmark.circle.fill" : "circle")
+                                    .font(.blaze(17))
+                                    .foregroundStyle(chosen.contains(option.id)
+                                                     ? palette.accent
+                                                     : palette.onSurfaceVariant.opacity(0.5))
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 14)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if i < options.count - 1 {
+                            Divider().overlay(palette.onSurface.opacity(0.06))
+                        }
+                    }
+                }
+                .background(palette.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding(16)
+            }
+            .background(palette.scaffold.ignoresSafeArea())
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.tint(palette.accent)
+                }
+            }
         }
         .presentationDetents([.medium])
     }
