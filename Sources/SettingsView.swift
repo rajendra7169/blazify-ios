@@ -293,7 +293,9 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 // The signed-in channel's own picture, falling back to the
                 // silhouette for a guest or before it has been fetched.
-                Group {
+                // Spelt out in full: this file has a Group of its own, for the
+                // settings sections, and a bare `Group` finds that one.
+                SwiftUI.Group {
                     if let photo = auth.accountPhoto, let url = URL(string: photo) {
                         RemoteImage(url: url, size: 46) { Circle().fill(palette.accent) }
                     } else {
