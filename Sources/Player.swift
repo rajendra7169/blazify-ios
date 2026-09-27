@@ -288,7 +288,6 @@ final class Player: ObservableObject {
     /// Advance if there's somewhere to go. Returns false at the end of the
     /// queue so the caller can stop rather than sit there looking like it plays.
     @discardableResult
-    @discardableResult
     func next(auto: Bool = false) -> Bool {
         // Moved on by hand: the count belonged to the song that was playing.
         if !auto { repeatCurrentSong(0) }
