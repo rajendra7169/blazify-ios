@@ -35,6 +35,7 @@ struct LibraryCollectionView: View {
     @State private var route: LibraryRoute?
     @State private var query = ""
     @State private var searching = false
+    @State private var importingSpotify = false
 
     private var shown: [HomeItem] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
@@ -78,6 +79,21 @@ struct LibraryCollectionView: View {
                         .foregroundStyle(palette.onSurface)
                 }
             }
+            // A playlist can also arrive from Spotify, and this is the screen
+            // where somebody is already looking at their playlists.
+            if kind == .playlists {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { importingSpotify = true } label: {
+                        Image(systemName: "square.and.arrow.down")
+                            .foregroundStyle(palette.onSurface)
+                    }
+                    .accessibilityLabel("Import from Spotify")
+                }
+            }
+        }
+        .sheet(isPresented: $importingSpotify) {
+            SpotifyImportSheet(player: player, onImported: { Task { await load() } })
+                .environment(\.palette, palette)
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             if searching {
@@ -98,13 +114,15 @@ struct LibraryCollectionView: View {
             }
         }
         .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
-        .task(id: auth.isLoggedIn) {
-            loading = true
-            let result = await YouTube.library(kind.browseId)
-            await MainActor.run {
-                items = result.filter { $0.browseId != "SE" }
-                loading = false
-            }
+        .task(id: auth.isLoggedIn) { await load() }
+    }
+
+    private func load() async {
+        loading = true
+        let result = await YouTube.library(kind.browseId)
+        await MainActor.run {
+            items = result.filter { $0.browseId != "SE" }
+            loading = false
         }
     }
 

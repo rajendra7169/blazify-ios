@@ -14,6 +14,7 @@ struct LibraryView: View {
     @State private var artists: [HomeItem] = []
     @State private var loading = false
     @State private var route: LibraryRoute?
+    @State private var importingSpotify = false
 
     private let longRatio: CGFloat = 2.9    // full-width banners
     private let boxRatio: CGFloat = 1.5     // paired cards
@@ -90,7 +91,20 @@ struct LibraryView: View {
             }
             .background(palette.scaffold.ignoresSafeArea())
             .navigationTitle("Library")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { importingSpotify = true } label: {
+                        Image(systemName: "square.and.arrow.down")
+                            .foregroundStyle(palette.onSurface)
+                    }
+                    .accessibilityLabel("Import from Spotify")
+                }
+            }
             .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
+        }
+        .sheet(isPresented: $importingSpotify) {
+            SpotifyImportSheet(player: player, onImported: { Task { await load() } })
+                .environment(\.palette, palette)
         }
         .task(id: auth.isLoggedIn) { await load() }
     }
