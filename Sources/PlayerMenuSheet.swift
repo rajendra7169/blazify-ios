@@ -7,6 +7,7 @@ struct PlayerMenuSheet: View {
     @ObservedObject private var downloads = Downloads.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showAddToPlaylist = false
+    @State private var showRepeatTimes = false
 
     var onQueue: () -> Void
     var onSleep: () -> Void
@@ -59,6 +60,14 @@ struct PlayerMenuSheet: View {
                         if let t = player.current { downloads.toggle(t) }
                     }
 
+                    row(player.repeatTimesLeft > 0 ? "repeat.1.circle.fill" : "repeat.1",
+                        player.repeatTimesLeft > 0
+                            ? String(localized: "\(player.repeatTimesLeft) more to go")
+                            : String(localized: "Play this a few times"),
+                        tint: player.repeatTimesLeft > 0 ? Blaze.amber : .white) {
+                        showRepeatTimes = true
+                    }
+
                     row("plus.circle", "Add to playlist") { showAddToPlaylist = true }
                     row("quote.bubble", "Lyrics") { dismiss(); onLyrics() }
                     row("textformat.size", "Lyrics settings") { dismiss(); onLyricsSettings() }
@@ -84,6 +93,9 @@ struct PlayerMenuSheet: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showAddToPlaylist) {
             if let track = player.current { AddToPlaylistSheet(track: track) }
+        }
+        .sheet(isPresented: $showRepeatTimes) {
+            RepeatTimesSheet(player: player)
         }
     }
 
@@ -114,5 +126,91 @@ struct PlayerMenuSheet: View {
     private var shareURL: URL? {
         guard let id = player.current?.videoId else { return nil }
         return URL(string: "https://music.youtube.com/watch?v=\(id)")
+    }
+}
+
+/// How many more times round before the queue carries on.
+///
+/// The repeat button already has "repeat this one for ever"; this is the other
+/// thing people mean by it — a song a few more times, then on with the queue.
+struct RepeatTimesSheet: View {
+    @ObservedObject var player: Player
+    @Environment(\.dismiss) private var dismiss
+
+    private let choices = [1, 2, 3, 5, 10]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "repeat.1")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Blaze.amber)
+                Text("How many more times?")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 22)
+            .padding(.bottom, 8)
+
+            Text("The song plays that many more times, then the queue carries on.")
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.6))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+
+            ForEach(choices, id: \.self) { times in
+                Button {
+                    player.repeatCurrentSong(times: times)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(times == 1 ? String(localized: "1 time")
+                                        : String(localized: "\(times) times"))
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 0)
+                        if player.repeatTimesLeft == times {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Blaze.amber)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            if player.repeatTimesLeft > 0 {
+                Button {
+                    player.repeatCurrentSong(times: 0)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: "xmark.circle")
+                            .font(.system(size: 17))
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text("Stop repeating")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Blaze.surface.ignoresSafeArea())
+        .presentationDetents([.medium])
+        .preferredColorScheme(.dark)
     }
 }

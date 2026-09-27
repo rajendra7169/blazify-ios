@@ -29,6 +29,11 @@ final class Player: ObservableObject {
     }
     @Published var duration = 0.0
 
+    /// "Play this a few times": how many more times round before the queue goes
+    /// on, and the repeat mode to put back when it does.
+    @Published private(set) var repeatTimesLeft = 0
+    private var repeatModeBeforeCount: RepeatMode = .off
+
     /// What SponsorBlock says is not music in whatever is playing, and how much
     /// of it has been jumped so far — the lyrics are timed to the song, so they
     /// have to be told about time that never played.
@@ -268,7 +273,10 @@ final class Player: ObservableObject {
     /// Advance if there's somewhere to go. Returns false at the end of the
     /// queue so the caller can stop rather than sit there looking like it plays.
     @discardableResult
-    func next() -> Bool {
+    @discardableResult
+    func next(auto: Bool = false) -> Bool {
+        // Moved on by hand: the count belonged to the song that was playing.
+        if !auto { repeatCurrentSong(0) }
         if index < queue.count - 1 {
             index += 1
             loadCurrent()
@@ -307,6 +315,9 @@ final class Player: ObservableObject {
 
     func cycleRepeat() {
         defer { saveModes() }
+        // Setting the repeat mode by hand is the last word on it, so a count of
+        // times left stops rather than quietly undoing the choice later.
+        repeatTimesLeft = 0
         switch repeatMode {
         case .off: repeatMode = .all
         case .all: repeatMode = .one
@@ -632,12 +643,33 @@ final class Player: ObservableObject {
     }
 
     func prev() {
+        repeatCurrentSong(0)
         if currentTime > 3 || index == 0 {
             seek(to: 0)
         } else {
             index -= 1
             loadCurrent()
         }
+    }
+
+    /// Play this song `times` more times before moving on, or stop counting when
+    /// `times` is zero.
+    func repeatCurrentSong(times: Int) {
+        guard times > 0 else {
+            if repeatTimesLeft > 0 { repeatMode = repeatModeBeforeCount }
+            repeatTimesLeft = 0
+            return
+        }
+        if repeatTimesLeft == 0 { repeatModeBeforeCount = repeatMode }
+        repeatTimesLeft = times
+        repeatMode = .one
+    }
+
+    /// One more time round: count it, and let the queue go on once there are none left.
+    private func countRepeat() {
+        guard repeatTimesLeft > 0 else { return }
+        repeatTimesLeft -= 1
+        if repeatTimesLeft == 0 { repeatMode = repeatModeBeforeCount }
     }
 
     /// Advance once per track, whether triggered by the end notification or the
@@ -736,6 +768,10 @@ final class Player: ObservableObject {
             sleepSongsRemaining = next
         }
         if repeatMode == .one {
+            // One of the few times asked for has just been used up. Counting it
+            // here can put the repeat mode back, and this last round still plays
+            // — which is exactly "a few more times, then carry on".
+            countRepeat()
             endHandled = false
             seek(to: 0)
             avPlayer?.play()
@@ -747,7 +783,7 @@ final class Player: ObservableObject {
         // rather than loading, which is where the silence comes from.
         if adoptPreparedPlayer() { return }
 
-        if !next() {
+        if !next(auto: true) {
             // Queue's empty. Autoplay keeps going with songs related to the last
  // one — the auto radio queue — otherwise settle on paused at
             // the end instead of showing "playing" forever.
@@ -789,7 +825,7 @@ final class Player: ObservableObject {
             }
             self.queue.append(contentsOf: fresh)
             self.endHandled = false
-            _ = self.next()
+            _ = self.next(auto: true)
         }
     }
 
