@@ -384,19 +384,9 @@ struct HomeView: View {
             Button {
                 if auth.isLoggedIn { showAccount = true } else { showLogin = true }
             } label: {
-                // Whoever is signed in, shown as themselves. The silhouette is
-                // for a guest, or for the moment before the picture arrives.
-                if let photo = auth.accountPhoto, let url = URL(string: photo) {
-                    RemoteImage(url: url, size: 30) {
-                        Circle().fill(palette.accent.opacity(0.25))
-                    }
-                    .frame(width: 30, height: 30)
-                    .clipShape(Circle())
-                } else {
-                    Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
-                        .font(.system(size: 26))
-                        .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
-                }
+                Image(systemName: auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                    .font(.system(size: 26))
+                    .foregroundStyle(auth.isLoggedIn ? palette.accent : palette.onSurface)
             }
             Spacer()
             HStack(spacing: 8) {
@@ -511,7 +501,7 @@ struct GreetingCard: View {
                 // Sits on the accent gradient, so it stays white in both themes.
                 .foregroundStyle(.white)
                 .padding(20)
-                .frame(maxWidth: 210, alignment: .leading)
+                .frame(maxWidth: 250, alignment: .leading)
             }
             // Mascot: taller than the card so it overflows the top; bleeds off the
             // right edge; drop shadow gives the 3D "popping out" look.
@@ -531,53 +521,60 @@ struct GreetingCard: View {
             .onAppear { repick() }
     }
 
-    /// Two small covers that play something. They sit where the tagline was, so
-    /// the card is the same height as before — and a cover reads as a button in
-    /// a way another line of words never did.
+    /// Two small covers that play something, where the tagline was — so the card
+    /// keeps its height. A cover says "this plays"; a worded pill read as a label
+    /// nobody would think to press.
     private var buttons: some View {
         HStack(spacing: 8) {
             if let pick = forYouPick {
-                pickButton(pick, label: "For you") { play(pick, from: forYouPool) }
+                cardButton(pick, label: "For you") { play(pick, from: forYouPool) }
             }
             if let pick = speedPick {
-                pickButton(pick, label: nil) { play(pick, from: speedPool) }
+                cardButton(pick, label: nil) { play(pick, from: speedPool) }
             }
         }
     }
 
-    private func pickButton(_ track: Track, label: String?, action: @escaping () -> Void) -> some View {
+    /// The cover, then the words — or the cover on its own, which is the whole
+    /// button and carries nothing around it but its shadow.
+    private func cardButton(_ track: Track, label: String?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                RemoteImage(url: track.artURL(size: 96), size: 30) {
-                    RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.25))
+            HStack(spacing: 0) {
+                ZStack {
+                    Color.white.opacity(0.12)
+                    RemoteImage(url: track.artURL(size: 96), size: 32) { Color.clear }
+                    // The play mark belongs to the worded button; a cover on its
+                    // own stays a clean picture.
+                    if label != nil {
+                        Circle().fill(.black.opacity(0.55))
+                            .frame(width: 18, height: 18)
+                            .overlay(
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.white),
+                            )
+                    }
                 }
-                .frame(width: 30, height: 30)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .frame(width: 32, height: 32)
+                .clipped()
+
                 if let label {
                     Text(label)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
+                        .fixedSize()
+                        .padding(.leading, 8)
+                        .padding(.trailing, 12)
                 }
             }
-            .padding(.horizontal, label == nil ? 5 : 8)
-            .padding(.vertical, 5)
+            .frame(height: 32)
             .background(.white.opacity(0.22))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .shadow(color: .black.opacity(0.28), radius: 5, y: 2)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .shadow(color: .black.opacity(0.35), radius: 4, y: 3)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label ?? "Play \(track.title)")
-    }
-
-    /// What you have played most, and what you have played lately — the nearest
-    /// thing this app knows to a pinned row and a mix made for you.
-    private var speedPool: [Track] {
-        PlayHistory.mostPlayed(.all, limit: 40).filter { !LocalMusic.isLocal($0.videoId) }
-    }
-
-    private var forYouPool: [Track] {
-        PlayHistory.recent.prefix(40).filter { !LocalMusic.isLocal($0.videoId) }
     }
 
     private func repick() {

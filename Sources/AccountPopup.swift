@@ -83,9 +83,16 @@ struct AccountPopup: View {
         } label: {
             HStack(spacing: 12) {
                 if auth.isLoggedIn {
-                    Circle().fill(palette.heroGradient)
-                        .frame(width: 40, height: 40)
-                        .overlay(Image(systemName: "person.fill").foregroundStyle(palette.onSurface))
+                    // Whoever is signed in, shown as themselves.
+                    if let photo = auth.accountPhoto, let url = URL(string: photo) {
+                        RemoteImage(url: url, size: 40) { Circle().fill(palette.heroGradient) }
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                    } else {
+                        Circle().fill(palette.heroGradient)
+                            .frame(width: 40, height: 40)
+                            .overlay(Image(systemName: "person.fill").foregroundStyle(palette.onSurface))
+                    }
                 } else {
                     iconChip("rectangle.portrait.and.arrow.right")
                 }
