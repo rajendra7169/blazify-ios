@@ -5,6 +5,7 @@ import SwiftUI
 struct PlayerMenuSheet: View {
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
+    @ObservedObject private var dial = SpeedDial.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showAddToPlaylist = false
     @State private var showRepeatTimes = false
@@ -71,6 +72,15 @@ struct PlayerMenuSheet: View {
                     }
 
                     row("plus.circle", "Add to playlist") { showAddToPlaylist = true }
+
+                    if let track = player.current, !track.videoId.isEmpty {
+                        let pinned = dial.isPinned(track.videoId)
+                        row(pinned ? "pin.slash" : "pin",
+                            pinned ? "Unpin from speed dial" : "Pin to speed dial",
+                            tint: pinned ? Blaze.amber : .white) {
+                            dial.toggle(track)
+                        }
+                    }
                     row("quote.bubble", "Lyrics") { dismiss(); onLyrics() }
                     row("textformat.size", "Lyrics settings") { dismiss(); onLyricsSettings() }
                     row("metronome", "Lyrics timing") { dismiss(); onLyricsTiming() }

@@ -408,6 +408,7 @@ struct SongRowMenu: View {
     var onAddToPlaylist: (() -> Void)?
     var onOpenArtist: (() -> Void)?
     @ObservedObject private var downloads = Downloads.shared
+    @ObservedObject private var dial = SpeedDial.shared
 
     @State private var playlistTrack: Track?
     @State private var artistId: String?
@@ -432,6 +433,11 @@ struct SongRowMenu: View {
                 if let onAddToPlaylist { onAddToPlaylist() } else { playlistTrack = track }
             } label: {
                 Label("Add to playlist", systemImage: "plus.circle")
+            }
+            Button { dial.toggle(track) } label: {
+                Label(dial.isPinned(track.videoId)
+                      ? "Unpin from speed dial" : "Pin to speed dial",
+                      systemImage: dial.isPinned(track.videoId) ? "pin.slash" : "pin")
             }
 
             Divider()

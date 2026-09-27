@@ -7,6 +7,7 @@ struct PlaylistView: View {
     let item: HomeItem
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
+    @ObservedObject private var dial = SpeedDial.shared
 
     @ObservedObject private var auth = Auth.shared
     @State private var tracks: [Track] = []
@@ -169,25 +170,36 @@ struct PlaylistView: View {
         .buttonStyle(.plain)
     }
 
-    /// The edit menu, shown only for playlists you own.
+    /// The ⋮ menu: pinning it, for any playlist, and the editing items for one of
+    /// your own.
     @ViewBuilder private var editMenu: some View {
-        if isEditable {
+        if isEditable || !(item.browseId ?? "").isEmpty {
             Menu {
-                Button {
-                    withAnimation { editing.toggle() }
-                } label: {
-                    Label(editing ? "Done" : "Reorder or remove",
-                          systemImage: editing ? "checkmark" : "arrow.up.arrow.down")
+                if let browseId = item.browseId, !browseId.isEmpty {
+                    Button { dial.toggle(item) } label: {
+                        Label(dial.isPinned(browseId)
+                              ? "Unpin from speed dial" : "Pin to speed dial",
+                              systemImage: dial.isPinned(browseId) ? "pin.slash" : "pin")
+                    }
                 }
-                Button {
-                    newTitle = item.title
-                    renaming = true
-                } label: {
-                    Label("Rename", systemImage: "pencil")
-                }
-                Divider()
-                Button(role: .destructive) { confirmDelete = true } label: {
-                    Label("Delete playlist", systemImage: "trash")
+                if isEditable {
+                    Divider()
+                    Button {
+                        withAnimation { editing.toggle() }
+                    } label: {
+                        Label(editing ? "Done" : "Reorder or remove",
+                              systemImage: editing ? "checkmark" : "arrow.up.arrow.down")
+                    }
+                    Button {
+                        newTitle = item.title
+                        renaming = true
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    Divider()
+                    Button(role: .destructive) { confirmDelete = true } label: {
+                        Label("Delete playlist", systemImage: "trash")
+                    }
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")

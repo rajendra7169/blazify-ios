@@ -37,6 +37,10 @@ struct HomeView: View {
                     if look.showHomeGreeting { GreetingCard(player: player) }
                     if look.showHomeSearchBar { searchPill }
 
+                    // Pinned first: the one part of this screen that does not
+                    // change every time it loads.
+                    SpeedDialGrid(player: player) { path.append($0) }
+
                     if !net.isOnline {
                         offlineFeed
                     } else {
@@ -465,6 +469,7 @@ struct SearchRoute: Hashable {}
 struct GreetingCard: View {
     @Environment(\.palette) private var palette
     @ObservedObject private var auth = Auth.shared
+    @ObservedObject private var dial = SpeedDial.shared
     /// The card can start something playing, so it needs the player.
     @ObservedObject var player: Player
     /// Which song each button is offering. Re-picked on every tap so the card
@@ -579,11 +584,14 @@ struct GreetingCard: View {
         .accessibilityLabel(label ?? "Play \(track.title)")
     }
 
-    /// What you have played most, and what you have played lately — the nearest
-    /// thing this app knows to a pinned row and a mix made for you. Local files
-    /// can't seed a queue, and a blocked artist doesn't get offered.
+    /// The speed dial proper when anything is pinned, and what you have played
+    /// most when nothing is — the button should always start something, even
+    /// before anybody has pinned their first song. Local files can't seed a
+    /// queue, and a blocked artist doesn't get offered.
     private var speedPool: [Track] {
-        PlayHistory.mostPlayed(.all, limit: 40)
+        let pinned = dial.songs.filter { !LocalMusic.isLocal($0.videoId) }
+        if !pinned.isEmpty { return pinned }
+        return PlayHistory.mostPlayed(.all, limit: 40)
             .filter { !LocalMusic.isLocal($0.videoId) }
             .withoutBlockedArtists()
     }
@@ -595,7 +603,9 @@ struct GreetingCard: View {
     }
 
     private func repick() {
-        speedPick = speedPool.randomElement()
+        // A pinned dial is a choice somebody made; it is offered in its own order
+        // rather than shuffled like the history behind it.
+        speedPick = dial.songs.first ?? speedPool.randomElement()
         forYouPick = forYouPool.randomElement()
     }
 
