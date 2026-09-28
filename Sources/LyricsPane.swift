@@ -141,6 +141,9 @@ struct LyricsPane: View {
             Spacer()
         }
         .padding(.horizontal, 22)
+        // Sits up where "Now Playing" used to be, rather than leaving a gap
+        // above it now that nothing is there.
+        .padding(.top, -34)
         .padding(.bottom, 6)
     }
 

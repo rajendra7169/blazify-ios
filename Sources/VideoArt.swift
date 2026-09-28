@@ -132,6 +132,17 @@ final class SongVideoLoader: ObservableObject {
         }
     }
 
+    /// Opens the song after this one, so a skip lands on a picture rather than
+    /// on black. Called with whatever the queue says is next.
+    func prepareNext(_ track: Track?, allowed: Bool, maxHeight: Int) {
+        guard allowed, let track, !track.videoId.isEmpty, !LocalMusic.isLocal(track.videoId)
+        else { return }
+        Task {
+            guard let found = await SongVideos.shared.forSong(track, maxHeight: maxHeight) else { return }
+            VideoArtPlayers.shared.prepare(found)
+        }
+    }
+
     /// The picture was found but would not play. The cover stays, and this says so.
     func trouble(_ reason: String) {
         guard video != nil else { return }
@@ -159,17 +170,65 @@ final class VideoArtPlayers {
     private var kept: AVPlayer?
     private var output: AVPlayerItemVideoOutput?
 
+    /// The song after this one, already opening. Skipping used to start the
+    /// whole fetch from nothing — the address was found ahead, but nothing had
+    /// been downloaded, so the picture arrived seconds after the song did.
+    private var nextURL: URL?
+    private var nextPlayer: AVPlayer?
+    private var nextOutput: AVPlayerItemVideoOutput?
+
+    /// How much of the picture to have in hand before it plays. Android starts
+    /// at half a second; two seconds of waiting is most of what a skip felt like.
+    private static let buffer: TimeInterval = 0.8
+
     /// The player for this video, made once and lent out afterwards.
     func player(for video: SongVideo) -> (player: AVPlayer, output: AVPlayerItemVideoOutput?, fresh: Bool) {
         if url == video.url, let kept { return (kept, output, false) }
-        release()
 
-        let asset = AVURLAsset(url: video.url,
-                               options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
+        // The one opened ahead for this song steps straight in, with whatever
+        // it has already fetched.
+        if nextURL == video.url, let ready = nextPlayer {
+            release()
+            url = video.url
+            kept = ready
+            output = nextOutput
+            nextURL = nil
+            nextPlayer = nil
+            nextOutput = nil
+            return (ready, output, true)
+        }
+
+        release()
+        let (made, videoOutput) = build(video)
+        url = video.url
+        kept = made
+        output = videoOutput
+        return (made, videoOutput, true)
+    }
+
+    /// Opens the song after this one quietly, so its first frames are already
+    /// here when somebody presses skip. Paused: it fetches what the buffer asks
+    /// for and then stops, which is under a second of picture.
+    func prepare(_ video: SongVideo) {
+        guard url != video.url, nextURL != video.url else { return }
+        nextPlayer?.pause()
+        nextPlayer?.replaceCurrentItem(with: nil)
+        let (made, videoOutput) = build(video)
+        made.pause()
+        nextURL = video.url
+        nextPlayer = made
+        nextOutput = videoOutput
+    }
+
+    private func build(_ video: SongVideo) -> (AVPlayer, AVPlayerItemVideoOutput) {
+        let asset = AVURLAsset(url: video.url, options: [
+            AVURLAssetHTTPUserAgentKey: YouTube.visionUA,
+            // Nothing here needs the exact length, and working it out means
+            // reading the whole index before the first frame can show.
+            AVURLAssetPreferPreciseDurationAndTimingKey: false,
+        ])
         let item = AVPlayerItem(asset: asset)
-        // Two seconds in hand is plenty for a picture. Waiting for the player's
-        // usual comfortable buffer is seconds of black.
-        item.preferredForwardBufferDuration = 2
+        item.preferredForwardBufferDuration = Self.buffer
         let made = AVPlayer(playerItem: item)
         made.isMuted = true              // the song is the sound
         made.actionAtItemEnd = .none
@@ -179,11 +238,7 @@ final class VideoArtPlayers {
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
         ])
         item.add(videoOutput)
-
-        url = video.url
-        kept = made
-        output = videoOutput
-        return (made, videoOutput, true)
+        return (made, videoOutput)
     }
 
     /// The screen has gone; the picture waits where it is.
@@ -195,6 +250,17 @@ final class VideoArtPlayers {
         kept = nil
         output = nil
         url = nil
+    }
+
+    /// Everything, including whatever was opened ahead — for leaving the design
+    /// or the design leaving the screen.
+    func releaseAll() {
+        release()
+        nextPlayer?.pause()
+        nextPlayer?.replaceCurrentItem(with: nil)
+        nextPlayer = nil
+        nextOutput = nil
+        nextURL = nil
     }
 }
 

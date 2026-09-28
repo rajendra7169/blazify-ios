@@ -71,6 +71,12 @@ final class Player: ObservableObject {
 
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
     var hasTrack: Bool { current != nil }
+
+    /// The song after this one, when the queue has one. What the Video design
+    /// opens ahead so a skip does not start its picture from nothing.
+    var upNext: Track? {
+        queue.indices.contains(index + 1) ? queue[index + 1] : nil
+    }
     var progress: Double { duration > 0 ? min(max(currentTime / duration, 0), 1) : 0 }
 
     private var avPlayer: AVPlayer?
@@ -916,8 +922,13 @@ final class Player: ObservableObject {
         scrobbled = false
         Task { await LastFM.shared.nowPlaying(track) }
         Task { await ListenBrainz.shared.nowPlaying(track) }
-        duration = track.duration
+        // The position goes back to nought BEFORE the new length is set. They
+        // live in different objects, so each one draws the screen on its own:
+        // setting the length first drew the new song's length against the old
+        // song's position — a bar that leapt to wherever the last song had got
+        // to and fell back. That is the bounce on every skip.
         currentTime = 0
+        duration = track.duration
         // Only now that the position is reset — saving earlier stored the
         // previous song's position against this song's index.
         saveQueue()
@@ -984,6 +995,7 @@ final class Player: ObservableObject {
                     }
                     return
                 }
+                self.currentTime = 0
                 self.duration = stream.duration
                 if YouTube.isLive(videoId) {
                     // A station: no length, nothing to keep on disk, no words to

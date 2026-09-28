@@ -348,6 +348,8 @@ struct PlayerView: View {
         // this size and costs seconds before the first frame.
         let height = Reachability.shared.isUnmetered ? 480 : 360
         videoLoader.load(for: player.current, allowed: allowed, maxHeight: height)
+        // And open the one after it, so skipping lands on a picture.
+        videoLoader.prepareNext(player.upNext, allowed: allowed, maxHeight: height)
     }
 
     private var fullArtBackground: some View {
@@ -392,16 +394,6 @@ struct PlayerView: View {
             }
             .padding(.horizontal, 48)
 
-            HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 8)
         }
     }
 
