@@ -415,6 +415,12 @@ enum Lyrics {
                                    resultDuration: itemDuration,
                                    title: title, artist: artist, duration: duration)
             guard score > 0 else { continue }
+            // A recording a quarter of a minute away from this one is a
+            // different cut of the song — a live take, an edit, somebody's
+            // slowed upload — and its words will never line up. The score
+            // already marks it down; this refuses it outright, because a bad
+            // match that wins by default is worse than no lyrics at all.
+            if duration > 0, itemDuration > 0, abs(itemDuration - duration) > 15 { continue }
 
             if let lrc = item["syncedLyrics"] as? String, !lrc.isEmpty {
                 out.append(LyricsCandidate(provider: "LrcLib", trackName: name, artistName: by,
@@ -429,7 +435,14 @@ enum Lyrics {
                                            score: score))
             }
         }
-        return out.sorted { $0.score > $1.score }
+        // Timed words beat untimed ones when the score cannot separate them.
+        // Without this, a plain copy of another artist's song could come back
+        // first on a title match alone — which is both the wrong words and no
+        // syncing at all.
+        return out.sorted {
+            if $0.score != $1.score { return $0.score > $1.score }
+            return $0.result.synced && !$1.result.synced
+        }
     }
 
     // MARK: Apple Music (anonymous web token → catalog search → lyrics relay)
