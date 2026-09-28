@@ -134,17 +134,13 @@ struct HomeView: View {
     /// with a heading that can play the row or open all of it.
     @ViewBuilder private func row(_ section: HomeSection) -> some View {
         if section.isSongs {
-            QuickPicksGrid(section: section, player: player,
-                           onSeeAll: { path.append(section) })
+            // A shelf of songs plays; it has no page worth opening.
+            QuickPicksGrid(section: section, player: player)
         } else {
-            let songs = section.items.filter { $0.browseId == nil && !($0.videoId ?? "").isEmpty }
+            // A shelf of playlists, albums or artists is looked through.
             HomeRail(section: section,
                      onTap: { tap($0, within: $1) },
-                     onSeeAll: { path.append(section) },
-                     onPlayAll: songs.isEmpty ? nil : {
-                         player.play(songs.map(\.asTrack), startAt: 0)
-                         player.showFullPlayer = true
-                     })
+                     onSeeAll: { path.append(section) })
         }
     }
 
@@ -170,7 +166,8 @@ struct HomeView: View {
             let start = songs.firstIndex { $0.videoId == vid } ?? 0
             player.play(songs.map(\.asTrack), startAt: start)
         }
-        player.showFullPlayer = true
+        // No jumping to the full player: somebody tapping a card on Home is
+        // still reading Home. The mini player says what started.
     }
 
     private func load(reshuffle: Bool = false) async {
@@ -695,14 +692,12 @@ struct HomeRail: View {
     /// The row is handed over with the card, so tapping one song can queue the
     /// rest of what it was sitting in.
     let onTap: (HomeItem, [HomeItem]) -> Void
-    /// Where "see all" goes, and what "play all" starts. A row of playlists has
-    /// nothing to play, so it gets the arrow alone.
+    /// Where "see all" goes.
     var onSeeAll: (() -> Void)?
-    var onPlayAll: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HomeSectionHeader(title: section.title, onPlayAll: onPlayAll, onSeeAll: onSeeAll)
+            HomeSectionHeader(title: section.title, onSeeAll: onSeeAll)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {

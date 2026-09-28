@@ -504,7 +504,15 @@ enum YouTube {
             let contentsArr = shelf["contents"] as? [[String: Any]] ?? []
             let isSongs = contentsArr.first?["musicResponsiveListItemRenderer"] != nil
             let items = contentsArr.compactMap(parseHomeItem)
-            if !items.isEmpty { out.append(HomeSection(title: title, items: items, isSongs: isSongs)) }
+            // YouTube's own "see all" for this shelf, when it offers one.
+            let more = ((header?["moreContentButton"] as? [String: Any])?["buttonRenderer"]
+                as? [String: Any])?["navigationEndpoint"] as? [String: Any]
+            let browse = more?["browseEndpoint"] as? [String: Any]
+            if !items.isEmpty {
+                out.append(HomeSection(title: title, items: items, isSongs: isSongs,
+                                       browseId: browse?["browseId"] as? String,
+                                       params: browse?["params"] as? String))
+            }
         }
         return out
     }

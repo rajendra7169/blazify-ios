@@ -46,7 +46,6 @@ struct SpeedDialGrid: View {
                 let queue = dial.songs
                 let start = queue.firstIndex { $0.videoId == pin.key } ?? 0
                 player.play(queue.isEmpty ? [pin.track] : queue, startAt: start)
-                player.showFullPlayer = true
             case .playlist, .artist:
                 onOpen(pin.item)
             }

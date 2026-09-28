@@ -156,6 +156,10 @@ struct HomeSection: Identifiable, Hashable {
     let title: String
     let items: [HomeItem]
     let isSongs: Bool
+    /// Where the rest of this shelf lives, when YouTube offers one. A row shows
+    /// the handful that fit; this is what "see all" opens.
+    var browseId: String?
+    var params: String?
 }
 
 /// A category chip under the greeting (All / Relax / Workout…). `params` re-browses

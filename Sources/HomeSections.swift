@@ -39,18 +39,14 @@ struct QuickPicksGrid: View {
 
     private let rows = Array(repeating: GridItem(.fixed(56), spacing: 8), count: 4)
 
-    /// Where "see all" goes. Nil leaves the row without one.
-    var onSeeAll: (() -> Void)?
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // A shelf of songs is played, not browsed: no arrow, just the words.
             HomeSectionHeader(
                 title: section.title,
                 onPlayAll: section.items.isEmpty ? nil : {
                     player.play(section.items.map(\.asTrack), startAt: 0)
-                    player.showFullPlayer = true
                 },
-                onSeeAll: onSeeAll,
             )
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -58,7 +54,6 @@ struct QuickPicksGrid: View {
                     ForEach(Array(section.items.enumerated()), id: \.element.id) { pair in
                         Button {
                             player.play(section.items.map(\.asTrack), startAt: pair.offset)
-                            player.showFullPlayer = true
                         } label: {
                             cell(pair.element)
                         }
@@ -166,7 +161,10 @@ struct PlaylistGridCard: View {
 struct HomeSectionHeader: View {
     @Environment(\.palette) private var palette
     let title: String
+    /// A row of songs is a thing to play, so it says so in words.
     var onPlayAll: (() -> Void)?
+    /// A row of playlists, albums or artists is a thing to look through, so it
+    /// gets the arrow into all of it instead.
     var onSeeAll: (() -> Void)?
 
     var body: some View {
@@ -178,12 +176,15 @@ struct HomeSectionHeader: View {
             Spacer(minLength: 8)
             if let onPlayAll {
                 Button(action: onPlayAll) {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(palette.accent)
+                    HStack(spacing: 5) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("Play all")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(palette.accent)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Play all")
             }
             if let onSeeAll {
                 Button(action: onSeeAll) {
@@ -202,6 +203,11 @@ struct HomeSectionHeader: View {
 }
 
 /// Everything in one home row, on a page of its own.
+///
+/// The row on Home is the handful of cards that fit across it. YouTube keeps the
+/// rest behind the shelf's own endpoint, so this asks for that and shows what
+/// comes back — falling back to the cards already in hand when a shelf has no
+/// page of its own.
 struct HomeSectionScreen: View {
     @Environment(\.palette) private var palette
     let section: HomeSection
@@ -210,25 +216,97 @@ struct HomeSectionScreen: View {
     /// so the whole feed keeps one way in and out.
     let onOpen: (HomeItem) -> Void
 
+    @State private var items: [HomeItem] = []
+    @State private var loading = true
+
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
+
+    /// The songs among them, in order — what Play and Shuffle work on.
+    private var songs: [Track] {
+        items.filter { $0.browseId == nil && !($0.videoId ?? "").isEmpty }.map(\.asTrack)
+    }
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(section.items) { item in
-                    BlazeMusicCard(title: item.title, subtitle: item.subtitle,
-                                   thumbnail: item.thumbnail, isCircular: item.isCircular,
-                                   fallbackIcon: item.isCircular ? "person.fill" : "music.note") {
-                        open(item)
+            VStack(alignment: .leading, spacing: 0) {
+                if !songs.isEmpty {
+                    actions
+                }
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(items) { item in
+                        BlazeMusicCard(title: item.title, subtitle: item.subtitle,
+                                       thumbnail: item.thumbnail, isCircular: item.isCircular,
+                                       fallbackIcon: item.isCircular ? "person.fill" : "music.note") {
+                            open(item)
+                        }
                     }
                 }
+                .padding(16)
+
+                if loading {
+                    ProgressView()
+                        .tint(palette.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
+                }
             }
-            .padding(16)
             .playerBottomPadding()
         }
         .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle(section.title)
         .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    /// Play and Shuffle, as a playlist has them.
+    private var actions: some View {
+        HStack(spacing: 12) {
+            Button {
+                player.play(songs, startAt: 0)
+            } label: {
+                label("play.fill", "Play")
+                    .foregroundStyle(.black)
+                    .background(palette.heroGradient)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                player.isShuffled = true
+                player.play(songs.shuffled(), startAt: 0)
+            } label: {
+                label("shuffle", "Shuffle")
+                    .foregroundStyle(palette.onSurface)
+                    .background(palette.onSurface.opacity(0.10))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
+    private func label(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon).font(.system(size: 14, weight: .bold))
+            Text(text).font(.blaze(15, .semibold))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+
+    private func load() async {
+        // What is already on screen shows at once; the full shelf replaces it.
+        await MainActor.run { if items.isEmpty { items = section.items } }
+        guard let browseId = section.browseId, !browseId.isEmpty else {
+            await MainActor.run { loading = false }
+            return
+        }
+        let all = await YouTube.moodPlaylists(browseId: browseId, params: section.params)
+        await MainActor.run {
+            if !all.isEmpty { items = all }
+            loading = false
+        }
     }
 
     private func open(_ item: HomeItem) {
@@ -236,10 +314,8 @@ struct HomeSectionScreen: View {
             onOpen(item)
             return
         }
-        let songs = section.items.filter { $0.browseId == nil && !($0.videoId ?? "").isEmpty }
-        guard !songs.isEmpty, let at = songs.firstIndex(where: { $0.videoId == item.videoId })
-        else { return }
-        player.play(songs.map(\.asTrack), startAt: at)
-        player.showFullPlayer = true
+        let playable = items.filter { $0.browseId == nil && !($0.videoId ?? "").isEmpty }
+        guard let at = playable.firstIndex(where: { $0.videoId == item.videoId }) else { return }
+        player.play(playable.map(\.asTrack), startAt: at)
     }
 }

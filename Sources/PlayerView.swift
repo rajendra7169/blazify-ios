@@ -487,6 +487,13 @@ struct PlayerView: View {
                     scrub = nil
                 }
                 .padding(.horizontal, 32)
+                // The bar follows the clock exactly; it must never inherit an
+                // animation from whatever is happening around it — the screen
+                // opening, a design changing — or it slides to the position
+                // instead of being at it.
+                .transaction { $0.animation = nil }
+                // A drag left half-finished belongs to the song it was dragging.
+                .onChange(of: player.current?.videoId) { scrub = nil }
 
                 HStack {
                     Text(timeString((scrub ?? player.progress) * player.duration))
