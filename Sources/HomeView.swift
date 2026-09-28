@@ -56,19 +56,11 @@ struct HomeView: View {
  // this is what makes the feed differ each time, as the
                             // `.shuffled()` sections do.
                             ForEach(localSections) { section in
-                                if section.isSongs {
-                                    QuickPicksGrid(section: section, player: player)
-                                } else {
-                                    HomeRail(section: section) { tap($0, within: $1) }
-                                }
+                                row(section)
                             }
 
                             ForEach(feed.sections) { section in
-                                if section.isSongs {
-                                    QuickPicksGrid(section: section, player: player)
-                                } else {
-                                    HomeRail(section: section) { tap($0, within: $1) }
-                                }
+                                row(section)
                             }
 
                             if !moods.isEmpty {
@@ -97,6 +89,14 @@ struct HomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: HomeItem.self) { item in
                 PlaylistView(item: item, player: player)
+            }
+            .navigationDestination(for: HomeSection.self) { section in
+                if section.isSongs {
+                    SongListScreen(title: section.title,
+                                   tracks: section.items.map(\.asTrack), player: player)
+                } else {
+                    HomeSectionScreen(section: section, player: player) { path.append($0) }
+                }
             }
             .navigationDestination(for: MoodItem.self) { mood in
                 MoodDetailView(mood: mood, player: player)
@@ -127,6 +127,24 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $showRecognition) {
             RecognitionView(player: player)
+        }
+    }
+
+    /// One row of the feed: songs as the grid, anything else as a rail, both
+    /// with a heading that can play the row or open all of it.
+    @ViewBuilder private func row(_ section: HomeSection) -> some View {
+        if section.isSongs {
+            QuickPicksGrid(section: section, player: player,
+                           onSeeAll: { path.append(section) })
+        } else {
+            let songs = section.items.filter { $0.browseId == nil && !($0.videoId ?? "").isEmpty }
+            HomeRail(section: section,
+                     onTap: { tap($0, within: $1) },
+                     onSeeAll: { path.append(section) },
+                     onPlayAll: songs.isEmpty ? nil : {
+                         player.play(songs.map(\.asTrack), startAt: 0)
+                         player.showFullPlayer = true
+                     })
         }
     }
 
@@ -309,12 +327,9 @@ struct HomeView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 56)
         } else {
+            // The offline rails get the same heading as the rest of the feed.
             ForEach(sections) { section in
-                if section.isSongs {
-                    QuickPicksGrid(section: section, player: player)
-                } else {
-                    HomeRail(section: section) { tap($0, within: $1) }
-                }
+                row(section)
             }
         }
     }
@@ -680,15 +695,14 @@ struct HomeRail: View {
     /// The row is handed over with the card, so tapping one song can queue the
     /// rest of what it was sitting in.
     let onTap: (HomeItem, [HomeItem]) -> Void
+    /// Where "see all" goes, and what "play all" starts. A row of playlists has
+    /// nothing to play, so it gets the arrow alone.
+    var onSeeAll: (() -> Void)?
+    var onPlayAll: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(section.title)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(palette.onSurface)
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 12)
+            HomeSectionHeader(title: section.title, onPlayAll: onPlayAll, onSeeAll: onSeeAll)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {

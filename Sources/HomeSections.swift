@@ -39,14 +39,19 @@ struct QuickPicksGrid: View {
 
     private let rows = Array(repeating: GridItem(.fixed(56), spacing: 8), count: 4)
 
+    /// Where "see all" goes. Nil leaves the row without one.
+    var onSeeAll: (() -> Void)?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(section.title)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(palette.onSurface)
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 12)
+            HomeSectionHeader(
+                title: section.title,
+                onPlayAll: section.items.isEmpty ? nil : {
+                    player.play(section.items.map(\.asTrack), startAt: 0)
+                    player.showFullPlayer = true
+                },
+                onSeeAll: onSeeAll,
+            )
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(rows: rows, spacing: 12) {
@@ -150,5 +155,91 @@ struct PlaylistGridCard: View {
                     .foregroundStyle(palette.onSurfaceVariant).lineLimit(1)
             }
         }
+    }
+}
+
+/// A home row's heading, with the two things Android puts beside it: a button
+/// that plays the whole row, and a way into all of it.
+///
+/// Without them a row was only ever the handful of cards that fit on screen —
+/// the rest of it had nowhere to go.
+struct HomeSectionHeader: View {
+    @Environment(\.palette) private var palette
+    let title: String
+    var onPlayAll: (() -> Void)?
+    var onSeeAll: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(palette.onSurface)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if let onPlayAll {
+                Button(action: onPlayAll) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(palette.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Play all")
+            }
+            if let onSeeAll {
+                Button(action: onSeeAll) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("See all")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+    }
+}
+
+/// Everything in one home row, on a page of its own.
+struct HomeSectionScreen: View {
+    @Environment(\.palette) private var palette
+    let section: HomeSection
+    @ObservedObject var player: Player
+    /// Cards that open a page hand it back to the screen that pushed this one,
+    /// so the whole feed keeps one way in and out.
+    let onOpen: (HomeItem) -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(section.items) { item in
+                    BlazeMusicCard(title: item.title, subtitle: item.subtitle,
+                                   thumbnail: item.thumbnail, isCircular: item.isCircular,
+                                   fallbackIcon: item.isCircular ? "person.fill" : "music.note") {
+                        open(item)
+                    }
+                }
+            }
+            .padding(16)
+            .playerBottomPadding()
+        }
+        .background(palette.scaffold.ignoresSafeArea())
+        .navigationTitle(section.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func open(_ item: HomeItem) {
+        guard item.browseId == nil else {
+            onOpen(item)
+            return
+        }
+        let songs = section.items.filter { $0.browseId == nil && !($0.videoId ?? "").isEmpty }
+        guard !songs.isEmpty, let at = songs.firstIndex(where: { $0.videoId == item.videoId })
+        else { return }
+        player.play(songs.map(\.asTrack), startAt: at)
+        player.showFullPlayer = true
     }
 }
