@@ -636,6 +636,24 @@ final class Player: ObservableObject {
         sleepSongsRemaining = nil
     }
 
+    /// Puts the player away: the song stops and the queue is emptied, so the
+    /// mini player goes with it. What a downward swipe on the mini player does
+    /// on Android, and now here.
+    func dismissPlayback() {
+        discardPlayer()
+        sleepAtEndOfSong = false
+        sleepSongsRemaining = nil
+        cancelSleepTimer()
+        queue = []
+        originalQueue = []
+        index = 0
+        duration = 0
+        lastError = nil
+        showFullPlayer = false
+        saveQueue()
+        updateNowPlaying()
+    }
+
     private func stopForSleep() {
         cancelSleepTimer()
         guard PlaybackPrefs.shared.sleepFadeOut, let player = avPlayer, isPlaying else {

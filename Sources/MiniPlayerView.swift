@@ -14,6 +14,8 @@ struct MiniPlayerView: View {
     /// Only the ring reads this, but the view is small — observing is cheap.
     @ObservedObject private var clock: PlaybackClock
     @State private var showArtist = false
+    /// How far the mini player has been dragged down, while a finger is on it.
+    @State private var dragDown: CGFloat = 0
     @State private var showAddToPlaylist = false
     @State private var resolvedArtistId: String?
 
@@ -108,10 +110,27 @@ struct MiniPlayerView: View {
             .padding(.horizontal, look.miniPlayerDesign == .flat ? 0 : 12)
             .contentShape(Rectangle())
             .onTapGesture { openPlayer() }
+            .offset(y: dragDown)
             .gesture(
-                DragGesture(minimumDistance: 30)
+                DragGesture(minimumDistance: 20)
+                    .onChanged { g in
+                        // Follows the finger downward, so the swipe that puts the
+                        // player away looks like it is putting it away.
+                        guard abs(g.translation.height) > abs(g.translation.width) else { return }
+                        dragDown = max(0, g.translation.height)
+                    }
                     .onEnded { g in
-                        if g.translation.width < -50 {
+                        let vertical = abs(g.translation.height) > abs(g.translation.width)
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { dragDown = 0 }
+                        if vertical {
+                            // Up opens it, down puts it away — the same two
+                            // gestures the Android sheet answers to.
+                            if g.translation.height < -40 {
+                                openPlayer()
+                            } else if g.translation.height > 60 {
+                                player.dismissPlayback()
+                            }
+                        } else if g.translation.width < -50 {
                             player.next()
                         } else if g.translation.width > 50 {
                             player.prev()
