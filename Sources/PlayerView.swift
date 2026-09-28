@@ -402,6 +402,18 @@ struct PlayerView: View {
     private var titleAndProgress: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
+                // On the lyrics page the artwork is nowhere else on screen, so
+                // the title carries a small square of it — the way the Android
+                // lyrics screen does.
+                if lyricsMode {
+                    RemoteImage(url: player.current?.artURL(size: 120), size: 44) {
+                        ArtPlaceholder()
+                    }
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(player.current?.title ?? "")
                         .font(.system(size: 22, weight: .bold))

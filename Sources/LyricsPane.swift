@@ -141,9 +141,9 @@ struct LyricsPane: View {
             Spacer()
         }
         .padding(.horizontal, 22)
-        // Sits up where "Now Playing" used to be, rather than leaving a gap
-        // above it now that nothing is there.
-        .padding(.top, -34)
+        // Up into some of the room "Now Playing" left behind, but not all of it:
+        // pulled the whole way, the pills sat against the top edge.
+        .padding(.top, -12)
         .padding(.bottom, 6)
     }
 

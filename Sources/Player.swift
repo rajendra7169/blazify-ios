@@ -720,13 +720,25 @@ final class Player: ObservableObject {
         guard unmetered || PlaybackPrefs.shared.videoOnMobile else { return }
         let height = unmetered ? 480 : 360
 
-        // This song first, then the one after it — a skip should not start the
-        // wait over. The answers are kept for hours, so the next song's picture
-        // is already found by the time it is reached.
-        let next = queue.indices.contains(index + 1) ? queue[index + 1] : nil
-        for song in [track, next].compactMap({ $0 })
-        where !LocalMusic.isLocal(song.videoId) && !song.videoId.isEmpty {
-            Task.detached { _ = await SongVideos.shared.forSong(song, maxHeight: height) }
+        guard !LocalMusic.isLocal(track.videoId), !track.videoId.isEmpty else { return }
+
+        // Finding the address was only half of it: nothing was fetched until the
+        // screen opened, so the first picture of a session still arrived seconds
+        // late. This opens it too — after a couple of seconds, so the song's own
+        // buffer gets the connection first, the way the Android player waits for
+        // the music to be comfortable before the picture takes anything.
+        Task.detached {
+            guard let found = await SongVideos.shared.forSong(track, maxHeight: height) else { return }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            await MainActor.run { VideoArtPlayers.shared.prepare(found) }
+        }
+
+        // The song after it gets its address looked up as well, so a skip does
+        // not start the search over. Its own fetching waits until the screen has
+        // taken this one in hand.
+        if let next = queue.indices.contains(index + 1) ? queue[index + 1] : nil,
+           !LocalMusic.isLocal(next.videoId), !next.videoId.isEmpty {
+            Task.detached { _ = await SongVideos.shared.forSong(next, maxHeight: height) }
         }
     }
 
