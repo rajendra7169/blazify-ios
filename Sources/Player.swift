@@ -945,6 +945,17 @@ final class Player: ObservableObject {
                 guard let stream else {
                     self.isLoading = false
                     self.lastError = "Couldn't load this track. Try again."
+                    // The player still holds the song before this one. Left
+                    // there, pressing play — on the lock screen, in the mini
+                    // player, anywhere — starts THAT song again while the screen
+                    // shows the one that failed, which is how a tap came to play
+                    // something nobody chose.
+                    self.discardPlayer()
+                    // And move on, if that is what the setting says: a song with
+                    // no address is not going to get one by being stared at.
+                    if PlaybackPrefs.shared.autoSkipOnError, self.index + 1 < self.queue.count {
+                        _ = self.next(auto: true)
+                    }
                     return
                 }
                 self.duration = stream.duration
@@ -1517,7 +1528,21 @@ final class Player: ObservableObject {
         }
     }
 
-    private func resume() { avPlayer?.play(); isPlaying = true; updateNowPlaying() }
+    private func resume() {
+        guard let avPlayer else {
+            // Nothing loaded — a restored session, or a song that failed. Start
+            // it the way the play button in the app does rather than telling the
+            // lock screen it is playing over silence.
+            if hasTrack {
+                playWhenReady = true
+                loadCurrent()
+            }
+            return
+        }
+        avPlayer.play()
+        isPlaying = true
+        updateNowPlaying()
+    }
     private func pause() { avPlayer?.pause(); isPlaying = false; updateNowPlaying() }
 
     private func loadArtwork(_ url: URL?) {
@@ -1555,6 +1580,23 @@ final class Player: ObservableObject {
         ]
         if let artwork { info[MPMediaItemPropertyArtwork] = artwork }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    /// Lets go of the player entirely: nothing to resume, nothing to hear.
+    ///
+    /// Pausing is not enough when the song it belongs to is gone — a pause can
+    /// be undone by any play button on the phone, and it would start the wrong
+    /// song.
+    private func discardPlayer() {
+        removeTimeObserver()
+        statusObs = nil
+        rateObs = nil
+        avPlayer?.pause()
+        avPlayer?.replaceCurrentItem(with: nil)
+        avPlayer = nil
+        isPlaying = false
+        currentTime = 0
+        updateNowPlaying()
     }
 
     private func removeTimeObserver() {
