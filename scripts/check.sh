@@ -30,6 +30,18 @@ status=0
 echo "Parsing every source file…"
 "$SWIFTC" -parse Sources/*.swift Widget/*.swift || status=1
 
+# Calls against hand-written initialisers. The parser cannot type-check, so an
+# argument a type does not accept reaches the cloud Mac and fails there; this is
+# the one shape of that mistake that has cost builds.
+echo
+echo "Checking calls against hand-written initialisers…"
+if python3 scripts/init-labels.py Sources Widget; then
+    echo "  ok"
+else
+    echo "  ^ these arguments match no initialiser of that type."
+    status=1
+fi
+
 # The handful of files that stand on their own — no app types, no networking —
 # can be checked properly, and their logic can even be run. Add to this list
 # only files that compile alone against plain Foundation.

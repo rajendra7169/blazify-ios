@@ -16,8 +16,13 @@ struct LyricsPane: View {
     /// than trusting the parent to re-render us.
     @ObservedObject private var clock: PlaybackClock
 
-    init(player: Player) {
+    /// Full screen leaves the words on their own; the pill goes with the rest of
+    /// the chrome.
+    let immersive: Bool
+
+    init(player: Player, immersive: Bool = false) {
         self.player = player
+        self.immersive = immersive
         _clock = ObservedObject(wrappedValue: player.clock)
     }
 
@@ -98,10 +103,6 @@ struct LyricsPane: View {
     }
 
     // MARK: Header
-
-    /// Full screen leaves the words on their own; the pill goes with the rest of
-    /// the chrome.
-    var immersive = false
 
     @ViewBuilder private var header: some View {
         if !immersive { headerRow }
