@@ -699,6 +699,25 @@ final class Player: ObservableObject {
 
     /// Advance once per track, whether triggered by the end notification or the
     /// time-observer backup.
+    /// Looks for the song's video as the song starts, when the Video design is
+    /// the one in use.
+    ///
+    /// The picture used to be looked for only when the full player was opened —
+    /// a search and a stream lookup, one after the other, with the listener
+    /// watching. On Android the player sheet exists all along, so its video is
+    /// found during ordinary listening and is simply there when the sheet is
+    /// raised. This does the same: the answer is remembered for hours, so the
+    /// screen finds it waiting.
+    private func warmVideoArt(for track: Track) {
+        guard UserDefaults.standard.string(forKey: "playerDesign") == "video",
+              !LocalMusic.isLocal(track.videoId), !track.videoId.isEmpty
+        else { return }
+        let unmetered = Reachability.shared.isUnmetered
+        guard unmetered || PlaybackPrefs.shared.videoOnMobile else { return }
+        let height = unmetered ? 480 : 360
+        Task.detached { _ = await SongVideos.shared.forSong(track, maxHeight: height) }
+    }
+
     /// What the community marked as not-the-song in this one.
     ///
     /// Nothing is asked for a file of your own or a broadcast: one has no video
@@ -907,6 +926,7 @@ final class Player: ObservableObject {
         let videoId = track.videoId
         countPlay(track)
         refreshSponsorSegments(for: videoId)
+        warmVideoArt(for: track)
         Task { @MainActor in ListenTogether.shared.broadcastTrack(track, position: 0) }
 
         // Your own files first — they have no network path at all — then a

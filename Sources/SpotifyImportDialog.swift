@@ -27,13 +27,19 @@ struct SpotifyImportDialog: View {
 
     private var looksRight: Bool { SpotifyPlaylist.parseLink(link) != nil }
 
+    /// Held apart from the presentation so the scrim and the card can fade in
+    /// after the cover itself is up. A cover arrives by sliding from the bottom,
+    /// which is a sheet's entrance, not a dialog's — showing the contents only
+    /// once it has landed turns that slide into a fade.
+    @State private var shown = false
+
     var body: some View {
         ZStack {
             // Tapping away closes it, unless the work is already under way: half of
             // it is network calls that cannot be taken back.
-            Color.black.opacity(0.45)
+            Color.black.opacity(shown ? 0.45 : 0)
                 .ignoresSafeArea()
-                .onTapGesture { if !running { dismiss() } }
+                .onTapGesture { if !running { close() } }
 
             VStack(spacing: 14) {
                 TravellingSongs(
@@ -62,8 +68,19 @@ struct SpotifyImportDialog: View {
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             .shadow(color: .black.opacity(0.45), radius: 24, y: 10)
             .padding(.horizontal, 24)
+            .scaleEffect(shown ? 1 : 0.92)
+            .opacity(shown ? 1 : 0)
         }
         .presentationBackground(.clear)
+        .onAppear {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { shown = true }
+        }
+    }
+
+    /// Fades out before it goes, so closing is as quiet as opening.
+    private func close() {
+        withAnimation(.easeOut(duration: 0.18)) { shown = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { dismiss() }
     }
 
     // MARK: - The three states
@@ -145,12 +162,12 @@ struct SpotifyImportDialog: View {
                 if !result.songs.isEmpty {
                     textButton("Play", enabled: true) {
                         player.play(result.songs, startAt: 0)
-                        dismiss()
+                        close()
                     }
                 }
-                textButton("OK", enabled: true) { dismiss() }
+                textButton("OK", enabled: true) { close() }
             } else {
-                textButton("Cancel", enabled: !running) { dismiss() }
+                textButton("Cancel", enabled: !running) { close() }
                 textButton("Import", enabled: looksRight && !running && auth.isLoggedIn) { start() }
             }
         }
@@ -292,32 +309,21 @@ private struct TravellingSongs: View {
     }
 }
 
-/// Spotify's mark, drawn rather than shipped: three waves on a green circle.
+/// Spotify's own mark.
+///
+/// The same path the Android app draws, taken from their vector unaltered — a
+/// brand's mark redrawn by hand is a different mark, and the arcs this used to
+/// approximate looked it.
 struct SpotifyMark: View {
-    var body: some View {
-        Canvas { context, canvas in
-            let side = min(canvas.width, canvas.height)
-            context.fill(Path(ellipseIn: CGRect(x: 0, y: 0, width: side, height: side)),
-                         with: .color(spotifyGreen))
+    /// Spotify's mark as vector path data, on a 24pt viewport.
+    private static let mark = "M12,0C5.4,0 0,5.4 0,12s5.4,12 12,12 12,-5.4 12,-12S18.66,0 12,0zM17.521,17.34c-0.24,0.359 -0.66,0.48 -1.021,0.24 -2.82,-1.74 -6.36,-2.101 -10.561,-1.141 -0.418,0.122 -0.779,-0.179 -0.899,-0.539 -0.12,-0.421 0.18,-0.78 0.54,-0.9 4.56,-1.021 8.52,-0.6 11.64,1.32 0.42,0.18 0.479,0.659 0.301,1.02zM18.961,14.04c-0.301,0.42 -0.841,0.6 -1.262,0.3 -3.239,-1.98 -8.159,-2.58 -11.939,-1.38 -0.479,0.12 -1.02,-0.12 -1.14,-0.6 -0.12,-0.48 0.12,-1.021 0.6,-1.141 4.34,-1.319 9.74,-0.659 13.46,1.62 0.361,0.181 0.54,0.78 0.241,1.2zM19.081,10.68C15.24,8.4 8.82,8.16 5.16,9.301c-0.6,0.179 -1.2,-0.181 -1.38,-0.721 -0.18,-0.601 0.18,-1.2 0.72,-1.381 4.26,-1.26 11.28,-1.02 15.721,1.621 0.539,0.3 0.719,1.02 0.419,1.56 -0.299,0.421 -1.02,0.599 -1.559,0.3z"
 
-            // The three waves share a centre below the mark, so each one bows
-            // upward — the widest at the top, the shortest at the bottom.
-            let centre = CGPoint(x: side / 2, y: side * 0.95)
-            let waves: [(radius: CGFloat, width: CGFloat, span: CGFloat)] = [
-                (side * 0.62, side * 0.105, 0.58),
-                (side * 0.45, side * 0.085, 0.54),
-                (side * 0.29, side * 0.070, 0.50),
-            ]
-            for wave in waves {
-                let half = CGFloat.pi * wave.span / 2
-                var path = Path()
-                path.addArc(center: centre, radius: wave.radius,
-                            startAngle: .radians(Double(-.pi / 2 - half)),
-                            endAngle: .radians(Double(-.pi / 2 + half)),
-                            clockwise: false)
-                context.stroke(path, with: .color(.black.opacity(0.9)),
-                               style: StrokeStyle(lineWidth: wave.width, lineCap: .round))
-            }
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            VectorPath.path(Self.mark, side: side)
+                .fill(spotifyGreen)
+                .frame(width: side, height: side)
         }
     }
 }

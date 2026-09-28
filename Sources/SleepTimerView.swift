@@ -18,9 +18,18 @@ struct SleepTimerView: View {
 
     var body: some View {
         VStack(spacing: 22) {
-            Image(systemName: "moon.zzz.fill")
-                .font(.system(size: 30))
-                .foregroundStyle(palette.accent)
+            // Android heads this sheet, and the Cast sheet beside it, the same
+            // way: the mark on the left with the heading next to it, not a
+            // symbol floating in the middle.
+            HStack(spacing: 14) {
+                Image(systemName: "moon.zzz.fill")
+                    .font(.system(size: 26))
+                    .foregroundStyle(palette.accent)
+                Text(player.sleepActive ? "Sleeping" : "Stop music after")
+                    .font(.blaze(22, .bold))
+                    .foregroundStyle(palette.onSurface)
+                Spacer(minLength: 0)
+            }
 
             if player.sleepActive {
                 running
@@ -40,11 +49,12 @@ struct SleepTimerView: View {
                     .onChange(of: geo.size.height) { sheetHeight = geo.size.height }
             },
         )
-        // Glass, like the AirPlay picker beside it on the same row — that one is
-        // drawn by the system and cannot be restyled, so this matches it rather
-        // than the two disagreeing.
-        .presentationBackground(.regularMaterial)
+        // Solid, as on Android, where the sleep timer and the Cast sheet share
+        // one background. (The AirPlay list beside it is the system's own sheet
+        // and cannot be restyled from here — Apple draws it.)
+        .presentationBackground(palette.surface)
         .presentationDetents([.height(sheetHeight)])
+        .presentationDragIndicator(.visible)
     }
 
     // MARK: Picker

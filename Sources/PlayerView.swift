@@ -322,7 +322,9 @@ struct PlayerView: View {
     /// connection unless it has been asked for on mobile data.
     private func loadVideo() {
         let allowed = Reachability.shared.isUnmetered || PlaybackPrefs.shared.videoOnMobile
-        let height = Reachability.shared.isUnmetered ? 720 : 360
+        // What Android asks for. A taller picture buys detail nobody can see at
+        // this size and costs seconds before the first frame.
+        let height = Reachability.shared.isUnmetered ? 480 : 360
         videoLoader.load(for: player.current, allowed: allowed, maxHeight: height)
     }
 

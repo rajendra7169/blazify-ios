@@ -184,6 +184,10 @@ struct VideoArtView: UIViewRepresentable {
         private var statusObs: NSKeyValueObservation?
         private var readyObs: NSKeyValueObservation?
         private var watchdog: Task<Void, Never>?
+        private var output: AVPlayerItemVideoOutput?
+        private var bandsLook: Task<Void, Never>?
+        /// The thinnest bands seen so far, so one dark scene cannot decide it.
+        private var bands: Double = 1
 
         /// Close enough to the sound that nobody could tell.
         private let inStep: Double = 0.08
@@ -243,6 +247,23 @@ struct VideoArtView: UIViewRepresentable {
             readyObs = view.playerLayer.observe(\.isReadyForDisplay, options: [.new]) { [weak self] layer, _ in
                 if layer.isReadyForDisplay { self?.watchdog?.cancel() }
             }
+            // A few frames are looked at, spread out, for the black bands some
+            // videos carry above and below the picture.
+            let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            ])
+            item?.add(output)
+            self.output = output
+            self.bands = 1
+            bandsLook?.cancel()
+            bandsLook = Task { [weak self, weak view] in
+                for wait in [0.4, 1.2, 2.0, 4.0, 8.0] {
+                    try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                    guard !Task.isCancelled, let self, let view else { return }
+                    await self.lookForBands(in: view)
+                }
+            }
+
             watchdog?.cancel()
             watchdog = Task { [weak self, weak view] in
                 try? await Task.sleep(nanoseconds: (self?.patience ?? 15) * 1_000_000_000)
@@ -326,12 +347,68 @@ struct VideoArtView: UIViewRepresentable {
             placed = true
         }
 
+        /// Reads one frame and, if it has bands, brings the picture in past them.
+        @MainActor
+        private func lookForBands(in view: PlayerContainerView) {
+            guard let output, let player else { return }
+            let time = player.currentTime()
+            guard output.hasNewPixelBuffer(forItemTime: time),
+                  let buffer = output.copyPixelBuffer(forItemTime: time,
+                                                      itemTimeForDisplay: nil)
+            else { return }
+
+            guard let rows = Self.brightness(of: buffer),
+                  let share = Letterbox.share(rows: rows)
+            else { return }
+
+            bands = min(bands, share)
+            let zoom = Letterbox.zoom(for: bands == 1 ? 0 : bands)
+            guard abs(view.playerLayer.transform.m11 - CGFloat(zoom)) > 0.001 else { return }
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(0.6)
+            view.playerLayer.transform = CATransform3DMakeScale(CGFloat(zoom), CGFloat(zoom), 1)
+            CATransaction.commit()
+        }
+
+        /// A coarse grid of brightnesses off one frame: enough to find a band,
+        /// cheap enough to read five times a song.
+        private static func brightness(of buffer: CVPixelBuffer) -> [[Double]]? {
+            CVPixelBufferLockBaseAddress(buffer, .readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+            guard let base = CVPixelBufferGetBaseAddress(buffer) else { return nil }
+            let width = CVPixelBufferGetWidth(buffer)
+            let height = CVPixelBufferGetHeight(buffer)
+            let stride = CVPixelBufferGetBytesPerRow(buffer)
+            guard width > 8, height > 8 else { return nil }
+
+            let columns = 48, lines = 54
+            var rows: [[Double]] = []
+            rows.reserveCapacity(lines)
+            let bytes = base.assumingMemoryBound(to: UInt8.self)
+            for line in 0..<lines {
+                let y = line * (height - 1) / (lines - 1)
+                var row: [Double] = []
+                row.reserveCapacity(columns)
+                for column in 0..<columns {
+                    let x = column * (width - 1) / (columns - 1)
+                    let at = y * stride + x * 4          // BGRA
+                    let blue = Double(bytes[at]), green = Double(bytes[at + 1]), red = Double(bytes[at + 2])
+                    row.append((red * 299 + green * 587 + blue * 114) / 1000)
+                }
+                rows.append(row)
+            }
+            return rows
+        }
+
         func stop() {
             NotificationCenter.default.removeObserver(self)
             statusObs = nil
             readyObs = nil
             watchdog?.cancel()
             watchdog = nil
+            bandsLook?.cancel()
+            bandsLook = nil
+            output = nil
             player?.pause()
             player?.replaceCurrentItem(with: nil)
             player = nil
@@ -344,4 +421,45 @@ struct VideoArtView: UIViewRepresentable {
 final class PlayerContainerView: UIView {
     override static var layerClass: AnyClass { AVPlayerLayer.self }
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}
+
+/// How much of a frame is black band at the top and again at the bottom.
+///
+/// Some videos carry a cinema-shaped picture inside a television-shaped frame,
+/// and those bands do not belong on a player whose whole point is the picture.
+/// The thinner of the two bands is taken, so a dark sky at the top is not
+/// mistaken for one. A frame that is dark nearly all over says nothing either
+/// way and gives nil.
+///
+/// Pure arithmetic over a row of samples, so it can be checked without a video.
+enum Letterbox {
+    /// Brightness, out of 255, below which a pixel counts as band.
+    static let dark: Double = 24
+
+    /// How much of a band's row a logo or a name printed in it may cover.
+    static let printShare = 0.25
+
+    /// Bands thinner than this are left alone; more than this is a dark scene.
+    static let smallest = 0.04
+    static let largest = 0.22
+
+    /// `rows` is the brightness of a grid of samples, top row first.
+    static func share(rows: [[Double]]) -> Double? {
+        guard let width = rows.first?.count, width > 0, rows.count > 4 else { return nil }
+        func isBand(_ row: [Double]) -> Bool {
+            row.filter { $0 >= dark }.count <= Int(Double(width) * printShare)
+        }
+        var top = 0
+        while top < rows.count / 2, isBand(rows[top]) { top += 1 }
+        var bottom = 0
+        while bottom < rows.count / 2, isBand(rows[rows.count - 1 - bottom]) { bottom += 1 }
+        let share = Double(min(top, bottom)) / Double(rows.count)
+        if share > largest { return nil }          // a dark scene, not a band
+        return share >= smallest ? share : 0
+    }
+
+    /// How far in to zoom so bands of `share` each fall outside the frame.
+    static func zoom(for share: Double) -> Double {
+        share > 0 ? 1 / (1 - 2 * share) : 1
+    }
 }

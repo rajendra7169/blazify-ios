@@ -33,7 +33,7 @@ echo "Parsing every source file…"
 # The handful of files that stand on their own — no app types, no networking —
 # can be checked properly, and their logic can even be run. Add to this list
 # only files that compile alone against plain Foundation.
-SELF_CONTAINED="Sources/PlaylistLink.swift Sources/CardOrder.swift"
+SELF_CONTAINED="Sources/PlaylistLink.swift Sources/CardOrder.swift Sources/LibraryCardText.swift"
 
 echo "Type-checking the files that stand on their own…"
 for file in $SELF_CONTAINED; do
@@ -47,6 +47,24 @@ done
 
 # The card ordering can be run, not just checked: the bug it exists to prevent
 # was a button playing a song other than the one on its face.
+echo
+echo "Running the library-card test…"
+if "$SWIFTC" -o /tmp/blazify-librarytext Sources/LibraryCardText.swift scripts/librarytext-test/main.swift 2>/dev/null; then
+    /tmp/blazify-librarytext | tail -2 || status=1
+else
+    echo "  could not build the test"
+    status=1
+fi
+
+echo
+echo "Running the letterbox test…"
+if "$SWIFTC" -o /tmp/blazify-letterbox scripts/letterbox-test/main.swift 2>/dev/null; then
+    /tmp/blazify-letterbox | tail -2 || status=1
+else
+    echo "  could not build the test"
+    status=1
+fi
+
 echo
 echo "Running the card-order test…"
 if "$SWIFTC" -o /tmp/blazify-cardorder Sources/CardOrder.swift scripts/cardorder-test/main.swift 2>/dev/null; then

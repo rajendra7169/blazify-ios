@@ -77,7 +77,8 @@ struct LibraryView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             LazyHStack(spacing: 12) {
                                 ForEach(artists) { artist in
-                                    BlazeMusicCard(title: artist.title, subtitle: artist.subtitle,
+                                    BlazeMusicCard(title: artist.title,
+                                                   subtitle: LibraryCardText.subtitle(artist.subtitle),
                                                    thumbnail: artist.thumbnail, isCircular: true,
                                                    fallbackIcon: "person.fill") {
                                         if let id = artist.browseId { route = .artist(id) }
@@ -97,10 +98,13 @@ struct LibraryView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
         }
+        // Presented without the cover's own slide, so what you see is the
+        // dialog's fade rather than a sheet arriving from the bottom edge.
         .fullScreenCover(isPresented: $importingSpotify) {
             SpotifyImportDialog(player: player, onImported: { Task { await load() } })
                 .environment(\.palette, palette)
         }
+        .transaction { if importingSpotify { $0.disablesAnimations = true } }
         .fullScreenCover(isPresented: $showAccount) {
             AccountPopup(player: player, isPresented: $showAccount)
                 .presentationBackground(.clear)
@@ -189,14 +193,16 @@ struct LibraryView: View {
             ForEach(Array(stride(from: 0, to: playlists.count, by: 2)), id: \.self) { i in
                 HStack(spacing: 12) {
                     BlazePlaylistCard(
-                        title: playlists[i].title, subtitle: playlists[i].subtitle,
+                        title: playlists[i].title,
+                        subtitle: LibraryCardText.subtitle(playlists[i].subtitle),
                         thumbnails: [playlists[i].thumbnail],
                         seed: BlazePalette.color(i), aspectRatio: userRatio,
                     ) { route = .playlist(playlists[i]) }
 
                     if i + 1 < playlists.count {
                         BlazePlaylistCard(
-                            title: playlists[i + 1].title, subtitle: playlists[i + 1].subtitle,
+                            title: playlists[i + 1].title,
+                            subtitle: LibraryCardText.subtitle(playlists[i + 1].subtitle),
                             thumbnails: [playlists[i + 1].thumbnail],
                             seed: BlazePalette.color(i + 1), aspectRatio: userRatio,
                         ) { route = .playlist(playlists[i + 1]) }

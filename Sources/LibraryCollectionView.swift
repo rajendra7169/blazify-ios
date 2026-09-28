@@ -132,14 +132,16 @@ struct LibraryCollectionView: View {
             ForEach(Array(stride(from: 0, to: shown.count, by: 2)), id: \.self) { i in
                 HStack(spacing: 12) {
                     BlazePlaylistCard(
-                        title: shown[i].title, subtitle: shown[i].subtitle,
+                        title: shown[i].title,
+                        subtitle: LibraryCardText.subtitle(shown[i].subtitle),
                         thumbnails: [shown[i].thumbnail],
                         seed: BlazePalette.color(i), aspectRatio: 1.55,
                     ) { route = .playlist(shown[i]) }
 
                     if i + 1 < shown.count {
                         BlazePlaylistCard(
-                            title: shown[i + 1].title, subtitle: shown[i + 1].subtitle,
+                            title: shown[i + 1].title,
+                            subtitle: LibraryCardText.subtitle(shown[i + 1].subtitle),
                             thumbnails: [shown[i + 1].thumbnail],
                             seed: BlazePalette.color(i + 1), aspectRatio: 1.55,
                         ) { route = .playlist(shown[i + 1]) }
