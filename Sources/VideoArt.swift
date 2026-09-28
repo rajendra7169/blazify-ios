@@ -140,6 +140,64 @@ final class SongVideoLoader: ObservableObject {
     }
 }
 
+/// The picture outlives the screen it is shown on.
+///
+/// The full player is presented as a cover, so closing it takes the whole view
+/// down — and with it, until now, the video: reopening built a new player,
+/// fetched the stream again and sat black for seconds. On Android the player
+/// sheet is never destroyed, only collapsed, which is why its picture is simply
+/// there when the sheet comes back up.
+///
+/// So the player is kept here instead. Closing the screen only rests it — paused,
+/// with everything it has already fetched — and opening it again hands the same
+/// player to the new layer. A different song releases it, since its buffer is of
+/// no use to the next one.
+final class VideoArtPlayers {
+    static let shared = VideoArtPlayers()
+
+    private var url: URL?
+    private var kept: AVPlayer?
+    private var output: AVPlayerItemVideoOutput?
+
+    /// The player for this video, made once and lent out afterwards.
+    func player(for video: SongVideo) -> (player: AVPlayer, output: AVPlayerItemVideoOutput?, fresh: Bool) {
+        if url == video.url, let kept { return (kept, output, false) }
+        release()
+
+        let asset = AVURLAsset(url: video.url,
+                               options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
+        let item = AVPlayerItem(asset: asset)
+        // Two seconds in hand is plenty for a picture. Waiting for the player's
+        // usual comfortable buffer is seconds of black.
+        item.preferredForwardBufferDuration = 2
+        let made = AVPlayer(playerItem: item)
+        made.isMuted = true              // the song is the sound
+        made.actionAtItemEnd = .none
+        made.automaticallyWaitsToMinimizeStalling = false
+
+        let videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        ])
+        item.add(videoOutput)
+
+        url = video.url
+        kept = made
+        output = videoOutput
+        return (made, videoOutput, true)
+    }
+
+    /// The screen has gone; the picture waits where it is.
+    func rest() { kept?.pause() }
+
+    func release() {
+        kept?.pause()
+        kept?.replaceCurrentItem(with: nil)
+        kept = nil
+        output = nil
+        url = nil
+    }
+}
+
 /// Plays the picture, muted, and keeps it in step with the song.
 ///
 /// The song is never touched — it is the clock, and only the picture is nudged. A video that is
@@ -226,20 +284,14 @@ struct VideoArtView: UIViewRepresentable {
         private let patience: UInt64 = 15
 
         func attach(to view: PlayerContainerView, video: SongVideo) {
-            // The same user-agent the song is fetched with. Without it googlevideo
-            // refuses the stream and the picture stays black — the song plays on,
-            // so there is nothing on screen to say what went wrong.
-            let asset = AVURLAsset(url: video.url,
-                                   options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
-            let player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
-            player.isMuted = true            // the song is the sound
-            player.actionAtItemEnd = .none
-            player.automaticallyWaitsToMinimizeStalling = false
-            // Two seconds in hand is plenty for a picture. Waiting for the
-            // player's usual comfortable buffer is seconds of black.
-            player.currentItem?.preferredForwardBufferDuration = 2
+            // Lent out rather than built: a player kept from the last time this
+            // screen was open already holds what it fetched, so reopening shows
+            // a picture instead of buffering one.
+            let lent = VideoArtPlayers.shared.player(for: video)
+            let player = lent.player
             self.player = player
             self.current = video
+            self.output = lent.output
             view.playerLayer.player = player
             view.playerLayer.videoGravity = .resizeAspectFill
             // Whatever the song before it was zoomed to, this one starts square.
@@ -263,11 +315,6 @@ struct VideoArtView: UIViewRepresentable {
             }
             // A few frames are looked at, spread out, for the black bands some
             // videos carry above and below the picture.
-            let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-            ])
-            item?.add(output)
-            self.output = output
             self.bands = 1
             bandsLook?.cancel()
             bandsLook = Task { [weak self, weak view] in
@@ -414,6 +461,8 @@ struct VideoArtView: UIViewRepresentable {
             return rows
         }
 
+        /// The screen is going. Everything watching it goes with it — the
+        /// picture itself is left where it is, paused, for when it comes back.
         func stop() {
             NotificationCenter.default.removeObserver(self)
             statusObs = nil
@@ -423,10 +472,9 @@ struct VideoArtView: UIViewRepresentable {
             bandsLook?.cancel()
             bandsLook = nil
             output = nil
-            player?.pause()
-            player?.replaceCurrentItem(with: nil)
             player = nil
             current = nil
+            VideoArtPlayers.shared.rest()
         }
     }
 }
