@@ -184,7 +184,10 @@ struct PlayerView: View {
 
     @ViewBuilder private var content: some View {
         if lyricsMode {
-            standardLayout { LyricsPane(player: player).transition(.opacity) }
+            standardLayout {
+                LyricsPane(player: player, immersive: immersive)
+                    .transition(.opacity)
+            }
         } else {
             switch design {
             case .ring:
@@ -367,18 +370,24 @@ struct PlayerView: View {
 
     // MARK: Header
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
         ZStack {
+            // The lyrics page is the words and nothing else; "Now Playing" over
+            // them is the one heading that says nothing you cannot see.
             VStack(spacing: 4) {
-                Text("Now Playing")
-                    .font(.system(size: 16, weight: design == .fullArt ? .bold : .semibold))
-                    .shadow(color: design == .fullArt ? .black.opacity(0.7) : .clear, radius: 3, y: 2)
-                if let from = player.current?.artist, !from.isEmpty {
-                    Text(from)
-                        .font(.system(size: 13, weight: .medium))
-                        .opacity(0.8)
-                        .lineLimit(1)
-                        .shadow(color: design == .fullArt ? .black.opacity(0.7) : .clear, radius: 3, y: 2)
+                if !lyricsMode {
+                    Text("Now Playing")
+                        .font(.system(size: 16, weight: design == .fullArt ? .bold : .semibold))
+                        .shadow(color: design == .fullArt ? .black.opacity(0.7) : .clear,
+                                radius: 3, y: 2)
+                    if let from = player.current?.artist, !from.isEmpty {
+                        Text(from)
+                            .font(.system(size: 13, weight: .medium))
+                            .opacity(0.8)
+                            .lineLimit(1)
+                            .shadow(color: design == .fullArt ? .black.opacity(0.7) : .clear,
+                                    radius: 3, y: 2)
+                    }
                 }
             }
             .padding(.horizontal, 48)

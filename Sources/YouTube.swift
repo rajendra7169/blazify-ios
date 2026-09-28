@@ -967,7 +967,8 @@ enum YouTube {
             let cols = r["flexColumns"] as? [[String: Any]] ?? []
             return HomeItem(title: flexText(cols, 0), subtitle: flexArtist(cols),
                             thumbnail: musicThumb(r["thumbnail"]), videoId: v,
-                            browseId: nil, isCircular: false)
+                            browseId: nil, isCircular: false,
+                            duration: flexDuration(cols))
         }
         return nil
     }

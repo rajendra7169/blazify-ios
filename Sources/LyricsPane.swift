@@ -26,9 +26,12 @@ struct LyricsPane: View {
     /// Nothing to switch between when the only candidate is already showing —
     /// but if nothing was good enough to show, one candidate is still worth
     /// reaching, so an imported song isn't left with no route to any lyrics.
-    private var pickerDisabled: Bool {
-        candidates.isEmpty || (candidates.count < 2 && result != nil)
-    }
+    /// The picker is there to say where these words came from and to offer the
+    /// other places they came from too. One source is still worth opening — it
+    /// names the one you are reading — so only having none closes it. It used to
+    /// close whenever a song had a single source, which is most songs, and the
+    /// button simply would not press.
+    private var pickerDisabled: Bool { candidates.isEmpty && result == nil }
     @State private var loading = true
     @State private var showVersions = false
     /// Seconds to shift the lyrics by, per song. Positive means the words come
@@ -96,7 +99,15 @@ struct LyricsPane: View {
 
     // MARK: Header
 
-    private var header: some View {
+    /// Full screen leaves the words on their own; the pill goes with the rest of
+    /// the chrome.
+    var immersive = false
+
+    @ViewBuilder private var header: some View {
+        if !immersive { headerRow }
+    }
+
+    private var headerRow: some View {
         HStack {
             Spacer()
             if !autoScroll {
@@ -111,8 +122,12 @@ struct LyricsPane: View {
             }
             Button { showVersions = true } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: "character.bubble")
-                    Text("Language")
+                    Image(systemName: "quote.bubble")
+                    // It said "Language", which promised the song in another
+                    // language. What it opens is the same words from every
+                    // source we can reach — that is what it says now, as on
+                    // Android.
+                    Text("Sources")
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
@@ -420,7 +435,12 @@ struct LyricsPane: View {
 
     /// Extrapolate from the last player sample using wall clock, only while playing.
     private func smoothedPosition(at date: Date) -> Double {
-        let raw = player.isPlaying ? anchorPos + date.timeIntervalSince(anchorWall) : anchorPos
+        // Wall-clock seconds are not song seconds when the song is playing fast
+        // or slow: at 1.25× the words fell behind between samples.
+        let rate = max(PlaybackPrefs.shared.speed, 0.1)
+        let raw = player.isPlaying
+            ? anchorPos + date.timeIntervalSince(anchorWall) * rate
+            : anchorPos
         // A positive offset means "show these words later", i.e. look further
         // back in the lyrics than the playhead. Time SponsorBlock jumped comes
         // off too: the words are timed to the song, not to the video, so a

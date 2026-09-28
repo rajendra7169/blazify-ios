@@ -121,7 +121,8 @@ extension Track {
         // goes through `artURL` and this didn't.
         HomeItem(title: title, subtitle: artist,
                  thumbnail: artURL(size: 544)?.absoluteString ?? thumbnail,
-                 videoId: videoId, browseId: nil, isCircular: false)
+                 videoId: videoId, browseId: nil, isCircular: false,
+                 duration: duration)
     }
 }
 
@@ -135,10 +136,16 @@ struct HomeItem: Identifiable, Hashable {
     let videoId: String?
     let browseId: String?
     let isCircular: Bool   // artists render as circles
+    /// How long the song is, when the row said. Carried because the lyrics
+    /// search scores a match on length before anything else: a song whose length
+    /// is unknown matches whichever version of it shares a title, which is how
+    /// words from a remix or a live cut end up over the studio recording.
+    var duration: Double = 0
 
     var thumbnailURL: URL? { URL(string: thumbnail) }
     var asTrack: Track {
-        Track(videoId: videoId ?? "", title: title, artist: subtitle, thumbnail: thumbnail, duration: 0)
+        Track(videoId: videoId ?? "", title: title, artist: subtitle,
+              thumbnail: thumbnail, duration: duration)
     }
 }
 
