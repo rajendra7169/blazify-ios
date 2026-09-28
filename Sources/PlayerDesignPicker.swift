@@ -653,22 +653,30 @@ private struct VideoArtPreview: View {
                 .animation(.easeInOut(duration: 0.5), value: showing)
             }
 
+            // The stage fade the player itself uses: clear at the top, gone by
+            // the progress bar, solid under the controls.
             LinearGradient(stops: [
-                .init(color: .black.opacity(0.30), location: 0.0),
-                .init(color: .clear, location: 0.35),
-                .init(color: .black.opacity(0.55), location: 0.65),
-                .init(color: .black.opacity(0.92), location: 1.0),
+                .init(color: .clear, location: 0.0),
+                .init(color: .clear, location: 0.30),
+                .init(color: .black.opacity(0.85), location: 0.55),
+                .init(color: .black, location: 0.66),
+                .init(color: .black, location: 1.0),
             ], startPoint: .top, endPoint: .bottom)
 
             VStack(spacing: 0) {
                 Text("Now Playing")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.75), radius: 3, y: 2)
                 Spacer()
-                PreviewMetaRow(player: player)
-                Spacer().frame(height: 8)
+                PreviewMetaRow(player: player, shadow: true)
+                Spacer().frame(height: 10)
+                // It has a bar like every other design; leaving it out was the
+                // one thing that made this mock not the screen it stands for.
+                PreviewSlider(player: player, inactiveAlpha: 0.25)
+                Spacer().frame(height: 10)
                 PreviewTransport(player: player)
-                Spacer().frame(height: 6)
+                Spacer().frame(height: 12)
                 PreviewQueuePeek()
                 Spacer().frame(height: 6)
             }

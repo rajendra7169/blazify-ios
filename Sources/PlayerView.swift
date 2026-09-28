@@ -208,7 +208,7 @@ struct PlayerView: View {
                 )
             case .classic:
                 standardLayout {
-                    SquareArtwork(player: player, side: min(UIScreen.main.bounds.width - 96, 320))
+                    SquareArtwork(player: player, side: stageHeight)
                 }
             case .record:
                 standardLayout {
@@ -218,15 +218,25 @@ struct PlayerView: View {
                         progress: player.progress,
                         fallback: Blaze.gradient,
                     )
+                    .frame(height: stageHeight)
                     .padding(.horizontal, 32)
                 }
             case .fullArt, .video:
-                standardLayout { Color.clear }
+                standardLayout { Color.clear.frame(height: stageHeight) }
             }
         }
     }
 
     /// Header · stage · title+progress · transport · bottom row.
+    /// How tall a design's stage is.
+    ///
+    /// Classic's artwork set this by accident and the others did not have it:
+    /// Full Art, Video and Record handed the layout something that grew to fill
+    /// the screen, so every spacer below collapsed to its minimum and the words,
+    /// the bar and the keys ended up piled together. One height for all of them
+    /// puts those rows in the same places whichever design is on.
+    private var stageHeight: CGFloat { min(UIScreen.main.bounds.width - 96, 320) }
+
     @ViewBuilder private func standardLayout<Stage: View>(@ViewBuilder stage: () -> Stage) -> some View {
         VStack(spacing: 0) {
             header
@@ -292,9 +302,9 @@ struct PlayerView: View {
                 // are those same places measured against the whole screen.
                 LinearGradient(stops: [
                     .init(color: .clear, location: 0.0),
-                    .init(color: .clear, location: 0.35),
-                    .init(color: .black.opacity(0.85), location: 0.60),
-                    .init(color: .black, location: 0.70),
+                    .init(color: .clear, location: 0.30),
+                    .init(color: .black.opacity(0.85), location: 0.55),
+                    .init(color: .black, location: 0.66),
                     .init(color: .black, location: 1.0),
                 ], startPoint: .top, endPoint: .bottom),
             )
