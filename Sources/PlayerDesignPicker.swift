@@ -629,6 +629,7 @@ private struct VideoArtPreview: View {
     /// picture rather than a still with a play mark stamped on it. The answer is
     /// cached per song, so asking here costs nothing extra.
     @StateObject private var videoLoader = SongVideoLoader()
+    @State private var showing = false
 
     var body: some View {
         ZStack {
@@ -642,12 +643,14 @@ private struct VideoArtPreview: View {
                         VideoArtView(video: v,
                                      position: player.currentTime,
                                      isPlaying: player.isPlaying,
-                                     songLength: player.duration)
+                                     songLength: player.duration,
+                                     onFirstFrame: { showing = true })
                             .frame(width: g.size.width, height: g.size.height)
                             .clipped()
+                            .opacity(showing ? 1 : 0)
                     }
                 }
-                .animation(.easeInOut(duration: 0.5), value: videoLoader.video)
+                .animation(.easeInOut(duration: 0.5), value: showing)
             }
 
             LinearGradient(stops: [
@@ -673,6 +676,7 @@ private struct VideoArtPreview: View {
             .padding(.top, 34)
         }
         .task(id: player.current?.videoId) { loadVideo() }
+        .onChange(of: player.current?.videoId) { showing = false }
         .onAppear { loadVideo() }
     }
 

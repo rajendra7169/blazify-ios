@@ -155,17 +155,23 @@ struct VideoArtView: UIViewRepresentable {
     /// Said when the picture will not start, so the screen can explain itself
     /// rather than showing the cover and leaving everyone to guess.
     var onTrouble: (String) -> Void = { _ in }
+    /// Said the moment there is a real frame on screen. Until then the artwork
+    /// underneath is what should be seen — a layer with nothing in it yet is
+    /// just black over the cover.
+    var onFirstFrame: () -> Void = { }
 
     func makeUIView(context: Context) -> PlayerContainerView {
         let view = PlayerContainerView()
         view.backgroundColor = .clear   // the cover shows through until a frame arrives
         context.coordinator.onTrouble = onTrouble
+        context.coordinator.onFirstFrame = onFirstFrame
         context.coordinator.attach(to: view, video: video)
         return view
     }
 
     func updateUIView(_ view: PlayerContainerView, context: Context) {
         context.coordinator.onTrouble = onTrouble
+        context.coordinator.onFirstFrame = onFirstFrame
         context.coordinator.update(video: video, position: position, songLength: songLength,
                                    isPlaying: isPlaying, view: view)
     }
@@ -180,6 +186,7 @@ struct VideoArtView: UIViewRepresentable {
         private var player: AVPlayer?
         private var current: SongVideo?
         var onTrouble: (String) -> Void = { _ in }
+        var onFirstFrame: () -> Void = { }
 
         private var statusObs: NSKeyValueObservation?
         private var readyObs: NSKeyValueObservation?
@@ -228,6 +235,9 @@ struct VideoArtView: UIViewRepresentable {
             player.isMuted = true            // the song is the sound
             player.actionAtItemEnd = .none
             player.automaticallyWaitsToMinimizeStalling = false
+            // Two seconds in hand is plenty for a picture. Waiting for the
+            // player's usual comfortable buffer is seconds of black.
+            player.currentItem?.preferredForwardBufferDuration = 2
             self.player = player
             self.current = video
             view.playerLayer.player = player
@@ -247,7 +257,9 @@ struct VideoArtView: UIViewRepresentable {
                 Task { @MainActor [weak self] in self?.onTrouble(reason) }
             }
             readyObs = view.playerLayer.observe(\.isReadyForDisplay, options: [.new]) { [weak self] layer, _ in
-                if layer.isReadyForDisplay { self?.watchdog?.cancel() }
+                guard layer.isReadyForDisplay else { return }
+                self?.watchdog?.cancel()
+                Task { @MainActor [weak self] in self?.onFirstFrame() }
             }
             // A few frames are looked at, spread out, for the black bands some
             // videos carry above and below the picture.

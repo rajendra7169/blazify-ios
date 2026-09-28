@@ -709,13 +709,19 @@ final class Player: ObservableObject {
     /// raised. This does the same: the answer is remembered for hours, so the
     /// screen finds it waiting.
     private func warmVideoArt(for track: Track) {
-        guard UserDefaults.standard.string(forKey: "playerDesign") == "video",
-              !LocalMusic.isLocal(track.videoId), !track.videoId.isEmpty
-        else { return }
+        guard UserDefaults.standard.string(forKey: "playerDesign") == "video" else { return }
         let unmetered = Reachability.shared.isUnmetered
         guard unmetered || PlaybackPrefs.shared.videoOnMobile else { return }
         let height = unmetered ? 480 : 360
-        Task.detached { _ = await SongVideos.shared.forSong(track, maxHeight: height) }
+
+        // This song first, then the one after it — a skip should not start the
+        // wait over. The answers are kept for hours, so the next song's picture
+        // is already found by the time it is reached.
+        let next = queue.indices.contains(index + 1) ? queue[index + 1] : nil
+        for song in [track, next].compactMap({ $0 })
+        where !LocalMusic.isLocal(song.videoId) && !song.videoId.isEmpty {
+            Task.detached { _ = await SongVideos.shared.forSong(song, maxHeight: height) }
+        }
     }
 
     /// What the community marked as not-the-song in this one.

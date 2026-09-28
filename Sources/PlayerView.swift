@@ -37,6 +37,10 @@ struct PlayerView: View {
     /// is showing instead of the video, and this is where to say that videos may
     /// play on data after all.
     @State private var askVideoOnMobile = false
+    /// Whether the video has a real frame on screen yet. Until it has, the
+    /// artwork underneath is what shows — and if a picture never arrives, the
+    /// artwork simply stays, the way the other designs look.
+    @State private var videoShowing = false
     @ObservedObject private var prefs = PlaybackPrefs.shared
     @ObservedObject private var net = Reachability.shared
 
@@ -264,13 +268,18 @@ struct PlayerView: View {
                                  position: player.currentTime,
                                  isPlaying: player.isPlaying,
                                  songLength: player.duration,
-                                 onTrouble: { videoLoader.trouble($0) })
+                                 onTrouble: { videoLoader.trouble($0) },
+                                 onFirstFrame: { videoShowing = true })
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
-                        .transition(.opacity)
+                        .opacity(videoShowing ? 1 : 0)
                 }
             }
-            .animation(.easeInOut(duration: 0.6), value: videoLoader.video)
+            .animation(.easeInOut(duration: 0.6), value: videoShowing)
+            // A new song is the artwork again until its own picture arrives, so
+            // skipping never leaves the song before it playing on the screen.
+            .onChange(of: player.current?.videoId) { videoShowing = false }
+            .onChange(of: videoLoader.video) { if videoLoader.video == nil { videoShowing = false } }
             // The picture is left alone down to the middle of the screen and only
             // then fades into the page the controls sit on — the same stage fade
             // the Android Video design uses. Dimming it from the top, as the still
