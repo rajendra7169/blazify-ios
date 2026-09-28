@@ -12,9 +12,40 @@ struct QueueView: View {
     @State private var saving = false
     @State private var notice: String?
 
+    /// "50 songs · 2:46:33", as the Android queue heads itself.
+    private var summary: String {
+        let count = player.queue.count
+        let songs = count == 1 ? String(localized: "1 song") : String(localized: "\(count) songs")
+        let total = player.queue.reduce(0) { $0 + max($1.duration, 0) }
+        guard total > 0 else { return songs }
+        return songs + " · " + timeString(total)
+    }
+
+    /// "Artist • 3:21", the way the Android queue writes it.
+    private func subtitle(for track: Track) -> String {
+        let length = track.duration > 0 ? timeString(track.duration) : ""
+        return [track.artist, length].filter { !$0.isEmpty }.joined(separator: " • ")
+    }
+
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    EmptyView()
+                } header: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Playing next")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(palette.onSurface)
+                        Text(summary)
+                            .font(.blaze(13))
+                            .foregroundStyle(palette.onSurfaceVariant)
+                    }
+                    .textCase(nil)
+                    .padding(.bottom, 8)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 0, trailing: 16))
+                }
+
                 ForEach(Array(player.queue.enumerated()), id: \.element.id) { pair in
                     let active = pair.offset == player.index
                     HStack(spacing: 0) {
@@ -23,29 +54,37 @@ struct QueueView: View {
                             dismiss()
                         } label: {
                             HStack(spacing: 12) {
-                            RemoteImage(url: pair.element.thumbnailURL, size: 48) {
-                                palette.onSurface.opacity(0.10)
-                            }
-                            .frame(width: 48, height: 48)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(pair.element.title)
-                                    .font(.subheadline)
-                                    .foregroundStyle(active ? palette.accent : palette.onSurface)
-                                    .lineLimit(1)
-                                Text(pair.element.artist)
-                                    .font(.caption)
-                                    .foregroundStyle(palette.onSurfaceVariant)
-                                    .lineLimit(1)
-                            }
-                                Spacer(minLength: 0)
-                                if active {
-                                    Image(systemName: "speaker.wave.2.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(palette.accent)
+                                RemoteImage(url: pair.element.artURL(size: 160), size: 52) {
+                                    palette.onSurface.opacity(0.10)
                                 }
+                                .frame(width: 52, height: 52)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .overlay {
+                                    if active {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(.black.opacity(0.45))
+                                            .overlay(
+                                                Image(systemName: player.isPlaying
+                                                      ? "waveform" : "play.fill")
+                                                    .font(.system(size: 16, weight: .bold))
+                                                    .foregroundStyle(.white),
+                                            )
+                                    }
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(pair.element.title)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(palette.onSurface)
+                                        .lineLimit(1)
+                                    Text(subtitle(for: pair.element))
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(palette.onSurfaceVariant)
+                                        .lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
                             }
+                            .padding(.vertical, 2)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -53,7 +92,13 @@ struct QueueView: View {
                         QueueRowMenu(track: pair.element, player: player,
                                      position: pair.offset)
                     }
-                    .listRowBackground(active ? palette.onSurface.opacity(0.08) : Color.clear)
+                    .listRowBackground(
+                        active
+                            ? RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(palette.onSurface.opacity(0.10))
+                                .padding(.horizontal, 8)
+                            : nil,
+                    )
                     .listRowSeparator(.hidden)
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
@@ -102,6 +147,9 @@ struct QueueView: View {
                     Button("Done") { dismiss() }.tint(palette.accent)
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                bottomKeys
+            }
             .overlay(alignment: .bottom) {
                 if let notice {
                     Text(notice)
@@ -123,6 +171,38 @@ struct QueueView: View {
                 Text("Creates a new playlist on your account with everything in the queue.")
             }
         }
+    }
+
+    /// Shuffle · Close · Repeat, over a fade into the page — the row the Android
+    /// queue ends with.
+    private var bottomKeys: some View {
+        HStack(spacing: 0) {
+            key(player.isShuffled ? "shuffle.circle.fill" : "shuffle", "Shuffle",
+                on: player.isShuffled) { player.toggleShuffle() }
+            key("chevron.down", "Close", on: false) { dismiss() }
+            key(player.repeatMode == .one ? "repeat.1" : "repeat", "Repeat",
+                on: player.repeatMode != .off) { player.cycleRepeat() }
+        }
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+        .background(
+            LinearGradient(colors: [palette.scaffold.opacity(0), palette.scaffold],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea(),
+        )
+    }
+
+    private func key(_ icon: String, _ title: String, on: Bool,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 19))
+                Text(title).font(.system(size: 11)).lineLimit(1)
+            }
+            .foregroundStyle(on ? palette.accent : palette.onSurface.opacity(0.85))
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
     }
 
     /// Songs on this phone have no video id on YouTube, so they can't go into a

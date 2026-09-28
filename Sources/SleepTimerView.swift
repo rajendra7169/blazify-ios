@@ -49,10 +49,11 @@ struct SleepTimerView: View {
                     .onChange(of: geo.size.height) { sheetHeight = geo.size.height }
             },
         )
-        // Solid, as on Android, where the sleep timer and the Cast sheet share
-        // one background. (The AirPlay list beside it is the system's own sheet
-        // and cannot be restyled from here — Apple draws it.)
-        .presentationBackground(palette.surface)
+        // Glass, like the AirPlay list beside it on the same row. That one is
+        // drawn by iOS outside the app and cannot be restyled at all, so the
+        // consistency has to come from this side: the two sheets that sit next
+        // to each other now share a background.
+        .presentationBackground(.regularMaterial)
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
     }

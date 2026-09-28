@@ -105,6 +105,13 @@ struct PlaylistView: View {
                                         Label("Remove", systemImage: "trash")
                                     }
                                 }
+                                .swipeActions(edge: .leading) {
+                                    Button { player.playNext(track) } label: {
+                                        Label("Play next",
+                                              systemImage: "text.line.first.and.arrowtriangle.forward")
+                                    }
+                                    .tint(Blaze.amber)
+                                }
                         }
                         .onMove { from, to in move(from: from, to: to) }
                     }
@@ -118,11 +125,12 @@ struct PlaylistView: View {
                         ForEach(Array(tracks.enumerated()), id: \.element.id) { pair in
                             SongRow(track: pair.element, player: player) {
                                 player.play(tracks, startAt: pair.offset)
-                                player.showFullPlayer = true
                             }
                             .padding(.leading, 16)
                             .padding(.vertical, 6)
                             .buttonStyle(.plain)
+                            // Swipe it right and it comes up next.
+                            .swipeToPlayNext(pair.element, player: player)
                         }
                     }
                 }

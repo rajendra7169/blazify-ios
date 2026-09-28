@@ -114,7 +114,6 @@ struct SongListScreen: View {
                     HStack(spacing: 0) {
                         Button {
                             player.play(shown, startAt: index)
-                            player.showFullPlayer = true
                         } label: {
                             TrackRow(track: track)
                                 .padding(.leading, 16)
@@ -129,6 +128,9 @@ struct SongListScreen: View {
                                     onOpenArtist: { openArtist(track) })
                             .padding(.trailing, 8)
                     }
+                    // Swipe it to the right and it comes up next, as in the
+                    // queue and as on Android.
+                    .swipeToPlayNext(track, player: player)
                     // So the pill knows whether the playing song is on screen,
                     // and has somewhere to scroll back to.
                     .id(track.videoId)
