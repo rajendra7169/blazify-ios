@@ -641,7 +641,8 @@ private struct VideoArtPreview: View {
                     if let v = videoLoader.video {
                         VideoArtView(video: v,
                                      position: player.currentTime,
-                                     isPlaying: player.isPlaying)
+                                     isPlaying: player.isPlaying,
+                                     songLength: player.duration)
                             .frame(width: g.size.width, height: g.size.height)
                             .clipped()
                     }

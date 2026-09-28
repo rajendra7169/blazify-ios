@@ -65,14 +65,18 @@ actor SongVideos {
             return SongVideo(videoId: track.videoId, url: url, synced: true)
         }
 
-        // Otherwise the artist's official video — a fan upload or a lyric video is not the song's
-        // picture. The same cut as the song follows it in step; a different cut runs on its own.
+        // Otherwise the artist's own video, and only that. A lyric video, a fan
+        // upload, a slowed-and-reverbed edit — those are what a plain search
+        // hands back first, and none of them is the song's picture. YouTube
+        // marks its own with OMV, which is what the Android player looks for and
+        // why its videos look like music videos.
         guard !track.title.isEmpty, !LocalMusic.isLocal(track.videoId) else { return nil }
         let query = track.artist.isEmpty ? track.title : "\(track.title) \(track.artist)"
         let results = await YouTube.search(query, scope: .videos)
-        let official = Array(results.prefix(candidates))
+        let official = results.prefix(candidates).filter(\.isOfficialVideo)
         guard !official.isEmpty else { return nil }
 
+        // The same cut as the song follows it in step; a different cut runs on its own.
         let sameCut = official.first {
             track.duration > 0 && $0.duration > 0 && abs($0.duration - track.duration) <= sameCutSeconds
         }
@@ -146,6 +150,8 @@ struct VideoArtView: UIViewRepresentable {
     /// Where the song is, in seconds.
     let position: Double
     let isPlaying: Bool
+    /// How long the song is, for placing a video that is a different cut of it.
+    var songLength: Double = 0
     /// Said when the picture will not start, so the screen can explain itself
     /// rather than showing the cover and leaving everyone to guess.
     var onTrouble: (String) -> Void = { _ in }
@@ -160,7 +166,8 @@ struct VideoArtView: UIViewRepresentable {
 
     func updateUIView(_ view: PlayerContainerView, context: Context) {
         context.coordinator.onTrouble = onTrouble
-        context.coordinator.update(video: video, position: position, isPlaying: isPlaying, view: view)
+        context.coordinator.update(video: video, position: position, songLength: songLength,
+                                   isPlaying: isPlaying, view: view)
     }
 
     static func dismantleUIView(_ view: PlayerContainerView, coordinator: Coordinator) {
@@ -178,8 +185,29 @@ struct VideoArtView: UIViewRepresentable {
         private var readyObs: NSKeyValueObservation?
         private var watchdog: Task<Void, Never>?
 
-        /// How far out of step the picture may drift before it is nudged.
-        private let tolerance: Double = 0.35
+        /// Close enough to the sound that nobody could tell.
+        private let inStep: Double = 0.08
+
+        /// Further apart than this and the picture jumps to the song rather than
+        /// catching up. Anything smaller is made up by running it a little fast
+        /// or a little slow, which nobody notices without the sound — where
+        /// seeking every quarter second, as this used to, is a visible stutter.
+        private let jumpBeyond: Double = 2
+
+        /// How far ahead of the song a jump aims, learned from how far each jump
+        /// actually landed out, and never more than four seconds.
+        private var lead: Double = 0.8
+        private var justJumped = false
+        private let maxLead: Double = 4
+
+        /// A cut of its own is put roughly where the song is, once, and again
+        /// whenever the listener moves the song themselves.
+        private var placed = false
+        private var lastPosition: Double = 0
+
+        /// Label logos and title cards at the start of a video, skipped when it
+        /// runs on its own.
+        private let openingTitles: Double = 6
 
         /// How long a picture may take to show its first frame before it counts
         /// as never having started. Generous: a video is fetched alongside the
@@ -195,6 +223,7 @@ struct VideoArtView: UIViewRepresentable {
             let player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
             player.isMuted = true            // the song is the sound
             player.actionAtItemEnd = .none
+            player.automaticallyWaitsToMinimizeStalling = false
             self.player = player
             self.current = video
             view.playerLayer.player = player
@@ -226,31 +255,75 @@ struct VideoArtView: UIViewRepresentable {
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem, queue: .main,
             ) { [weak player] _ in
-                player?.seek(to: .zero)
+                let length = player?.currentItem?.duration.seconds ?? 0
+                let from = length.isFinite && length > 0 ? min(6, length / 4) : 0
+                player?.seek(to: CMTime(seconds: from, preferredTimescale: 600))
                 player?.play()
             }
         }
 
-        func update(video: SongVideo, position: Double, isPlaying: Bool, view: PlayerContainerView) {
+        func update(video: SongVideo, position: Double, songLength: Double,
+                    isPlaying: Bool, view: PlayerContainerView) {
             if current != video {
                 stop()
+                placed = false
+                lead = 0.8
                 attach(to: view, video: video)
             }
             guard let player else { return }
+            defer { lastPosition = position }
 
-            if video.synced {
-                let at = player.currentTime().seconds
-                if at.isFinite, abs(at - position) > tolerance {
-                    player.seek(to: CMTime(seconds: position, preferredTimescale: 600),
-                                toleranceBefore: .zero, toleranceAfter: .zero)
-                }
+            guard isPlaying else {
+                if player.rate != 0 { player.pause() }
+                return
+            }
+            if player.rate == 0 { player.play() }
+            guard player.currentItem?.status == .readyToPlay else { return }
+
+            // The listener dragged the progress bar. Both kinds of picture have
+            // to answer that — one follows the song's second, the other is put
+            // back to roughly the same distance through itself.
+            let moved = abs(position - lastPosition) > jumpBeyond
+
+            guard video.synced else {
+                if !placed || moved { place(player, at: position, songLength: songLength) }
+                return
             }
 
-            if isPlaying, player.rate == 0 {
-                player.play()
-            } else if !isPlaying, player.rate != 0 {
-                player.pause()
+            let at = player.currentTime().seconds
+            guard at.isFinite else { return }
+            let drift = position - at
+
+            if justJumped {
+                // Half the miss, so one slow answer does not throw the next jump far off.
+                lead = min(max(lead + drift / 2, 0), maxLead)
+                justJumped = false
             }
+
+            if abs(drift) > jumpBeyond {
+                player.rate = 1
+                player.seek(to: CMTime(seconds: position + lead, preferredTimescale: 600),
+                            toleranceBefore: .zero, toleranceAfter: .zero)
+                justJumped = true
+            } else if abs(drift) > inStep {
+                // Made up by running the picture a touch fast or slow instead of
+                // jumping it, which is what makes this look smooth.
+                player.rate = Float(1 + min(max(drift / 4, -0.25), 0.25))
+            } else if player.rate != 1 {
+                player.rate = 1
+            }
+        }
+
+        /// Puts a video that is a different cut about as far through itself as the
+        /// song is through itself, and never on the opening titles.
+        private func place(_ player: AVPlayer, at position: Double, songLength: Double) {
+            let length = player.currentItem?.duration.seconds ?? 0
+            guard length.isFinite, length > 0 else { return }
+            let along = songLength > 0 ? position / songLength : 0
+            let target = max(along * length, min(openingTitles, length / 4))
+            player.seek(to: CMTime(seconds: min(target, length - 1), preferredTimescale: 600),
+                        toleranceBefore: .zero, toleranceAfter: .zero)
+            placed = true
         }
 
         func stop() {

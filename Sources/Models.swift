@@ -17,6 +17,10 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
     /// From `watchEndpointMusicConfig.musicVideoType`: ATV is the audio track,
     /// anything else is an actual music video.
     var video: Bool?
+    /// That same field, kept whole. ATV is the audio track, OMV the artist's own
+    /// video, UGC somebody's upload — a distinction the Video design needs, since
+    /// a slowed-and-reverbed fan edit is not the song's picture.
+    var videoType: String?
     /// A row's identity WITHIN a playlist. The same song can appear twice, so
     /// removing or moving one needs this rather than the video id.
     var setVideoId: String?
@@ -27,9 +31,13 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
     var id: String { videoId }
     var thumbnailURL: URL? { artURL(size: 0) }
 
+    /// True only for the artist's own video — what YouTube Music itself shows.
+    var isOfficialVideo: Bool { videoType == "MUSIC_VIDEO_TYPE_OMV" }
+
     init(videoId: String, title: String, artist: String, thumbnail: String,
          duration: Double, artistId: String? = nil,
-         explicit: Bool? = nil, video: Bool? = nil, setVideoId: String? = nil) {
+         explicit: Bool? = nil, video: Bool? = nil, videoType: String? = nil,
+         setVideoId: String? = nil) {
         self.videoId = videoId
         self.title = title
         self.artist = artist
@@ -38,6 +46,7 @@ struct Track: Identifiable, Equatable, Codable, Hashable {
         self.artistId = artistId
         self.explicit = explicit
         self.video = video
+        self.videoType = videoType
         self.setVideoId = setVideoId
     }
 

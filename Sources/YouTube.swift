@@ -429,13 +429,16 @@ enum YouTube {
                     ?? overlayVideoId(r["overlay"])
                 guard let vid = videoId, !vid.isEmpty else { continue }
                 let cols = r["flexColumns"] as? [[String: Any]] ?? []
+                let videoType = deepString(r, key: "musicVideoType")
                 out.append(Track(
                     videoId: vid,
                     title: flexText(cols, 0),
                     artist: flexArtist(cols),
                     thumbnail: musicThumb(r["thumbnail"]),
                     duration: flexDuration(cols),   // 0 when the row carries none
-                    artistId: flexArtistId(cols)
+                    artistId: flexArtistId(cols),
+                    video: videoType.map { $0 != "MUSIC_VIDEO_TYPE_ATV" },
+                    videoType: videoType
                 ))
                 if out.count >= 25 { return out }
             }
@@ -1041,6 +1044,7 @@ enum YouTube {
                                       artistId: flexArtistId(cols),
                                       explicit: explicit,
                                       video: videoType.map { $0 != "MUSIC_VIDEO_TYPE_ATV" },
+                                      videoType: videoType,
                                       setVideoId: itemData?["playlistSetVideoId"] as? String)
                     // Every song list in the app is built here, so the Content
                     // filters only need applying at this one point.

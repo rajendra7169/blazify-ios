@@ -263,6 +263,7 @@ struct PlayerView: View {
                     VideoArtView(video: v,
                                  position: player.currentTime,
                                  isPlaying: player.isPlaying,
+                                 songLength: player.duration,
                                  onTrouble: { videoLoader.trouble($0) })
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
