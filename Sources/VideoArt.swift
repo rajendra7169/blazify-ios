@@ -232,6 +232,8 @@ struct VideoArtView: UIViewRepresentable {
             self.current = video
             view.playerLayer.player = player
             view.playerLayer.videoGravity = .resizeAspectFill
+            // Whatever the song before it was zoomed to, this one starts square.
+            view.playerLayer.transform = CATransform3DIdentity
             // Nothing is heard from it, so it starts the moment it can.
             player.play()
 
