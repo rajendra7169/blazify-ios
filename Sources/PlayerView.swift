@@ -58,13 +58,32 @@ struct PlayerView: View {
     private var sheetProgress: Double {
         let span = expandedBound - collapsedBound
         guard span > 0 else { return 1 }
-        return min(max(1 - Double(dragOffset / span), 0), 1)
+        // Measured from where the sheet actually is, not from the drag alone —
+        // otherwise arriving and leaving happen at full progress, behind a scrim
+        // that is already opaque, and the travel cannot be seen at all.
+        return min(max(1 - Double(sheetOffset / span), 0), 1)
     }
 
     /// Finger-release settle: critically damped, stiffness 1500 (SpringSpec()).
     private var settleSpring: Animation {
         .interpolatingSpring(mass: 1, stiffness: 1500, damping: 77.46)
     }
+
+    /// Arriving and leaving.
+    ///
+    /// Softer and slower than the settle, because this one covers the whole
+    /// height of the screen rather than the last few points of a drag: the same
+    /// stiffness over that distance arrives like a slammed door.
+    private var travelSpring: Animation {
+        .spring(response: 0.42, dampingFraction: 0.86)
+    }
+
+    /// False for the first instant, so the sheet has somewhere to travel from.
+    @State private var arrived = false
+
+    /// How far down the sheet sits: the finger's drag, plus the whole screen
+    /// while it is still on its way in or already on its way out.
+    private var sheetOffset: CGFloat { arrived ? dragOffset : expandedBound }
 
     var body: some View {
         ZStack {
@@ -105,13 +124,18 @@ struct PlayerView: View {
             // NB: no clipShape here — clipping happens at the safe-area bounds,
             // which cropped the background's ignoresSafeArea and put a black band
             // under the status bar. Full-bleed matters more than the drag corners.
-            .offset(y: dragOffset)
+            .offset(y: sheetOffset)
         }
         .gesture(sheetDrag)
         // Settings → Lyrics → Hide the status bar, while lyrics are up.
         .statusBarHidden(lyricsMode && LyricsPrefs.shared.hideStatusBarFullscreen)
         .onAppear {
             dragOffset = 0
+            // Slides up from the bottom rather than being cut in. The cover
+            // itself appears instantly — with a clear background that reads as
+            // the player simply existing, with no sense of having come from the
+            // mini player it was dragged out of.
+            withAnimation(travelSpring) { arrived = true }
             // Settings → Player → Keep the screen on.
             UIApplication.shared.isIdleTimerDisabled = PlaybackPrefs.shared.keepScreenOn
         }
@@ -172,17 +196,28 @@ struct PlayerView: View {
                 if vy < -250 {                              // flicked up → expand
                     springBack()
                 } else if vy > 250 {                        // flicked down → collapse
-                    dismiss()
+                    close()
                 } else if value > midpoint {
                     springBack()
                 } else {
-                    dismiss()
+                    close()
                 }
             }
     }
 
     private func springBack() {
         withAnimation(settleSpring) { dragOffset = 0 }
+    }
+
+    /// Put the sheet down the way it came up.
+    ///
+    /// Dismissing outright hands a sheet that is halfway down the screen to a
+    /// system animation that knows nothing about where the finger left it, and
+    /// the two together read as a cut. This carries it the rest of the way
+    /// first, and lets the cover go once there is nothing left to see.
+    private func close() {
+        withAnimation(travelSpring) { arrived = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { dismiss() }
     }
 
     // MARK: Layout dispatch
