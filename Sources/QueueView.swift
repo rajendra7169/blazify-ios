@@ -7,6 +7,13 @@ struct QueueView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var auth = Auth.shared
 
+    /// Whether the rows are pinned down. Locked by default, as on Android: the
+    /// queue is read far more often than it is rearranged, and a list that
+    /// rearranges itself under a thumb meant for scrolling is worse than one
+    /// that asks first. It also buys back the swipes — iOS turns off swipe
+    /// actions entirely while a list is in edit mode.
+    @AppStorage("queueEditLocked") private var locked = true
+
     @State private var showSave = false
     @State private var playlistName = ""
     @State private var saving = false
@@ -29,17 +36,22 @@ struct QueueView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { rows in
             List {
                 Section {
                     EmptyView()
                 } header: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Playing next")
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(palette.onSurface)
-                        Text(summary)
-                            .font(.blaze(13))
-                            .foregroundStyle(palette.onSurfaceVariant)
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Playing next")
+                                .font(.system(size: 26, weight: .bold))
+                                .foregroundStyle(palette.onSurface)
+                            Text(summary)
+                                .font(.blaze(13))
+                                .foregroundStyle(palette.onSurfaceVariant)
+                        }
+                        Spacer(minLength: 0)
+                        lockKey
                     }
                     .textCase(nil)
                     .padding(.bottom, 8)
@@ -63,12 +75,15 @@ struct QueueView: View {
                                     if active {
                                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                                             .fill(.black.opacity(0.45))
-                                            .overlay(
-                                                Image(systemName: player.isPlaying
-                                                      ? "waveform" : "play.fill")
-                                                    .font(.system(size: 16, weight: .bold))
-                                                    .foregroundStyle(.white),
-                                            )
+                                            .overlay {
+                                                if player.isPlaying {
+                                                    PlayingBars()
+                                                } else {
+                                                    Image(systemName: "play.fill")
+                                                        .font(.system(size: 16, weight: .bold))
+                                                        .foregroundStyle(.white)
+                                                }
+                                            }
                                     }
                                 }
 
@@ -92,13 +107,10 @@ struct QueueView: View {
                         QueueRowMenu(track: pair.element, player: player,
                                      position: pair.offset)
                     }
-                    .listRowBackground(
-                        active
-                            ? RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(palette.onSurface.opacity(0.10))
-                                .padding(.horizontal, 8)
-                            : nil,
-                    )
+                    // Edge to edge. Inset by eight points it read as a card
+                    // that had come loose from the list rather than as the row
+                    // being played.
+                    .listRowBackground(active ? palette.onSurface.opacity(0.10) : nil)
                     .listRowSeparator(.hidden)
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
@@ -120,7 +132,7 @@ struct QueueView: View {
                 }
                 .onMove { from, to in player.moveInQueue(from: from, to: to) }
             }
-            .environment(\.editMode, .constant(.active))
+            .environment(\.editMode, .constant(locked ? .inactive : .active))
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(palette.scaffold.ignoresSafeArea())
@@ -170,7 +182,52 @@ struct QueueView: View {
             } message: {
                 Text("Creates a new playlist on your account with everything in the queue.")
             }
+            // Opening the queue lands on the song being played rather than at
+            // the top of a list it is forty rows down in — and if it changes
+            // while the queue is open, the list follows it.
+            .onAppear { jump(using: rows, animated: false) }
+            .onChange(of: player.index) { jump(using: rows, animated: true) }
+            }
         }
+    }
+
+    /// Put whatever is playing in the middle of the screen.
+    private func jump(using rows: ScrollViewProxy, animated: Bool) {
+        guard player.queue.indices.contains(player.index) else { return }
+        let id = player.queue[player.index].id
+        // A beat after appearing: scrolling a list that has not finished laying
+        // itself out lands somewhere near, not on, the row asked for.
+        DispatchQueue.main.asyncAfter(deadline: .now() + (animated ? 0 : 0.05)) {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.25)) { rows.scrollTo(id, anchor: .center) }
+            } else {
+                rows.scrollTo(id, anchor: .center)
+            }
+        }
+    }
+
+    /// Pinned or free to rearrange.
+    ///
+    /// Round, quiet while locked and amber while not, so the state is readable
+    /// without reading the padlock itself — and sitting at the end of the title
+    /// row, where it belongs to the whole list rather than to any one song.
+    private var lockKey: some View {
+        Button {
+            locked.toggle()
+        } label: {
+            Image(systemName: locked ? "lock" : "lock.open")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(locked ? palette.onSurfaceVariant : Blaze.amber)
+                .frame(width: 40, height: 40)
+                .background(
+                    Circle().fill(locked
+                        ? palette.onSurface.opacity(0.08)
+                        : Blaze.amber.opacity(0.18)),
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(locked ? "Queue locked" : "Queue unlocked")
+        .accessibilityHint("Unlock to drag songs into a different order")
     }
 
     /// Shuffle · Close · Repeat, over a fade into the page — the row the Android
