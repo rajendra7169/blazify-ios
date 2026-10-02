@@ -931,20 +931,53 @@ enum YouTube {
 
     /// Playlists inside a mood/genre category.
     static func moodPlaylists(browseId: String, params: String?) async -> [HomeItem] {
-        guard !browseId.isEmpty else { return [] }
+        await shelfPage(browseId: browseId, params: params).items
+    }
+
+    /// One page of a shelf, and the token for the next one.
+    ///
+    /// A shelf opened from Home can be hundreds of items long and arrives a page
+    /// at a time. Asking once and showing what came back is how a list of three
+    /// hundred songs silently becomes a list of twenty.
+    static func shelfPage(
+        browseId: String,
+        params: String?,
+        continuation: String? = nil,
+    ) async -> (items: [HomeItem], next: String?) {
+        guard !browseId.isEmpty else { return ([], nil) }
         let visitor = await visitorData()
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
         var body: [String: Any] = ["context": ["client": client], "browseId": browseId]
         if let params { body["params"] = params }
+        if let continuation { body["continuation"] = continuation }
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
                                     userAgent: webUA, visitor: visitor, body: body)
-        else { return [] }
+        else { return ([], nil) }
         var out: [HomeItem] = []
         var seen = Set<String>()
         collectCards(json, into: &out, seen: &seen)
-        return out
+        return (out, anyContinuation(json))
+    }
+
+    /// The first continuation token anywhere in a response.
+    ///
+    /// Which renderer carries it depends on what the shelf holds — a grid, a
+    /// list of songs, a carousel — so this looks for the token rather than for
+    /// the renderer that should have it.
+    private static func anyContinuation(_ node: Any) -> String? {
+        if let dict = node as? [String: Any] {
+            if let found = nextContinuation(dict) { return found }
+            for value in dict.values {
+                if let found = anyContinuation(value) { return found }
+            }
+        } else if let list = node as? [Any] {
+            for value in list {
+                if let found = anyContinuation(value) { return found }
+            }
+        }
+        return nil
     }
 
     private static func parseHomeItem(_ item: [String: Any]) -> HomeItem? {

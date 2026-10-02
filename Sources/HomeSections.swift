@@ -218,6 +218,8 @@ struct HomeSectionScreen: View {
 
     @State private var items: [HomeItem] = []
     @State private var loading = true
+    @State private var next: String?
+    @State private var extending = false
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
 
@@ -226,24 +228,43 @@ struct HomeSectionScreen: View {
         items.filter { $0.browseId == nil && !($0.videoId ?? "").isEmpty }.map(\.asTrack)
     }
 
+    /// Whether this shelf is songs and nothing else.
+    ///
+    /// Decided by what came back rather than by the heading: a row called
+    /// "Singles" holds songs and one called "Albums" does not, and the heading
+    /// is no guide to which. Songs belong in a list, where a title can be read
+    /// and an artist sits beneath it; everything else belongs in artwork.
+    private var isSongList: Bool {
+        !items.isEmpty && items.allSatisfy { $0.browseId == nil && !($0.videoId ?? "").isEmpty }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if !songs.isEmpty {
                     actions
                 }
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(items) { item in
-                        BlazeMusicCard(title: item.title, subtitle: item.subtitle,
-                                       thumbnail: item.thumbnail, isCircular: item.isCircular,
-                                       fallbackIcon: item.isCircular ? "person.fill" : "music.note") {
-                            open(item)
+                if isSongList {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { at, item in
+                            songRow(item, at: at)
                         }
                     }
+                    .padding(.top, 4)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(items) { item in
+                            BlazeMusicCard(title: item.title, subtitle: item.subtitle,
+                                           thumbnail: item.thumbnail, isCircular: item.isCircular,
+                                           fallbackIcon: item.isCircular ? "person.fill" : "music.note") {
+                                open(item)
+                            }
+                        }
+                    }
+                    .padding(16)
                 }
-                .padding(16)
 
-                if loading {
+                if loading || extending {
                     ProgressView()
                         .tint(palette.accent)
                         .frame(maxWidth: .infinity)
@@ -256,6 +277,30 @@ struct HomeSectionScreen: View {
         .navigationTitle(section.title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+    }
+
+    /// One song, drawn as the playlist screens draw it.
+    ///
+    /// Reaching the last few rows asks for the next page, so a long shelf
+    /// arrives as it is read rather than all at once or not at all.
+    private func songRow(_ item: HomeItem, at index: Int) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                open(item)
+            } label: {
+                TrackRow(track: item.asTrack)
+                    .padding(.leading, 16)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+
+            SongRowMenu(track: item.asTrack, player: player,
+                        onAddToPlaylist: nil, onOpenArtist: nil)
+                .padding(.trailing, 8)
+        }
+        .onAppear {
+            if index >= items.count - 5 { Task { await extend() } }
+        }
     }
 
     /// Play and Shuffle, as a playlist has them.
@@ -302,10 +347,25 @@ struct HomeSectionScreen: View {
             await MainActor.run { loading = false }
             return
         }
-        let all = await YouTube.moodPlaylists(browseId: browseId, params: section.params)
+        let page = await YouTube.shelfPage(browseId: browseId, params: section.params)
         await MainActor.run {
-            if !all.isEmpty { items = all }
+            if !page.items.isEmpty { items = page.items }
+            next = page.next
             loading = false
+        }
+    }
+
+    /// The next page, once, however many rows ask for it at the same moment.
+    private func extend() async {
+        guard let token = next, !extending, let browseId = section.browseId else { return }
+        await MainActor.run { extending = true }
+        let page = await YouTube.shelfPage(browseId: browseId, params: section.params,
+                                           continuation: token)
+        await MainActor.run {
+            let known = Set(items.map(\.id))
+            items += page.items.filter { !known.contains($0.id) }
+            next = page.next
+            extending = false
         }
     }
 
