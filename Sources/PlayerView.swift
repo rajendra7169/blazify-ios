@@ -117,7 +117,12 @@ struct PlayerView: View {
         }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
-        .sheet(isPresented: $showQueue) { QueueView(player: player) }
+        // Full screen, as on Android. A sheet left the queue sitting in a card
+        // with the player showing above it, which makes a list of fifty songs
+        // feel like a note about the queue rather than the queue itself.
+        .fullScreenCover(isPresented: $showQueue) {
+            QueueView(player: player).environment(\.palette, palette)
+        }
         .sheet(isPresented: $showEqualizer) {
             NavigationStack { EqualizerView(player: player) }
                 .environment(\.palette, palette)

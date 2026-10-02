@@ -240,13 +240,33 @@ struct QueueView: View {
             key(player.repeatMode == .one ? "repeat.1" : "repeat", "Repeat",
                 on: player.repeatMode != .off) { player.cycleRepeat() }
         }
-        .padding(.top, 10)
-        .padding(.bottom, 6)
+        .padding(.top, 18)
+        .padding(.bottom, 8)
         .background(
-            LinearGradient(colors: [palette.scaffold.opacity(0), palette.scaffold],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea(),
+            // Three stops rather than two, and deeper than the keys are tall.
+            // A short fade let rows scroll up until they were sitting under the
+            // icons, legible enough to read and too faint to use — the bar has
+            // to stop being a suggestion before the keys stop competing with
+            // the list. Solid by the time it reaches the home indicator.
+            LinearGradient(
+                stops: [
+                    .init(color: palette.scaffold.opacity(0), location: 0),
+                    .init(color: palette.scaffold.opacity(0.92), location: 0.45),
+                    .init(color: palette.scaffold, location: 0.75),
+                    .init(color: palette.scaffold, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom,
+            )
+            .ignoresSafeArea(),
         )
+        .overlay(alignment: .top) {
+            // A hairline where the fade begins, so the bar reads as a surface
+            // the list passes behind rather than as a smudge over it.
+            Rectangle()
+                .fill(palette.onSurface.opacity(0.06))
+                .frame(height: 1)
+        }
     }
 
     private func key(_ icon: String, _ title: String, on: Bool,
