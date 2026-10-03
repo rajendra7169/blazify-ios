@@ -133,12 +133,25 @@ final class Player: ObservableObject {
                 self?.applyRemote(action)
             }
         }
+        // Whose item ended, not merely that one did.
+        //
+        // Registered against every item in the process, this fired for anything
+        // in the application that reaches an end — and the music video behind
+        // the Video Art design is an AVPlayerItem like any other. Three or four
+        // minutes into a song, the video would finish, this would read it as the
+        // song finishing, and the queue would walk on to another track with
+        // nobody having touched anything. The prepared gapless item would have
+        // done the same.
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: nil,
             queue: .main,
-        ) { [weak self] _ in
-            self?.trackEnded()
+        ) { [weak self] note in
+            guard let self,
+                  let ended = note.object as? AVPlayerItem,
+                  ended === self.avPlayer?.currentItem
+            else { return }
+            self.trackEnded()
         }
     }
 
