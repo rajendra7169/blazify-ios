@@ -64,6 +64,15 @@ final class Player: ObservableObject {
     /// — one finger movement, two views, and they cannot share a number that
     /// belongs privately to one of them.
     @Published var sheetDrag: CGFloat = 0
+
+    /// True only while a finger on the mini player is carrying the sheet up.
+    ///
+    /// Without it, the player had to guess on arrival: it treated a drag offset
+    /// of zero as "opened by a tap, animate me in" and anything else as "a
+    /// finger has me". Any value left behind by an earlier gesture then read as
+    /// a drag in progress, so the sheet stayed where that value put it — off the
+    /// bottom of the screen — and the tap looked as though it had done nothing.
+    @Published var draggingSheet = false
     @Published var lastError: String?
 
     @Published var isShuffled = false

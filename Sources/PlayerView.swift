@@ -129,17 +129,23 @@ struct PlayerView: View {
         // Settings → Lyrics → Hide the status bar, while lyrics are up.
         .statusBarHidden(lyricsMode && LyricsPrefs.shared.hideStatusBarFullscreen)
         .onAppear {
-            // Opened by a tap: it is sitting at zero, so put it off the bottom
-            // and let it travel up. Opened by a drag from the mini player: the
-            // finger already placed it somewhere and owns it until let go.
-            if player.sheetDrag == 0 {
+            // Opened by a tap or a button: put it off the bottom and let it
+            // travel up, whatever was left in that number by the last gesture.
+            // Opened by a drag from the mini player: the finger owns it, and
+            // says so, until it lets go.
+            if !player.draggingSheet {
                 player.sheetDrag = expandedBound
                 withAnimation(travelSpring) { player.sheetDrag = 0 }
             }
             // Settings → Player → Keep the screen on.
             UIApplication.shared.isIdleTimerDisabled = PlaybackPrefs.shared.keepScreenOn
         }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            // A claim cannot outlive the screen it was made on: left standing,
+            // the next opening would think a finger still had hold of it.
+            player.draggingSheet = false
+        }
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
         // Full screen, as on Android. A sheet left the queue sitting in a card
         // with the player showing above it, which makes a list of fifty songs
@@ -195,6 +201,9 @@ struct PlayerView: View {
             }
             .onEnded { g in
                 dragFrom = nil
+                // The drag may have begun on the mini player and been handed
+                // over when the cover appeared; either way it is over now.
+                player.draggingSheet = false
                 let vy = g.velocity.height                  // px/s, positive = downward
                 let value = expandedBound - player.sheetDrag  // the sheet's visible height
                 let midpoint = (expandedBound - collapsedBound) / 2

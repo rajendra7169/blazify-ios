@@ -111,7 +111,12 @@ struct MiniPlayerView: View {
             .contentShape(Rectangle())
             .onTapGesture { openPlayer() }
             .offset(y: dragDown)
-            .gesture(
+            // Simultaneous, not exclusive: attached plainly, the drag enters
+            // arbitration against the tap and the first tap is spent deciding
+            // between them rather than opening anything. A tap cannot start a
+            // drag that needs twenty points of travel, so letting both watch
+            // costs nothing.
+            .simultaneousGesture(
                 DragGesture(minimumDistance: 20)
                     .onChanged { g in
                         guard abs(g.translation.height) > abs(g.translation.width) else { return }
@@ -126,6 +131,7 @@ struct MiniPlayerView: View {
                             dragDown = 0
                             let screen = UIScreen.main.bounds.height
                             if !player.showFullPlayer {
+                                player.draggingSheet = true
                                 player.sheetDrag = screen
                                 player.showFullPlayer = true
                             }
@@ -143,6 +149,7 @@ struct MiniPlayerView: View {
                         if vertical, player.showFullPlayer, g.translation.height < 0 {
                             // The player is already up and following the finger;
                             // all that is left is deciding where it settles.
+                            player.draggingSheet = false
                             let screen = UIScreen.main.bounds.height
                             let far = g.translation.height < -90 || g.velocity.height < -300
                             withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
