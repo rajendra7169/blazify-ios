@@ -181,6 +181,13 @@ final class VideoArtPlayers {
     /// at half a second; two seconds of waiting is most of what a skip felt like.
     private static let buffer: TimeInterval = 0.8
 
+    /// How much to keep in hand once it is playing. The starting figure was
+    /// kept for the whole song, and a stream fetched less than a second ahead
+    /// of the playhead dies at the first hiccup — on a four-minute song it did,
+    /// a couple of minutes in, and the picture froze there. Android's player
+    /// keeps about fifty seconds.
+    static let deepBuffer: TimeInterval = 45
+
     /// The player for this video, made once and lent out afterwards.
     func player(for video: SongVideo) -> (player: AVPlayer, output: AVPlayerItemVideoOutput?, fresh: Bool) {
         if url == video.url, let kept { return (kept, output, false) }
@@ -232,7 +239,11 @@ final class VideoArtPlayers {
         let made = AVPlayer(playerItem: item)
         made.isMuted = true              // the song is the sound
         made.actionAtItemEnd = .none
-        made.automaticallyWaitsToMinimizeStalling = false
+        // Left on, so that when the buffer does run dry the player waits for
+        // it to fill and carries on by itself. With it off a stall put the
+        // rate to zero and left it there; the fast first start this was turned
+        // off for is had from playImmediately(atRate:) instead.
+        made.automaticallyWaitsToMinimizeStalling = true
 
         let videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
@@ -314,6 +325,9 @@ struct VideoArtView: UIViewRepresentable {
 
         private var statusObs: NSKeyValueObservation?
         private var readyObs: NSKeyValueObservation?
+        /// The end-of-video watcher, kept so it can be taken down: these are
+        /// not removed by name, and one was left behind for every song.
+        private var endObs: NSObjectProtocol?
         private var watchdog: Task<Void, Never>?
         private var output: AVPlayerItemVideoOutput?
         private var bandsLook: Task<Void, Never>?
@@ -362,8 +376,9 @@ struct VideoArtView: UIViewRepresentable {
             view.playerLayer.videoGravity = .resizeAspectFill
             // Whatever the song before it was zoomed to, this one starts square.
             view.playerLayer.transform = CATransform3DIdentity
-            // Nothing is heard from it, so it starts the moment it can.
-            player.play()
+            // Nothing is heard from it, so it starts the moment it can — with
+            // whatever it has, not after the usual wait for a safe amount.
+            player.playImmediately(atRate: 1)
 
             // Three ways this can go wrong, and all three used to look the same
             // from the outside: the item refuses, the layer never has a frame to
@@ -374,9 +389,11 @@ struct VideoArtView: UIViewRepresentable {
                 let reason = item.error?.localizedDescription ?? "the video would not load"
                 Task { @MainActor [weak self] in self?.onTrouble(reason) }
             }
-            readyObs = view.playerLayer.observe(\.isReadyForDisplay, options: [.new]) { [weak self] layer, _ in
+            readyObs = view.playerLayer.observe(\.isReadyForDisplay, options: [.new]) { [weak self, weak player] layer, _ in
                 guard layer.isReadyForDisplay else { return }
                 self?.watchdog?.cancel()
+                // The picture is up; from here it fetches well ahead of itself.
+                player?.currentItem?.preferredForwardBufferDuration = VideoArtPlayers.deepBuffer
                 Task { @MainActor [weak self] in self?.onFirstFrame() }
             }
             // A few frames are looked at, spread out, for the black bands some
@@ -399,7 +416,8 @@ struct VideoArtView: UIViewRepresentable {
             }
 
             // A cut of its own just loops; there is nothing to stay in step with.
-            NotificationCenter.default.addObserver(
+            if let endObs { NotificationCenter.default.removeObserver(endObs) }
+            endObs = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem, queue: .main,
             ) { [weak player] _ in
@@ -422,10 +440,27 @@ struct VideoArtView: UIViewRepresentable {
             defer { lastPosition = position }
 
             guard isPlaying else {
-                if player.rate != 0 { player.pause() }
+                // Not by rate: a player waiting on its buffer has a rate of
+                // zero already, and left alone it would start up on its own
+                // the moment the buffer filled, under a song that is paused.
+                if player.timeControlStatus != .paused { player.pause() }
                 return
             }
-            if player.rate == 0 { player.play() }
+            switch player.timeControlStatus {
+            case .paused:
+                player.playImmediately(atRate: 1)
+            case .waitingToPlayAtSpecifiedRate:
+                // Its buffer ran dry and it is filling it. Everything below
+                // would only get in the way — a seek now throws away what it
+                // has just fetched, and seeking every quarter second, as this
+                // used to while stalled, is why a stall was for good. It comes
+                // back by itself, and the drift it has by then is one jump.
+                return
+            case .playing:
+                break
+            @unknown default:
+                break
+            }
             guard player.currentItem?.status == .readyToPlay else { return }
 
             // The listener dragged the progress bar. Both kinds of picture have
@@ -530,7 +565,8 @@ struct VideoArtView: UIViewRepresentable {
         /// The screen is going. Everything watching it goes with it — the
         /// picture itself is left where it is, paused, for when it comes back.
         func stop() {
-            NotificationCenter.default.removeObserver(self)
+            if let endObs { NotificationCenter.default.removeObserver(endObs) }
+            endObs = nil
             statusObs = nil
             readyObs = nil
             watchdog?.cancel()

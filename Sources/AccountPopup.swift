@@ -1,9 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// The account popup from the home header: a
-/// card pinned near the top (72pt down, 16pt sides, 28pt radius) over a dimmed
-/// tap-to-dismiss backdrop.
+/// The account popup from the home header: a card in the middle of the
+/// screen (16pt sides, 28pt radius) over a dimmed tap-to-dismiss backdrop.
 struct AccountPopup: View {
     @Environment(\.palette) private var palette
     @ObservedObject var player: Player
@@ -18,7 +17,6 @@ struct AccountPopup: View {
     @State private var confirmLogout = false
     @State private var showTogether = false
     @State private var showDeveloper = false
-    @State private var cardHeight: CGFloat = 0
     @State private var moreContent = UserDefaults.standard.object(forKey: "useLoginForBrowse") as? Bool ?? true
     @State private var autoSync = UserDefaults.standard.object(forKey: "ytmSync") as? Bool ?? true
 
@@ -33,41 +31,36 @@ struct AccountPopup: View {
                 .contentShape(Rectangle())
                 .onTapGesture { isPresented = false }
 
-            // Centred rather than pinned 72pt down, which is where Android
-            // puts its dialog, and measured so it is exactly as tall as what
-            // is in it — a scroll view takes all the height it is offered, so
-            // without this the card would be 580pt of mostly empty surface.
-            ScrollView {
-                VStack(spacing: 0) {
-                    titleBar
-                    accountCard
-                    Spacer().frame(height: 8)
-                    toggleGroup
-                    Spacer().frame(height: 12)
-                    developerRow
-                    Spacer().frame(height: 12)
-                    bottomBlock
-                }
-                .padding(16)
-                .background(
-                    GeometryReader { box in
-                        Color.clear.preference(key: CardHeight.self, value: box.size.height)
-                    },
-                )
+            // As tall as what is in it, and centred, as Android's dialog is.
+            // Only on a screen too short to hold it does it scroll — a card
+            // given a fixed height was 560pt of panel with a scroll bar in it.
+            ViewThatFits(in: .vertical) {
+                card
+                ScrollView { card }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(height: min(cardHeight == 0 ? 560 : cardHeight, 560))
-            .onPreferenceChange(CardHeight.self) { cardHeight = $0 }
             .background(palette.surface)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             .shadow(color: .black.opacity(0.35), radius: 24, y: 8)
             .padding(.horizontal, 16)
+            .padding(.vertical, 24)
+
+            // The developer, in a small card over this one — as on Android,
+            // where it is a dialog — rather than a page of its own.
+            if showDeveloper {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { showDeveloper = false }
+                    .transition(.opacity)
+                developerCard
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
         }
+        .animation(.easeOut(duration: 0.18), value: showDeveloper)
         .sheet(isPresented: $showLogin) { LoginView() }
         .sheet(isPresented: $showAccount) { AccountLibraryView(player: player) }
         .sheet(isPresented: $showTokenSheet) { tokenSheet }
         .sheet(isPresented: $showTogether) { TogetherView() }
-        .sheet(isPresented: $showDeveloper) { developerSheet }
         .confirmationDialog("Keep library data?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) {
                 auth.signOut()
@@ -77,6 +70,20 @@ struct AccountPopup: View {
         } message: {
             Text("Downloaded songs are always kept.")
         }
+    }
+
+    private var card: some View {
+        VStack(spacing: 0) {
+            titleBar
+            accountCard
+            Spacer().frame(height: 8)
+            toggleGroup
+            Spacer().frame(height: 12)
+            developerRow
+            Spacer().frame(height: 12)
+            bottomBlock
+        }
+        .padding(16)
     }
 
     /// "Know about the developer", as Android heads it: the photo, who it is,
@@ -118,75 +125,56 @@ struct AccountPopup: View {
         }
     }
 
-    /// What Android opens on tapping that row: who made this, and how to reach
-    /// them. The links are the ones already on the website.
-    private var developerSheet: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    Image("DeveloperPhoto")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 112, height: 112)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(palette.accent.opacity(0.5), lineWidth: 2))
-                        .padding(.top, 16)
+    /// Android's dialog, line for line: photo, name, what he does, a few words
+    /// in his own voice, and the two places to find him.
+    private var developerCard: some View {
+        VStack(spacing: 0) {
+            Image("DeveloperPhoto")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 96, height: 96)
+                .clipShape(Circle())
 
-                    VStack(spacing: 4) {
-                        Text("Rajendra Pandey")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(palette.onSurface)
-                        Text("Developer, Kathmandu")
-                            .font(.system(size: 14))
-                            .foregroundStyle(palette.onSurfaceVariant)
-                    }
+            Spacer().frame(height: 12)
+            Text("Rajendra Pandey")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(palette.onSurface)
+            Spacer().frame(height: 2)
+            Text("Builds Blazify, from Kathmandu")
+                .font(.system(size: 13))
+                .foregroundStyle(palette.onSurfaceVariant)
 
-                    Text("Blazify is built and maintained by one person, in Nepal. "
-                        + "It is free, open source, and has no adverts — if it is useful "
-                        + "to you, telling somebody about it is the whole thanks it needs.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(palette.onSurfaceVariant)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 8)
+            Spacer().frame(height: 14)
+            Text("I build Blazify on my own, in the open. It began because I wanted a music player that looked the way I thought one should, and people kept asking me for a copy. What goes into each version is mostly what people tell me is broken or missing.")
+                .font(.system(size: 14))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 4)
 
-                    VStack(spacing: 4) {
-                        developerLink("globe", "rajendrapandey.info.np",
-                                      "https://rajendrapandey.info.np")
-                        developerLink("chevron.left.forwardslash.chevron.right", "github.com/rajendra7169",
-                                      "https://github.com/rajendra7169")
-                        developerLink("envelope", "rajendrapandey199971@gmail.com",
-                                      "mailto:rajendrapandey199971@gmail.com")
-                    }
-                    .padding(.top, 4)
-                }
-                .padding(16)
+            Spacer().frame(height: 16)
+            HStack(spacing: 8) {
+                developerLink("Website", "https://rajendrapandey.info.np")
+                developerLink("GitHub", "https://github.com/rajendra7169")
             }
-            .background(palette.surface.ignoresSafeArea())
-            .navigationTitle("About the developer")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { showDeveloper = false }.tint(palette.accent)
-                }
-            }
+            Spacer().frame(height: 4)
         }
+        .padding(24)
+        .background(palette.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: .black.opacity(0.35), radius: 24, y: 8)
+        .padding(.horizontal, 36)
     }
 
-    private func developerLink(_ icon: String, _ label: String, _ address: String) -> some View {
+    private func developerLink(_ label: String, _ address: String) -> some View {
         Button {
             if let url = URL(string: address) { UIApplication.shared.open(url) }
         } label: {
-            HStack(spacing: 16) {
-                iconChip(icon)
-                Text(label)
-                    .font(.system(size: 15))
-                    .foregroundStyle(palette.onSurface)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
+            Text(label)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(palette.accent)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -385,14 +373,6 @@ struct AccountPopup: View {
             .frame(width: 40, height: 40)
             .background(palette.accent.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-/// How tall what is in the card came out, so the card can be that tall.
-private struct CardHeight: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 

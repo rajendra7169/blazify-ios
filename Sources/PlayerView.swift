@@ -14,7 +14,6 @@ struct PlayerView: View {
         self.player = player
         _clock = ObservedObject(wrappedValue: player.clock)
     }
-    @Environment(\.dismiss) private var dismiss
 
     @AppStorage("playerDesign") private var designRaw = PlayerDesign.classic.rawValue
     /// Carried into the sleep sheet, which otherwise loses the app's colours.
@@ -265,16 +264,19 @@ struct PlayerView: View {
     private func close() {
         withAnimation(travelSpring) { player.sheetDrag = expandedBound }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
-            // Without this the screen closes twice: ours carries the sheet down,
-            // and then the system plays its own dismissal of the cover over the
-            // top of it. By now the sheet is already off the bottom and there is
-            // nothing left to animate, so the system's part is turned off.
+            // The sheet is off the bottom now and there is nothing left to
+            // animate, so the cover goes without the system's own slide-down —
+            // through the flag that presents it, which is what the transaction
+            // applies to. The environment's dismiss is not driven by it, and
+            // the cover slid down a second time.
+            //
+            // And the offset is left where it is. It used to be put back to
+            // zero here, a beat before the cover was actually gone: the sheet
+            // snapped back up to the top for the rest of that beat, and then
+            // slid away again with the cover. Arriving sets it anyway.
             var instant = Transaction()
             instant.disablesAnimations = true
-            withTransaction(instant) { dismiss() }
-            // Back to zero once it is out of sight, so the next opening starts
-            // from the bottom rather than from wherever this one ended.
-            player.sheetDrag = 0
+            withTransaction(instant) { player.showFullPlayer = false }
         }
     }
 
