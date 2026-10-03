@@ -215,11 +215,14 @@ final class VideoArtPlayers {
 
     /// The player for this video, made once and lent out afterwards.
     func player(for video: SongVideo) -> (player: AVPlayer, output: AVPlayerItemVideoOutput?, fresh: Bool) {
-        if url == video.url, let kept { return (kept, output, false) }
+        // A kept player whose item has failed is not lent out again: the
+        // screen reopened twenty seconds after a refused address and was
+        // handed the same refusal, already final, with nothing left to try.
+        if url == video.url, let kept, kept.currentItem?.status != .failed { return (kept, output, false) }
 
         // The one opened ahead for this song steps straight in, with whatever
         // it has already fetched.
-        if nextURL == video.url, let ready = nextPlayer {
+        if nextURL == video.url, let ready = nextPlayer, ready.currentItem?.status != .failed {
             release()
             url = video.url
             kept = ready

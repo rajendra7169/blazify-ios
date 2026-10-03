@@ -230,12 +230,14 @@ enum YouTube {
     static func videoStream(for videoId: String, maxHeight: Int) async -> (url: URL, alternate: URL?)? {
         let visitor = await visitorData()
         let preferred = await MainActor.run { StreamPrefs.shared.order }
-        // The iOS client first, whatever the order for songs. A music video is
-        // usually a label's, and for those the other two do not answer — one
-        // wants a sign-in, the other calls it unplayable — so each was half a
-        // second spent to be told no before the one that says yes was asked.
-        // It is also the one handed an HLS manifest when there is one.
-        let clients = [StreamClient.ios] + preferred.filter { $0 != .ios }
+        // The iOS client last, whatever the order for songs. Putting it first
+        // was a mistake made from a desk: it answers for every video, and the
+        // file addresses it hands out play from here — and on the phone the
+        // video server refuses every one of them, 403, while the addresses the
+        // other two clients hand out play. The log from the phone was the
+        // proof. So the two that are known to play are asked first, and the
+        // iOS client only for the label videos they will not answer for.
+        let clients = preferred.filter { $0 != .ios } + [StreamClient.ios]
 
         for client in clients {
             var context = client.context
@@ -284,7 +286,15 @@ enum YouTube {
                 if height > bestHeight { bestHeight = height; best = f }
             }
             if let best, let u = best["url"] as? String, let url = URL(string: u) {
-                VideoArtLog.note("stream: file \(bestHeight)p itag \(best["itag"] ?? "?")\(hls == nil ? "" : ", hls alternate")")
+                // From the iOS client, whose file addresses the phone's video
+                // server has refused, the HLS stream — a different kind of
+                // address, signed differently — goes first, and the file is
+                // the fallback. From the other two the file is what plays.
+                if client == .ios, let hls {
+                    VideoArtLog.note("stream: hls from \(client.rawValue), file \(bestHeight)p itag \(best["itag"] ?? "?") as alternate")
+                    return (hls, url)
+                }
+                VideoArtLog.note("stream: file \(bestHeight)p itag \(best["itag"] ?? "?") from \(client.rawValue)\(hls == nil ? "" : ", hls alternate")")
                 return (url, hls)
             }
             VideoArtLog.note("stream: no H.264 file ≤\(maxHeight)p in \(formats.count) formats\(hls == nil ? "" : ", using hls")")
