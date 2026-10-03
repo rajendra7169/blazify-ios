@@ -474,6 +474,7 @@ struct PlayerView: View {
                         .font(.system(size: 16))
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
+                        .opensArtist(player)
                     // Only on the design that promised a picture, and only while
                     // there is none: the reason, in place of a mystery.
                     if design == .video, videoLoader.video == nil, let note = videoLoader.note {

@@ -105,6 +105,7 @@ struct RingPlayerLayout: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
+                    .opensArtist(player)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 

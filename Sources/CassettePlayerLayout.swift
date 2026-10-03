@@ -92,6 +92,7 @@ struct CassetteTitleKeys: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
+                    .opensArtist(player)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
