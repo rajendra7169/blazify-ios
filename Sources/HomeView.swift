@@ -186,7 +186,11 @@ struct HomeView: View {
             // A refresh fires several requests at once and YouTube sometimes
             // answers the home browse with nothing. Keep what we already have
             // rather than blanking the feed down to the local rails.
-            if !f.sections.isEmpty { feed = f }
+            if !f.sections.isEmpty {
+                var kept = f
+                kept.sections = f.sections.withoutShorts()
+                feed = kept
+            }
             let shuffle = ContentPrefs.shared.randomizeHomeOrder
             if !m.isEmpty { moods = shuffle ? m.shuffled() : m }
             // Shuffle the running order too, so it isn't always Quick picks on
@@ -208,7 +212,7 @@ struct HomeView: View {
             await MainActor.run {
                 // Don't repeat a shelf we already have on screen.
                 let existing = Set(feed.sections.map(\.title))
-                feed.sections += next.sections.filter { !existing.contains($0.title) }
+                feed.sections += next.sections.withoutShorts().filter { !existing.contains($0.title) }
                 feed.continuation = next.continuation
                 loadingMore = false
             }
@@ -389,7 +393,9 @@ struct HomeView: View {
             loading = true
             let f = await YouTube.home(params: chip.params)
             await MainActor.run {
-                feed = f
+                var kept = f
+                kept.sections = f.sections.withoutShorts()
+                feed = kept
                 loading = false
             }
         }

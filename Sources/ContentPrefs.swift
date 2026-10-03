@@ -11,6 +11,9 @@ final class ContentPrefs: ObservableObject {
     @Published var country: String { didSet { save(country, "contentCountry") } }
 
     @Published var hideExplicit: Bool { didSet { save(hideExplicit, "hideExplicit") } }
+    /// Shorts arrive as their own shelves in the home feed; hiding videos does
+    /// not touch them, because they are playlists rather than songs.
+    @Published var hideShorts: Bool { didSet { save(hideShorts, "hideYoutubeShorts") } }
     @Published var hideVideoSongs: Bool { didSet { save(hideVideoSongs, "hideVideoSongs") } }
 
     @Published var showArtistDescription: Bool { didSet { save(showArtistDescription, "showArtistDescription") } }
@@ -56,6 +59,7 @@ final class ContentPrefs: ObservableObject {
 
         hideExplicit = flag("hideExplicit", false)
         hideVideoSongs = flag("hideVideoSongs", false)
+        hideShorts = flag("hideYoutubeShorts", false)
         showArtistDescription = flag("showArtistDescription", true)
         showSubscriberCount = flag("showArtistSubscriberCount", true)
         randomizeHomeOrder = flag("randomizeHomeOrder", true)
@@ -82,5 +86,24 @@ final class ContentPrefs: ObservableObject {
 
     private func save(_ value: Any, _ key: String) {
         UserDefaults.standard.set(value, forKey: key)
+    }
+}
+
+/// Dropping Shorts out of the home feed.
+///
+/// They arrive as shelves of playlists whose browse id begins "SS", which is how
+/// Android recognises them too — there is nothing else in the response that
+/// marks one. A shelf left with nothing in it goes as well, rather than standing
+/// there as a heading over empty space.
+extension Array where Element == HomeSection {
+    func withoutShorts() -> [HomeSection] {
+        guard ContentPrefs.shared.hideShorts else { return self }
+        return compactMap { section in
+            let kept = section.items.filter { !($0.browseId?.hasPrefix("SS") ?? false) }
+            if kept.isEmpty { return nil }
+            if kept.count == section.items.count { return section }
+            return HomeSection(title: section.title, items: kept, isSongs: section.isSongs,
+                               browseId: section.browseId, params: section.params)
+        }
     }
 }

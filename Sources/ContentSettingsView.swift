@@ -40,6 +40,10 @@ struct ContentSettingsView: View {
                 SettingsToggle(symbol: "video.slash", title: "Hide video songs",
                                subtitle: "Skip music videos and keep the audio versions",
                                isOn: $prefs.hideVideoSongs)
+                SettingsDivider()
+                SettingsToggle(symbol: "rectangle.portrait.slash", title: "Hide YouTube Shorts",
+                               subtitle: "Drops Shorts shelves out of Home",
+                               isOn: $prefs.hideShorts)
             }
 
             SettingsGroup(title: "Artist pages") {
