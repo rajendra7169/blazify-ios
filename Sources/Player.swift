@@ -98,6 +98,9 @@ final class Player: ObservableObject {
 
     private var avPlayer: AVPlayer?
     private var timeObserver: Any?
+    private var volumeObs: NSKeyValueObservation?
+    /// Whether the silence is what stopped the music.
+    private var pausedByMute = false
     private var statusObs: NSKeyValueObservation?
     private var rateObs: NSKeyValueObservation?
     private var isSeeking = false
@@ -129,6 +132,7 @@ final class Player: ObservableObject {
         restoreQueue()
         observeRouteChanges()
         observeInterruptions()
+        observeVolume()
         NotificationCenter.default.addObserver(
             forName: .blazifyAudioPrefsChanged, object: nil, queue: .main,
         ) { [weak self] _ in self?.applyAudioPrefs() }
@@ -228,6 +232,32 @@ final class Player: ObservableObject {
     /// a speaker reconnect, which iOS reports as an route change.
     /// Audio interruptions (a call, Siri) and iOS pausing us. Without this the
     /// transport keeps claiming it's playing after the system has stopped us.
+    /// Settings → Player → Pause when muted.
+    ///
+    /// iOS has no "device volume is zero" notification, but the audio session
+    /// publishes its output volume, so the change can be watched directly.
+    /// Whether we paused for this reason is remembered, so turning the sound
+    /// back up only resumes what the silence stopped — not something paused by
+    /// hand ten minutes earlier.
+    private func observeVolume() {
+        volumeObs = AVAudioSession.sharedInstance().observe(
+            \.outputVolume, options: [.new],
+        ) { [weak self] session, _ in
+            DispatchQueue.main.async {
+                guard let self, PlaybackPrefs.shared.pauseOnMute else { return }
+                if session.outputVolume <= 0.001 {
+                    if self.isPlaying {
+                        self.pausedByMute = true
+                        self.pause()
+                    }
+                } else if self.pausedByMute {
+                    self.pausedByMute = false
+                    self.resume()
+                }
+            }
+        }
+    }
+
     private func observeInterruptions() {
         NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification, object: nil, queue: .main,

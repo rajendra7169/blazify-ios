@@ -164,6 +164,10 @@ struct PlayerSettingsView: View {
                                subtitle: "An album is a few hundred megabytes",
                                isOn: $prefs.downloadOnWifiOnly)
                 SettingsDivider()
+                SettingsToggle(symbol: "speaker.slash", title: "Pause when muted",
+                               subtitle: "And carry on when the volume comes back",
+                               isOn: $prefs.pauseOnMute)
+                SettingsDivider()
                 SettingsToggle(symbol: "sun.max", title: "Keep the screen on",
                                subtitle: "While the full player is open",
                                isOn: $prefs.keepScreenOn)

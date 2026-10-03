@@ -56,6 +56,11 @@ final class PlaybackPrefs: ObservableObject {
     /// inconvenience.
     @Published var downloadOnWifiOnly: Bool { didSet { save(downloadOnWifiOnly, "downloadOnWifiOnly") } }
 
+    /// Pause when the volume is turned all the way down, and carry on when it
+    /// comes back. Turning the sound off is usually meant as "stop", and a song
+    /// that plays on silently is one you come back to three tracks later.
+    @Published var pauseOnMute: Bool { didSet { save(pauseOnMute, "pauseOnMute") } }
+
     /// Video Art is a video, which costs far more than a picture — off on mobile
     /// data until it is asked for.
     @Published var videoOnMobile: Bool { didSet { save(videoOnMobile, "videoOnMobile") } }
@@ -98,6 +103,7 @@ final class PlaybackPrefs: ObservableObject {
         // downloads working would be reported as a bug, not noticed as a
         // kindness.
         downloadOnWifiOnly = flag("downloadOnWifiOnly", false)
+        pauseOnMute = flag("pauseOnMute", false)
         preservePitch = flag("preservePitch", true)
         gapless = flag("gaplessPlayback", true)
         crossfade = flag("crossfadeEnabled", false)
