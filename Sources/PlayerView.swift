@@ -76,7 +76,7 @@ struct PlayerView: View {
     @State private var arrived = false
     private let arriveDrift: CGFloat = 36
     private var fadeIn: Animation { .easeOut(duration: 0.28) }
-    private var fadeOut: Animation { .easeIn(duration: 0.2) }
+    private var fadeOut: Animation { .easeIn(duration: 0.22) }
 
     /// Where the sheet stood when this drag began, so a handover continues it.
     @State private var dragFrom: CGFloat?
@@ -230,11 +230,11 @@ struct PlayerView: View {
                 if vy < -250 {                              // flicked up → expand
                     springBack()
                 } else if vy > 250 {                        // flicked down → collapse
-                    close()
+                    close(velocity: vy)
                 } else if value > midpoint {
                     springBack()
                 } else {
-                    close()
+                    close(velocity: vy)
                 }
             }
     }
@@ -263,11 +263,21 @@ struct PlayerView: View {
     /// system animation that knows nothing about where the finger left it, and
     /// the two together read as a cut. This carries it the rest of the way
     /// first, and lets the cover go once there is nothing left to see.
-    private func close() {
-        // From wherever the finger left it: it fades out there, drifting on a
-        // little, rather than travelling the rest of the way to the bottom.
+    private func close(velocity vy: CGFloat = 0) {
+        // The sheet carries on the way the finger sent it, at the speed it
+        // was going, and fades as it goes. Fading it where the finger left it
+        // stopped the motion dead in the middle of the screen — a sheet that
+        // was travelling and then simply stood there going transparent.
+        // The spring's starting speed is the finger's, scaled to the distance
+        // left, which is how this spring takes it.
+        let left = max(expandedBound - player.sheetDrag, 1)
+        let carryOn = Animation.interpolatingSpring(
+            mass: 1, stiffness: 180, damping: 26,
+            initialVelocity: Double(max(vy, 0) / left),
+        )
+        withAnimation(carryOn) { player.sheetDrag = expandedBound }
         withAnimation(fadeOut) { arrived = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
             // Nothing is left to see, so the cover goes without the system's
             // own slide-down — through the flag that presents it, which is
             // what the transaction applies to. The environment's dismiss is
