@@ -486,7 +486,9 @@ enum YouTube {
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
                                     userAgent: webUA, visitor: visitor, body: body, login: true)
         else { return .empty }
-        return continuation == nil ? parseHome(json) : parseHomeContinuation(json)
+        let feed = continuation == nil ? parseHome(json) : parseHomeContinuation(json)
+        if !feed.chips.isEmpty { knownChips = feed.chips }
+        return feed
     }
 
     /// Continuation pages arrive under `continuationContents.sectionListContinuation`
@@ -908,6 +910,41 @@ enum YouTube {
 
     // MARK: - Moods & genres
 
+    /// Whether browsing carries the account — the "More content" switch on the
+    /// account panel, on unless turned off. Android sends the account on every
+    /// browse while it is on; here Home did and the mood pages and shelves did
+    /// not, which is why those came back for the country and not the person.
+    static var browseLogin: Bool {
+        UserDefaults.standard.object(forKey: "useLoginForBrowse") as? Bool ?? true
+    }
+
+    /// The Home feed's mood chips, kept from the last Home answer so a mood
+    /// page can ask for its own without loading Home again.
+    static var knownChips: [HomeChip] = []
+
+    /// The shelves YouTube Music puts together for a mood for this account —
+    /// "Your Relax mix", songs liked in that mood, the lot. These are the Home
+    /// feed filtered by its chip, which is the one place YouTube's own
+    /// personalisation reaches a mood; the mood page's grid is editorial, the
+    /// same for everybody in the country.
+    static func moodShelves(for moodTitle: String) async -> [HomeSection] {
+        if knownChips.isEmpty { _ = await home() }
+        let wanted = chipName(for: moodTitle)
+        guard let chip = knownChips.first(where: { $0.title.lowercased() == wanted }),
+              let params = chip.params
+        else { return [] }
+        return await home(params: params).sections.filter { !$0.items.isEmpty }
+    }
+
+    /// The Home chip a mood tile answers to. Most share a name; two do not.
+    private static func chipName(for moodTitle: String) -> String {
+        switch moodTitle.lowercased() {
+        case "chill": "relax"
+        case "energy boosters": "energize"
+        default: moodTitle.lowercased()
+        }
+    }
+
     /// The "Moods & moments" / "Genres" tiles from FEmusic_moods_and_genres.
     static func moods() async -> [MoodItem] {
         let visitor = await visitorData()
@@ -916,7 +953,7 @@ enum YouTube {
         if let visitor { client["visitorData"] = visitor }
         let body: [String: Any] = ["context": ["client": client], "browseId": "FEmusic_moods_and_genres"]
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
-                                    userAgent: webUA, visitor: visitor, body: body)
+                                    userAgent: webUA, visitor: visitor, body: body, login: browseLogin)
         else { return [] }
         guard
             let contents = json["contents"] as? [String: Any],
@@ -969,7 +1006,7 @@ enum YouTube {
         if let params { body["params"] = params }
         if let continuation { body["continuation"] = continuation }
         guard let json = await post(musicBrowse, name: "67", version: remixVersion,
-                                    userAgent: webUA, visitor: visitor, body: body)
+                                    userAgent: webUA, visitor: visitor, body: body, login: browseLogin)
         else { return ([], nil) }
         var out: [HomeItem] = []
         var seen = Set<String>()
