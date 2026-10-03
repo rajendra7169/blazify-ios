@@ -38,7 +38,6 @@ struct SearchView: View {
     @State private var moods: [MoodItem] = []
     @State private var searching = false
     @State private var didSearch = false
-    @State private var moodRoute: MoodItem?
     /// Cancels an in-flight suggestion fetch when another keystroke lands.
     @State private var suggestTask: Task<Void, Never>?
     /// Set while `run` rewrites the field, so its own edit isn't treated as typing.
@@ -89,7 +88,10 @@ struct SearchView: View {
         }
         .background(palette.scaffold.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(item: $moodRoute) { MoodDetailView(mood: $0, player: player) }
+        // By type, so a mood sits in the path in the order it was opened. When
+        // this screen is itself pushed from Home, Home's own destination for
+        // the type is the one used — the same page either way.
+        .navigationDestination(for: MoodItem.self) { MoodDetailView(mood: $0, player: player) }
         // Screens pushed from here hand back a card by value rather than by
         // binding — a mood page full of playlists is the common one. Without a
         // destination for the type, every one of those cards is a dead tap: the
@@ -214,7 +216,12 @@ struct SearchView: View {
     private func browseTile(_ mood: MoodItem) -> some View {
         let seed = Color(hex: mood.colorARGB & 0xFFFFFF)
         let covers = browseArt.art[BrowseArt.key(mood)] ?? []
-        return Button { moodRoute = mood } label: {
+        // Pushed by value, like the playlists the mood page pushes in turn. It
+        // used to be pushed through a binding, and a stack keeps those after
+        // its value pushes: the moment a playlist went on top of the mood, the
+        // stack was rebuilt as playlist then mood, and the mood page came back
+        // over the playlist you had just opened.
+        return NavigationLink(value: mood) {
             ZStack(alignment: .topLeading) {
                 LinearGradient(colors: [seed.mixed(with: .white, 0.24), seed,
                                         seed.mixed(with: .black, 0.18)],
