@@ -157,48 +157,57 @@ struct PlayerMenuSheet: View {
     /// The five icon actions Android heads this sheet with, in its order:
     /// add to queue, add to playlist, download, view artist, start radio.
     private var actionRow: some View {
-        HStack(alignment: .top, spacing: 0) {
-            action("text.badge.plus", "Add to queue") {
-                if let t = player.current { player.addToQueue([t]) }
-                dismiss()
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                action("text.badge.plus", "Add to queue") {
+                    if let t = player.current { player.addToQueue([t]) }
+                    dismiss()
+                }
+                action("plus.circle", "Add to playlist") { showAddToPlaylist = true }
+                action(downloadState == .done ? "arrow.down.circle.fill"
+                         : downloadState == .downloading ? "hourglass" : "arrow.down.circle",
+                       downloadState == .done ? "Downloaded"
+                         : downloadState == .downloading ? "Downloading" : "Download",
+                       tint: downloadState == .done ? Blaze.amber : .white,
+                       // A broadcast has no file to keep: it is a playlist that
+                       // keeps growing, and never the same twice.
+                       disabled: downloadState == .downloading || player.isCurrentLive) {
+                    if let t = player.current { downloads.toggle(t) }
+                }
+                action("person", "Artist") { openArtist() }
+                action("dot.radiowaves.left.and.right", "Start radio") {
+                    if let t = player.current { player.startRadio(from: t) }
+                    dismiss()
+                }
             }
-            action("plus.circle", "Add to playlist") { showAddToPlaylist = true }
-            action(downloadState == .done ? "arrow.down.circle.fill"
-                     : downloadState == .downloading ? "hourglass" : "arrow.down.circle",
-                   downloadState == .done ? "Downloaded"
-                     : downloadState == .downloading ? "Downloading" : "Download",
-                   tint: downloadState == .done ? Blaze.amber : .white,
-                   // A broadcast has no file to keep: it is a playlist that
-                   // keeps growing, and never the same twice.
-                   disabled: downloadState == .downloading || player.isCurrentLive) {
-                if let t = player.current { downloads.toggle(t) }
-            }
-            action("person", "Artist") { openArtist() }
-            action("dot.radiowaves.left.and.right", "Start radio") {
-                if let t = player.current { player.startRadio(from: t) }
-                dismiss()
-            }
+            .padding(.horizontal, 16)
         }
-        .padding(.horizontal, 8)
         .padding(.top, 4)
     }
 
+    /// One action tile, sized for its words.
+    ///
+    /// Android's own note on why these are a scrolling row rather than a fixed
+    /// three across: squeezing every label into a third of the screen set them
+    /// marqueeing, so "Add to playlist" went past as "aylist". A fixed width
+    /// that fits the words, the ones used most first, and the rest a swipe away.
     private func action(_ icon: String, _ title: String, tint: Color = .white,
                         disabled: Bool = false, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
-            VStack(spacing: 7) {
+            VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 21, weight: .regular))
-                    .frame(height: 24)
+                    .font(.system(size: 22, weight: .regular))
+                    .frame(height: 28)
                 Text(title)
-                    .font(.system(size: 11))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .foregroundStyle(disabled ? Color.white.opacity(0.35) : tint)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .frame(width: 108)
+            .padding(.vertical, 12)
+            .background(Color.white.opacity(disabled ? 0.04 : 0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
