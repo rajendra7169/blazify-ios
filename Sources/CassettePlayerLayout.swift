@@ -7,16 +7,18 @@ import UIKit
 /// queue / sleep / palette / more live in the bottom pill.
 struct CassettePlayerLayout: View {
     @ObservedObject var player: Player
+    /// Watched here as well as in the waveform card: the reels are handed a
+    /// progress figure as a plain value, and a value is only as fresh as the
+    /// view that passed it. Taken as a parameter rather than reached for
+    /// through the player, so this keeps its memberwise initialiser — which
+    /// means it must be declared where it is passed, since a memberwise
+    /// initialiser takes its arguments in the order the properties are written.
+    @ObservedObject var clock: PlaybackClock
     var onLyrics: () -> Void
     var onQueue: () -> Void
     var onSleep: () -> Void
     var onTheme: () -> Void
     var onMore: () -> Void
-    /// Watched here as well as in the waveform card: the reels are handed a
-    /// progress figure as a plain value, and a value is only as fresh as the
-    /// view that passed it. Taken as a parameter rather than reached for
-    /// through the player, so this keeps its memberwise initialiser.
-    @ObservedObject var clock: PlaybackClock
 
     private var played: Double {
         player.duration > 0 ? min(max(clock.currentTime / player.duration, 0), 1) : 0
