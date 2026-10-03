@@ -163,6 +163,10 @@ final class Player: ObservableObject {
     private var preparedDuration: Double = 0
     private var fadeDuration: Double = 0
     private var preparedIndex: Int?
+    /// Which song the prepared player holds. The queue can be reordered
+    /// underneath an index — a song dragged in ahead, one removed — and a
+    /// handover that only checked the index would play the wrong song.
+    private var preparedVideoId: String?
     private var endHandled = false
     private var artwork: MPMediaItemArtwork?
 
@@ -414,6 +418,13 @@ final class Player: ObservableObject {
         // Moved on by hand: the count belonged to the song that was playing.
         if !auto { repeatCurrentSong(times: 0) }
         if index < queue.count - 1 {
+            // The next song's player is built and buffering from the moment
+            // this one is safely ahead, so a skip by hand starts it on the
+            // spot. It used to be built only for the last ten seconds and
+            // used only when the song ended by itself; a skip threw it away
+            // and started from nothing — a new connection, a buffer, three
+            // seconds of silence after a tap.
+            if !auto, adoptPreparedPlayer(byHand: true) { return true }
             index += 1
             loadCurrent()
             return true
@@ -1372,24 +1383,29 @@ final class Player: ObservableObject {
 
     // MARK: - Gapless
 
-    /// Build the next track's player early so it can start the instant this one
-    /// ends. Crossfade already overlaps the two, so it takes precedence.
+    /// Build the next track's player early, so it can start the instant this
+    /// one ends or is skipped. Crossfade overlaps the two with a player of its
+    /// own at the song's end; this one still serves a skip by hand.
+    ///
+    /// Built as soon as this song is safely ahead — twenty seconds in hand, or
+    /// the whole file — rather than in its last ten seconds: that is what the
+    /// Android player does with the next item, and it is why a skip there is
+    /// instant. The prepared player fetches thirty seconds and then stops.
     private func considerGapless() {
         let prefs = PlaybackPrefs.shared
-        guard prefs.gapless, !prefs.crossfade, !crossfading, isPlaying,
-              repeatMode != .one, duration > 0
-        else { return }
+        guard !crossfading, isPlaying, repeatMode != .one, duration > 0 else { return }
         let next = index + 1
         guard queue.indices.contains(next), preparedIndex != next else { return }
-        // Ten seconds is enough to resolve and buffer without holding a second
-        // stream open for most of the song.
-        guard duration - currentTime <= 10 else { return }
+        let remaining = duration - currentTime
+        guard remaining <= 10 || bufferedAhead >= 20 || bufferedAhead >= remaining - 1 else { return }
+        if prefs.crossfade, remaining <= prefs.crossfadeDuration + 1 { return }
 
         preparedIndex = next
+        preparedVideoId = queue[next].videoId
         let track = queue[next]
         Task { @MainActor in
             guard let resolved = await self.resolved(for: track),
-                  self.preparedIndex == next else { return }
+                  self.preparedIndex == next, self.preparedVideoId == track.videoId else { return }
             let asset = AVURLAsset(url: resolved.url,
                                    options: [AVURLAssetHTTPUserAgentKey: YouTube.visionUA])
             let item = AVPlayerItem(asset: asset)
@@ -1399,6 +1415,13 @@ final class Player: ObservableObject {
             }
             item.audioTimePitchAlgorithm = PlaybackPrefs.shared.preservePitch
                 ? .timeDomain : .varispeed
+            // The equaliser's tap, as on every other item. Without it the
+            // song handed over this way played flat — the one song in the
+            // queue the equaliser could not reach.
+            Task { @MainActor [weak item] in
+                guard let mix = await EqualizerTap.audioMix(for: asset) else { return }
+                item?.audioMix = mix
+            }
             // Ask for real buffer before this is handed over. Preparing early
             // is only worth anything if there is something in it by the time
             // the last song ends.
@@ -1414,13 +1437,19 @@ final class Player: ObservableObject {
 
     /// Swap to the pre-built player. Returns false when nothing was ready, so
     /// the caller falls back to a normal load.
-    private func adoptPreparedPlayer() -> Bool {
-        guard PlaybackPrefs.shared.gapless,
+    private func adoptPreparedPlayer(byHand: Bool = false) -> Bool {
+        // At the song's own end the handover is what the gapless setting
+        // means, and crossfade has its own; a skip by hand is just a skip,
+        // and takes the ready player whatever the settings say.
+        guard byHand || (PlaybackPrefs.shared.gapless && !PlaybackPrefs.shared.crossfade),
               let prepared = preparedPlayer,
               let target = preparedIndex,
-              target == index + 1, queue.indices.contains(target)
+              target == index + 1, queue.indices.contains(target),
+              queue[target].videoId == preparedVideoId,
+              prepared.currentItem?.status != .failed
         else { return false }
 
+        if !crossfading { cancelCrossfade() }
         avPlayer?.pause()
         removeTimeObserver()
         statusObs = nil
@@ -1428,6 +1457,7 @@ final class Player: ObservableObject {
 
         preparedPlayer = nil
         preparedIndex = nil
+        preparedVideoId = nil
         avPlayer = prepared
         index = target
         prepared.play()
@@ -1441,6 +1471,7 @@ final class Player: ObservableObject {
         preparedPlayer?.pause()
         preparedPlayer = nil
         preparedIndex = nil
+        preparedVideoId = nil
         preparedDuration = 0
     }
 
@@ -1550,6 +1581,22 @@ final class Player: ObservableObject {
     /// already playing on the adopted player.
     private func adoptPlayingTrack(realDuration: Double) {
         guard let track = current, let player = avPlayer else { return }
+
+        // Everything a song loaded the long way gets. These were missed on a
+        // handover: no sponsor segments, no picture warmed, a "play next"
+        // pick left waiting for a turn it had just had.
+        pendingPlayNextIds.removeAll { $0 == track.videoId }
+        refreshSponsorSegments(for: track.videoId)
+        warmVideoArt(for: track)
+        if LocalMusic.shared.localAudioURL(for: track.videoId) == nil,
+           Downloads.shared.localAudioURL(for: track.videoId) == nil,
+           AudioCache.shared.cachedURL(for: track.videoId) == nil {
+            // Keep a copy, as a song loaded the long way is kept.
+            AudioCache.shared.cache(Track(videoId: track.videoId, title: track.title,
+                                          artist: track.artist, thumbnail: track.thumbnail,
+                                          duration: realDuration > 0 ? realDuration : track.duration,
+                                          artistId: track.artistId))
+        }
 
         scrobbleStart = Date()
         scrobbled = false

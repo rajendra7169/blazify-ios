@@ -40,6 +40,25 @@ enum VideoArtLog {
         url.absoluteString.contains("/hls_") || url.absoluteString.contains("manifest") ? "hls" : "file"
     }
 
+    /// Fetches the first bytes of an address with an ordinary request, the
+    /// same user agent as the player's, and writes down the status. Run when
+    /// the player's item has failed: 206 here and a refusal there means the
+    /// server minds the player's request, not the address.
+    static func probe(_ url: URL) {
+        var req = URLRequest(url: url)
+        req.setValue("bytes=0-1", forHTTPHeaderField: "Range")
+        req.setValue(YouTube.visionUA, forHTTPHeaderField: "User-Agent")
+        req.allowsCellularAccess = false
+        req.timeoutInterval = 15
+        URLSession.shared.dataTask(with: req) { _, response, error in
+            if let error {
+                note("probe: \(error.localizedDescription)")
+            } else if let http = response as? HTTPURLResponse {
+                note("probe: HTTP \(http.statusCode) from the same address, wifi only")
+            }
+        }.resume()
+    }
+
     static var text: String {
         lock.lock()
         defer { lock.unlock() }

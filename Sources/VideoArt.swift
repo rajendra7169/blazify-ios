@@ -256,8 +256,17 @@ final class VideoArtPlayers {
     }
 
     private func build(_ video: SongVideo) -> (AVPlayer, AVPlayerItemVideoOutput) {
+        // Never over cellular while on Wi‑Fi. The phone's Wi‑Fi Assist can
+        // move a new media connection onto cellular when it judges the Wi‑Fi
+        // weak, while the short lookup that fetched the address went over
+        // Wi‑Fi — and these addresses are signed for the network they were
+        // fetched from, so the server refuses the picture, 403. A picture
+        // behind the player should not be spending mobile data uninvited in
+        // any case; on cellular by choice it is allowed, as before.
+        let onWiFi = Reachability.shared.isUnmetered
         let asset = AVURLAsset(url: video.url, options: [
             AVURLAssetHTTPUserAgentKey: YouTube.visionUA,
+            AVURLAssetAllowsCellularAccessKey: !onWiFi,
             // Nothing here needs the exact length, and working it out means
             // reading the whole index before the first frame can show.
             AVURLAssetPreferPreciseDurationAndTimingKey: false,
@@ -282,7 +291,7 @@ final class VideoArtPlayers {
         // handled by hand in the screen's coordinator, which watches for the
         // stall and starts again when the buffer is back.
         made.automaticallyWaitsToMinimizeStalling = false
-        VideoArtLog.note("player: built for \(VideoArtLog.kind(of: video.url)) \(video.videoId)")
+        VideoArtLog.note("player: built for \(VideoArtLog.kind(of: video.url)) \(video.videoId) wifi=\(onWiFi)")
 
         let videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
@@ -451,6 +460,10 @@ struct VideoArtView: UIViewRepresentable {
                 if let error = item.error as NSError? {
                     VideoArtLog.note("item: FAILED \(error.domain) \(error.code) — \(error.localizedDescription)"
                         + (error.userInfo[NSUnderlyingErrorKey].map { " / under: \($0)" } ?? ""))
+                    // Ask for the same address the ordinary way, so the log
+                    // says whether the server objects to the address or to
+                    // the player's request.
+                    if let asset = item.asset as? AVURLAsset { VideoArtLog.probe(asset.url) }
                 } else {
                     VideoArtLog.note("item: FAILED with no error")
                 }
