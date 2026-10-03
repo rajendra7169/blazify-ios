@@ -83,6 +83,11 @@ struct SearchView: View {
         .background(palette.scaffold.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(item: $moodRoute) { MoodDetailView(mood: $0, player: player) }
+        // Screens pushed from here hand back a card by value rather than by
+        // binding — a mood page full of playlists is the common one. Without a
+        // destination for the type, every one of those cards is a dead tap: the
+        // link is built, pressed, and resolves to nothing at all.
+        .navigationDestination(for: HomeItem.self) { PlaylistView(item: $0, player: player) }
         .navigationDestination(item: $cardRoute) { PlaylistView(item: $0, player: player) }
         .navigationDestination(item: $artistRoute) {
             ArtistView(browseId: $0.browseId, player: player)

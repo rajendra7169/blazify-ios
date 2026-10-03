@@ -114,17 +114,49 @@ struct MiniPlayerView: View {
             .gesture(
                 DragGesture(minimumDistance: 20)
                     .onChanged { g in
-                        // Follows the finger downward, so the swipe that puts the
-                        // player away looks like it is putting it away.
                         guard abs(g.translation.height) > abs(g.translation.width) else { return }
-                        dragDown = max(0, g.translation.height)
+                        if g.translation.height < 0 {
+                            // Upward: the full player comes with the finger. It
+                            // is presented straight away, sitting a screen-height
+                            // down, and rises as far as the thumb has travelled —
+                            // so the page behind dims and the player fades in
+                            // exactly as they do in reverse on the way out,
+                            // rather than the swipe being a switch that fires at
+                            // the end of itself.
+                            dragDown = 0
+                            let screen = UIScreen.main.bounds.height
+                            if !player.showFullPlayer {
+                                player.sheetDrag = screen
+                                player.showFullPlayer = true
+                            }
+                            player.sheetDrag = max(0, screen + g.translation.height)
+                        } else {
+                            // Downward: follows the finger, so the swipe that
+                            // puts the player away looks like it is putting it
+                            // away.
+                            dragDown = g.translation.height
+                        }
                     }
                     .onEnded { g in
                         let vertical = abs(g.translation.height) > abs(g.translation.width)
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { dragDown = 0 }
-                        if vertical {
-                            // Up opens it, down puts it away — the same two
-                            // gestures the Android sheet answers to.
+                        if vertical, player.showFullPlayer, g.translation.height < 0 {
+                            // The player is already up and following the finger;
+                            // all that is left is deciding where it settles.
+                            let screen = UIScreen.main.bounds.height
+                            let far = g.translation.height < -90 || g.velocity.height < -300
+                            withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                                player.sheetDrag = far ? 0 : screen
+                            }
+                            if !far {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                                    player.showFullPlayer = false
+                                    player.sheetDrag = 0
+                                }
+                            }
+                        } else if vertical {
+                            // Down puts it away — the gesture the Android sheet
+                            // answers to as well.
                             if g.translation.height < -40 {
                                 openPlayer()
                             } else if g.translation.height > 60 {

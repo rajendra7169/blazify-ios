@@ -233,39 +233,32 @@ struct QueueView: View {
     /// Shuffle · Close · Repeat, over a fade into the page — the row the Android
     /// queue ends with.
     private var bottomKeys: some View {
-        HStack(spacing: 0) {
-            key(player.isShuffled ? "shuffle.circle.fill" : "shuffle", "Shuffle",
-                on: player.isShuffled) { player.toggleShuffle() }
-            key("chevron.down", "Close", on: false) { dismiss() }
-            key(player.repeatMode == .one ? "repeat.1" : "repeat", "Repeat",
-                on: player.repeatMode != .off) { player.cycleRepeat() }
-        }
-        .padding(.top, 18)
-        .padding(.bottom, 8)
-        .background(
-            // Three stops rather than two, and deeper than the keys are tall.
-            // A short fade let rows scroll up until they were sitting under the
-            // icons, legible enough to read and too faint to use — the bar has
-            // to stop being a suggestion before the keys stop competing with
-            // the list. Solid by the time it reaches the home indicator.
+        VStack(spacing: 0) {
+            // The list disappears into this before it reaches the keys.
             LinearGradient(
-                stops: [
-                    .init(color: palette.scaffold.opacity(0), location: 0),
-                    .init(color: palette.scaffold.opacity(0.92), location: 0.45),
-                    .init(color: palette.scaffold, location: 0.75),
-                    .init(color: palette.scaffold, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom,
+                colors: [palette.scaffold.opacity(0), palette.scaffold],
+                startPoint: .top, endPoint: .bottom,
             )
-            .ignoresSafeArea(),
-        )
-        .overlay(alignment: .top) {
-            // A hairline where the fade begins, so the bar reads as a surface
-            // the list passes behind rather than as a smudge over it.
-            Rectangle()
-                .fill(palette.onSurface.opacity(0.06))
-                .frame(height: 1)
+            .frame(height: 26)
+            .allowsHitTesting(false)
+
+            HStack(spacing: 0) {
+                key(player.isShuffled ? "shuffle.circle.fill" : "shuffle", "Shuffle",
+                    on: player.isShuffled) { player.toggleShuffle() }
+                key("chevron.down", "Close", on: false) { dismiss() }
+                key(player.repeatMode == .one ? "repeat.1" : "repeat", "Repeat",
+                    on: player.repeatMode != .off) { player.cycleRepeat() }
+            }
+            .padding(.top, 6)
+            .padding(.bottom, 8)
+            // Solid, and nothing clever about it. The gradient that used to run
+            // the whole height of this bar was told to ignore the safe area,
+            // which stretches its frame below the home indicator and rescales
+            // every stop with it — so the part that was meant to be solid ended
+            // up off the bottom of the screen, and the keys sat in what was
+            // still the fade. The page behind already paints to both edges, so
+            // reaching past the safe area was never this view's job.
+            .background(palette.scaffold)
         }
     }
 

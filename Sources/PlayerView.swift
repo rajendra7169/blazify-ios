@@ -32,7 +32,6 @@ struct PlayerView: View {
     @State private var lyricsOffset: Double = 0
     @State private var lyricsMode = false
     @State private var immersive = false
-    @State private var dragOffset: CGFloat = 0
     /// Offered once, the first time the Video design meets mobile data: the cover
     /// is showing instead of the video, and this is where to say that videos may
     /// play on data after all.
@@ -78,12 +77,12 @@ struct PlayerView: View {
         .spring(response: 0.42, dampingFraction: 0.86)
     }
 
-    /// False for the first instant, so the sheet has somewhere to travel from.
-    @State private var arrived = false
+    /// Where the sheet stood when this drag began, so a handover continues it.
+    @State private var dragFrom: CGFloat?
 
-    /// How far down the sheet sits: the finger's drag, plus the whole screen
-    /// while it is still on its way in or already on its way out.
-    private var sheetOffset: CGFloat { arrived ? dragOffset : expandedBound }
+    /// How far down the sheet sits — the one number, shared with the mini
+    /// player so a drag that starts down there carries on up here.
+    private var sheetOffset: CGFloat { player.sheetDrag }
 
     var body: some View {
         ZStack {
@@ -126,16 +125,17 @@ struct PlayerView: View {
             // under the status bar. Full-bleed matters more than the drag corners.
             .offset(y: sheetOffset)
         }
-        .gesture(sheetDrag)
+        .gesture(sheetGesture)
         // Settings → Lyrics → Hide the status bar, while lyrics are up.
         .statusBarHidden(lyricsMode && LyricsPrefs.shared.hideStatusBarFullscreen)
         .onAppear {
-            dragOffset = 0
-            // Slides up from the bottom rather than being cut in. The cover
-            // itself appears instantly — with a clear background that reads as
-            // the player simply existing, with no sense of having come from the
-            // mini player it was dragged out of.
-            withAnimation(travelSpring) { arrived = true }
+            // Opened by a tap: it is sitting at zero, so put it off the bottom
+            // and let it travel up. Opened by a drag from the mini player: the
+            // finger already placed it somewhere and owns it until let go.
+            if player.sheetDrag == 0 {
+                player.sheetDrag = expandedBound
+                withAnimation(travelSpring) { player.sheetDrag = 0 }
+            }
             // Settings → Player → Keep the screen on.
             UIApplication.shared.isIdleTimerDisabled = PlaybackPrefs.shared.keepScreenOn
         }
@@ -183,14 +183,20 @@ struct PlayerView: View {
     /// The sheet drag: 1:1 with the finger, then a velocity/position classifier —
  /// never a decay fling (performFling uses velocity only to
     /// choose a target, and the spring gets no initial velocity).
-    private var sheetDrag: some Gesture {
+    private var sheetGesture: some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { g in
-                dragOffset = max(0, g.translation.height)   // hard-clamped at the top
+                // Measured from wherever the sheet already is, not from the top.
+                // A drag that began on the mini player hands over to this one the
+                // moment the cover appears, and starting from zero each time
+                // would snap the sheet shut under the finger that was opening it.
+                if dragFrom == nil { dragFrom = player.sheetDrag }
+                player.sheetDrag = max(0, (dragFrom ?? 0) + g.translation.height)
             }
             .onEnded { g in
+                dragFrom = nil
                 let vy = g.velocity.height                  // px/s, positive = downward
-                let value = expandedBound - dragOffset      // the sheet's visible height
+                let value = expandedBound - player.sheetDrag  // the sheet's visible height
                 let midpoint = (expandedBound - collapsedBound) / 2
 
                 if vy < -250 {                              // flicked up → expand
@@ -206,7 +212,7 @@ struct PlayerView: View {
     }
 
     private func springBack() {
-        withAnimation(settleSpring) { dragOffset = 0 }
+        withAnimation(settleSpring) { player.sheetDrag = 0 }
     }
 
     /// Put the sheet down the way it came up.
@@ -216,8 +222,13 @@ struct PlayerView: View {
     /// the two together read as a cut. This carries it the rest of the way
     /// first, and lets the cover go once there is nothing left to see.
     private func close() {
-        withAnimation(travelSpring) { arrived = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { dismiss() }
+        withAnimation(travelSpring) { player.sheetDrag = expandedBound }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+            dismiss()
+            // Back to zero once it is out of sight, so the next tap opens from
+            // the bottom rather than from wherever this one ended.
+            player.sheetDrag = 0
+        }
     }
 
     // MARK: Layout dispatch

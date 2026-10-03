@@ -56,6 +56,14 @@ final class Player: ObservableObject {
     private var lastSponsorSkip: (end: Double, at: Date)?
     @Published private(set) var sponsorSkipped = 0.0
     @Published var showFullPlayer = false
+
+    /// How far the full player sits below its open position, in points.
+    ///
+    /// Zero is fully open; a screen height is fully away. It lives here rather
+    /// than inside the player's own view because the mini player drags it open
+    /// — one finger movement, two views, and they cannot share a number that
+    /// belongs privately to one of them.
+    @Published var sheetDrag: CGFloat = 0
     @Published var lastError: String?
 
     @Published var isShuffled = false

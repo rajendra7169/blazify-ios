@@ -86,6 +86,9 @@ struct YoursView: View {
             .background(palette.scaffold.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
+            // As on Explore: a mood page pushed from here offers its playlists
+            // by value, and without this they cannot be opened.
+            .navigationDestination(for: HomeItem.self) { PlaylistView(item: $0, player: player) }
             .navigationDestination(item: $moodRoute) { mood in
                 MoodDetailView(mood: mood, player: player)
             }
