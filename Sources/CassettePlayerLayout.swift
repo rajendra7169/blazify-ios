@@ -12,6 +12,15 @@ struct CassettePlayerLayout: View {
     var onSleep: () -> Void
     var onTheme: () -> Void
     var onMore: () -> Void
+    /// Watched here as well as in the waveform card: the reels are handed a
+    /// progress figure as a plain value, and a value is only as fresh as the
+    /// view that passed it. Taken as a parameter rather than reached for
+    /// through the player, so this keeps its memberwise initialiser.
+    @ObservedObject var clock: PlaybackClock
+
+    private var played: Double {
+        player.duration > 0 ? min(max(clock.currentTime / player.duration, 0), 1) : 0
+    }
 
     private var sleepLabel: String {
         if player.sleepAtEndOfSong { return "End of song" }
@@ -37,7 +46,7 @@ struct CassettePlayerLayout: View {
             // Tape stage.
             CassetteTapeView(
                 isPlaying: player.isPlaying,
-                progress: player.progress,
+                progress: played,
                 accent: player.artColor,
                 artURL: player.current?.artURL(size: 720),
             )
@@ -111,6 +120,18 @@ struct CassetteTitleKeys: View {
 /// Cream card holding the times and the 36-bar waveform (tap AND drag to seek).
 struct RetroWaveformCard: View {
     @ObservedObject var player: Player
+    /// The live position is published by its own observable, not by the player —
+    /// deliberately, so that four updates a second do not re-render every screen
+    /// in the app. The cost is that reading `player.currentTime` subscribes a
+    /// view to nothing at all: this card drew itself once, with a position of
+    /// zero and a duration not yet known, and then never again. Watching the
+    /// clock is what every other view that draws time already does.
+    @ObservedObject private var clock: PlaybackClock
+
+    init(player: Player) {
+        self.player = player
+        _clock = ObservedObject(wrappedValue: player.clock)
+    }
 
     private let barCount = 36
 
@@ -122,7 +143,7 @@ struct RetroWaveformCard: View {
                     LiveBadge(color: Retro.ink)
                     Spacer()
                 } else {
-                    Text(timeString(player.currentTime))
+                    Text(timeString(clock.currentTime))
                     Spacer()
                     Text(player.duration > 0 ? timeString(player.duration) : "")
                 }
@@ -132,7 +153,9 @@ struct RetroWaveformCard: View {
 
             GeometryReader { geo in
                 Canvas { ctx, size in
-                    let frac = player.progress
+                    let frac = player.duration > 0
+                        ? min(max(clock.currentTime / player.duration, 0), 1)
+                        : 0
                     let gap = size.width / CGFloat(barCount)
                     let barW = gap * 0.55
                     for i in 0..<barCount {

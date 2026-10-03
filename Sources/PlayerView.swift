@@ -254,6 +254,7 @@ struct PlayerView: View {
             case .cassette:
                 CassettePlayerLayout(
                     player: player,
+                    clock: clock,
                     onLyrics: { lyricsMode = true },
                     onQueue: { showQueue = true },
                     onSleep: { showSleep = true },

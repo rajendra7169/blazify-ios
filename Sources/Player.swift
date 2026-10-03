@@ -1454,6 +1454,26 @@ final class Player: ObservableObject {
         ) { [weak self] time in
             guard let self, player === self.avPlayer, !self.isSeeking else { return }
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
+
+            // The length as the audio itself reports it.
+            //
+            // Until now this was only ever taken from what somebody said it
+            // would be — the figure in the listing, or the one the stream
+            // resolver returned — and when neither carried one it stayed at
+            // zero for the whole song. Nothing about playback minds: the audio
+            // plays, the position counts, the words scroll. But progress is
+            // position over length, and with a length of zero every progress
+            // bar in the application sits at the far left for ever and no end
+            // time can be shown. The item knows, once it is ready; ask it.
+            //
+            // Not for a live broadcast, where the length is deliberately zero —
+            // a station has no end to be a fraction of.
+            if !self.isCurrentLive, let item = player.currentItem {
+                let real = item.duration.seconds
+                if real.isFinite, real > 1, abs(real - self.duration) > 1 {
+                    self.duration = real
+                }
+            }
             self.considerSponsorSkip()
             self.considerScrobble()
             self.considerCrossfade()
