@@ -65,14 +65,6 @@ final class Player: ObservableObject {
     /// belongs privately to one of them.
     @Published var sheetDrag: CGFloat = 0
 
-    /// True only while a finger on the mini player is carrying the sheet up.
-    ///
-    /// Without it, the player had to guess on arrival: it treated a drag offset
-    /// of zero as "opened by a tap, animate me in" and anything else as "a
-    /// finger has me". Any value left behind by an earlier gesture then read as
-    /// a drag in progress, so the sheet stayed where that value put it — off the
-    /// bottom of the screen — and the tap looked as though it had done nothing.
-    @Published var draggingSheet = false
     @Published var lastError: String?
 
     @Published var isShuffled = false
@@ -1542,11 +1534,19 @@ final class Player: ObservableObject {
             // bar in the application sits at the far left for ever and no end
             // time can be shown. The item knows, once it is ready; ask it.
             //
-            // Not for a live broadcast, where the length is deliberately zero —
-            // a station has no end to be a fraction of.
-            if !self.isCurrentLive, let item = player.currentItem {
+            // Only when we have none. Overriding a length we already knew, on
+            // the grounds that the item disagreed, made a four-minute song
+            // report eight: a stream fetched in ranges, or one still filling the
+            // cache, can have AVPlayer estimate a length that is simply wrong,
+            // and that estimate then became the truth the whole screen was drawn
+            // from. The listing's figure is the better one when it exists; this
+            // is for when it does not.
+            //
+            // Not for a live broadcast, where zero is deliberate — a station has
+            // no end to be a fraction of.
+            if !self.isCurrentLive, self.duration <= 0, let item = player.currentItem {
                 let real = item.duration.seconds
-                if real.isFinite, real > 1, abs(real - self.duration) > 1 {
+                if real.isFinite, real > 1 {
                     self.duration = real
                 }
             }

@@ -147,22 +147,16 @@ struct PlayerView: View {
         // Settings → Lyrics → Hide the status bar, while lyrics are up.
         .statusBarHidden(lyricsMode && LyricsPrefs.shared.hideStatusBarFullscreen)
         .onAppear {
-            // Opened by a tap or a button: put it off the bottom and let it
-            // travel up, whatever was left in that number by the last gesture.
-            // Opened by a drag from the mini player: the finger owns it, and
-            // says so, until it lets go.
-            if !player.draggingSheet {
-                player.sheetDrag = expandedBound
-                withAnimation(travelSpring) { player.sheetDrag = 0 }
-            }
+            // However it was opened, it arrives from the bottom: put it off
+            // the screen and let it travel up, whatever the last gesture left
+            // in that number.
+            player.sheetDrag = expandedBound
+            withAnimation(travelSpring) { player.sheetDrag = 0 }
             // Settings → Player → Keep the screen on.
             UIApplication.shared.isIdleTimerDisabled = PlaybackPrefs.shared.keepScreenOn
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
-            // A claim cannot outlive the screen it was made on: left standing,
-            // the next opening would think a finger still had hold of it.
-            player.draggingSheet = false
         }
         .fullScreenCover(isPresented: $showDesign) { PlayerDesignPicker(player: player) }
         // Full screen, as on Android. A sheet left the queue sitting in a card
@@ -219,9 +213,6 @@ struct PlayerView: View {
             }
             .onEnded { g in
                 dragFrom = nil
-                // The drag may have begun on the mini player and been handed
-                // over when the cover appeared; either way it is over now.
-                player.draggingSheet = false
                 let vy = g.velocity.height                  // px/s, positive = downward
                 let value = expandedBound - player.sheetDrag  // the sheet's visible height
                 let midpoint = (expandedBound - collapsedBound) / 2
@@ -265,9 +256,15 @@ struct PlayerView: View {
     private func close() {
         withAnimation(travelSpring) { player.sheetDrag = expandedBound }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
-            dismiss()
-            // Back to zero once it is out of sight, so the next tap opens from
-            // the bottom rather than from wherever this one ended.
+            // Without this the screen closes twice: ours carries the sheet down,
+            // and then the system plays its own dismissal of the cover over the
+            // top of it. By now the sheet is already off the bottom and there is
+            // nothing left to animate, so the system's part is turned off.
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { dismiss() }
+            // Back to zero once it is out of sight, so the next opening starts
+            // from the bottom rather than from wherever this one ended.
             player.sheetDrag = 0
         }
     }

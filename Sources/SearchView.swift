@@ -22,7 +22,14 @@ struct SearchView: View {
     // Everything to begin with. The mixed answer is the right first guess, and
     // narrowing is what you do once you know what you did not find.
     @State private var scope: YouTube.SearchScope = .everything
-    @State private var cardRoute: HomeItem?
+    /// A card this screen pushes itself, as its own type.
+    ///
+    /// Not a bare HomeItem: this stack also answers HomeItem by value, for the
+    /// cards offered by screens pushed from here, and two destinations resolving
+    /// the same type make the stack ambiguous — a tap satisfied one and cleared
+    /// the other, which showed as a push that bounced straight back and a wrong
+    /// screen behind it.
+    @State private var cardRoute: CardRoute?
     @State private var artistRoute: ArtistRoute?
     /// A YouTube link pasted into the box, so a shared link is one tap away.
     private var pastedLink: YouTubeLink? { YouTubeLink.parse(query) }
@@ -88,7 +95,7 @@ struct SearchView: View {
         // destination for the type, every one of those cards is a dead tap: the
         // link is built, pressed, and resolves to nothing at all.
         .navigationDestination(for: HomeItem.self) { PlaylistView(item: $0, player: player) }
-        .navigationDestination(item: $cardRoute) { PlaylistView(item: $0, player: player) }
+        .navigationDestination(item: $cardRoute) { PlaylistView(item: $0.item, player: player) }
         .navigationDestination(item: $artistRoute) {
             ArtistView(browseId: $0.browseId, player: player)
         }
@@ -467,9 +474,9 @@ extension SearchView {
         case .playlist:
             guard let browseId = link.browseId else { return }
             query = ""
-            cardRoute = HomeItem(title: "Shared playlist", subtitle: "",
-                                 thumbnail: "", videoId: nil,
-                                 browseId: browseId, isCircular: false)
+            cardRoute = CardRoute(item: HomeItem(title: "Shared playlist", subtitle: "",
+                                                 thumbnail: "", videoId: nil,
+                                                 browseId: browseId, isCircular: false))
         }
     }
 }
@@ -512,7 +519,7 @@ extension SearchView {
                     if scope == .artists, let id = card.browseId {
                         artistRoute = ArtistRoute(browseId: id)
                     } else {
-                        cardRoute = card
+                        cardRoute = CardRoute(item: card)
                     }
                 } label: {
                     HStack(spacing: 12) {
@@ -788,4 +795,11 @@ struct SongRow: View {
 struct ArtistRoute: Identifiable, Hashable {
     let browseId: String
     var id: String { browseId }
+}
+
+/// A card pushed by the search screen itself, kept distinct from the cards that
+/// screens pushed from here offer by value.
+struct CardRoute: Hashable, Identifiable {
+    let item: HomeItem
+    var id: HomeItem.ID { item.id }
 }

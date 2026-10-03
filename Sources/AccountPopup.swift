@@ -17,15 +17,26 @@ struct AccountPopup: View {
     @State private var showTokenSheet = false
     @State private var confirmLogout = false
     @State private var showTogether = false
+    @State private var showDeveloper = false
+    @State private var cardHeight: CGFloat = 0
     @State private var moreContent = UserDefaults.standard.object(forKey: "useLoginForBrowse") as? Bool ?? true
     @State private var autoSync = UserDefaults.standard.object(forKey: "ytmSync") as? Bool ?? true
 
     var body: some View {
-        ZStack(alignment: .top) {
+        ZStack {
+            // The backdrop takes every tap that doesn't land on the card.
+            // It couldn't before: the card lived in a scroll view that filled
+            // the screen, so there was nowhere left for an outside tap to go
+            // and the cross was the only way out.
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
+                .contentShape(Rectangle())
                 .onTapGesture { isPresented = false }
 
+            // Centred rather than pinned 72pt down, which is where Android
+            // puts its dialog, and measured so it is exactly as tall as what
+            // is in it — a scroll view takes all the height it is offered, so
+            // without this the card would be 580pt of mostly empty surface.
             ScrollView {
                 VStack(spacing: 0) {
                     titleBar
@@ -33,30 +44,30 @@ struct AccountPopup: View {
                     Spacer().frame(height: 8)
                     toggleGroup
                     Spacer().frame(height: 12)
+                    developerRow
+                    Spacer().frame(height: 12)
                     bottomBlock
                 }
                 .padding(16)
-                .background(palette.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                .padding(.horizontal, 16)
-                .padding(.top, 72)
+                .background(
+                    GeometryReader { box in
+                        Color.clear.preference(key: CardHeight.self, value: box.size.height)
+                    },
+                )
             }
             .scrollBounceBehavior(.basedOnSize)
-            // The dimmed backdrop below carries a dismiss tap, but this scroll
-            // view covers the whole screen, so every tap outside the card
-            // landed on it instead and the only way out was the cross. Its own
-            // background takes the tap and sits behind the card, so the card
-            // still gets everything aimed at the card.
-            .background(
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { isPresented = false },
-            )
+            .frame(height: min(cardHeight == 0 ? 560 : cardHeight, 560))
+            .onPreferenceChange(CardHeight.self) { cardHeight = $0 }
+            .background(palette.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .shadow(color: .black.opacity(0.35), radius: 24, y: 8)
+            .padding(.horizontal, 16)
         }
         .sheet(isPresented: $showLogin) { LoginView() }
         .sheet(isPresented: $showAccount) { AccountLibraryView(player: player) }
         .sheet(isPresented: $showTokenSheet) { tokenSheet }
         .sheet(isPresented: $showTogether) { TogetherView() }
+        .sheet(isPresented: $showDeveloper) { developerSheet }
         .confirmationDialog("Keep library data?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) {
                 auth.signOut()
@@ -66,6 +77,118 @@ struct AccountPopup: View {
         } message: {
             Text("Downloaded songs are always kept.")
         }
+    }
+
+    /// "Know about the developer", as Android heads it: the photo, who it is,
+    /// and a tap for the rest.
+    private var developerRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Know about the developer")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+
+            Button { showDeveloper = true } label: {
+                HStack(spacing: 12) {
+                    Image("DeveloperPhoto")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Rajendra Pandey")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(palette.onSurface)
+                        Text("Developer, Kathmandu")
+                            .font(.system(size: 13))
+                            .foregroundStyle(palette.onSurfaceVariant)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(palette.onSurface.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// What Android opens on tapping that row: who made this, and how to reach
+    /// them. The links are the ones already on the website.
+    private var developerSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    Image("DeveloperPhoto")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 112, height: 112)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(palette.accent.opacity(0.5), lineWidth: 2))
+                        .padding(.top, 16)
+
+                    VStack(spacing: 4) {
+                        Text("Rajendra Pandey")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(palette.onSurface)
+                        Text("Developer, Kathmandu")
+                            .font(.system(size: 14))
+                            .foregroundStyle(palette.onSurfaceVariant)
+                    }
+
+                    Text("Blazify is built and maintained by one person, in Nepal. "
+                        + "It is free, open source, and has no adverts — if it is useful "
+                        + "to you, telling somebody about it is the whole thanks it needs.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 8)
+
+                    VStack(spacing: 4) {
+                        developerLink("globe", "rajendrapandey.info.np",
+                                      "https://rajendrapandey.info.np")
+                        developerLink("chevron.left.forwardslash.chevron.right", "github.com/rajendra7169",
+                                      "https://github.com/rajendra7169")
+                        developerLink("envelope", "rajendrapandey199971@gmail.com",
+                                      "mailto:rajendrapandey199971@gmail.com")
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(16)
+            }
+            .background(palette.surface.ignoresSafeArea())
+            .navigationTitle("About the developer")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { showDeveloper = false }.tint(palette.accent)
+                }
+            }
+        }
+    }
+
+    private func developerLink(_ icon: String, _ label: String, _ address: String) -> some View {
+        Button {
+            if let url = URL(string: address) { UIApplication.shared.open(url) }
+        } label: {
+            HStack(spacing: 16) {
+                iconChip(icon)
+                Text(label)
+                    .font(.system(size: 15))
+                    .foregroundStyle(palette.onSurface)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var titleBar: some View {
@@ -262,6 +385,14 @@ struct AccountPopup: View {
             .frame(width: 40, height: 40)
             .background(palette.accent.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+/// How tall what is in the card came out, so the card can be that tall.
+private struct CardHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
