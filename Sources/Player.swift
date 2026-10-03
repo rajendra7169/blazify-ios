@@ -182,6 +182,20 @@ final class Player: ObservableObject {
         NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main,
         ) { [weak self] _ in self?.saveQueue() }
+        // Being killed. A music app that is playing is not suspended, so when
+        // it is swiped away this is called, and it matters: the equaliser's
+        // tap is in the middle of rendering, and a process cut off there
+        // leaves the hardware repeating whatever was last in its buffer — a
+        // short burst of noise at the moment of closing. Stop, and hand the
+        // session back, before that can happen.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willTerminateNotification, object: nil, queue: .main,
+        ) { [weak self] _ in
+            self?.saveQueue()
+            self?.avPlayer?.pause()
+            self?.avPlayer?.replaceCurrentItem(with: nil)
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
         Task { await syncFavorites() }
         Task { @MainActor in
             ListenTogether.shared.onRemote = { [weak self] action in

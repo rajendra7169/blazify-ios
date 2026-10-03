@@ -76,7 +76,6 @@ struct PlayerView: View {
     @State private var arrived = false
     private let arriveDrift: CGFloat = 36
     private var fadeIn: Animation { .easeOut(duration: 0.28) }
-    private var fadeOut: Animation { .easeIn(duration: 0.22) }
 
     /// Where the sheet stood when this drag began, so a handover continues it.
     @State private var dragFrom: CGFloat?
@@ -265,9 +264,12 @@ struct PlayerView: View {
     /// first, and lets the cover go once there is nothing left to see.
     private func close(velocity vy: CGFloat = 0) {
         // The sheet carries on the way the finger sent it, at the speed it
-        // was going, and fades as it goes. Fading it where the finger left it
-        // stopped the motion dead in the middle of the screen — a sheet that
-        // was travelling and then simply stood there going transparent.
+        // was going, all the way off the bottom — Android's collapse. No fade
+        // on the way down: fading it as it went had it vanish in the middle
+        // of the screen before it had finished travelling, and fading it where
+        // the finger left it, before that, stopped the motion dead. The scrim
+        // and the controls already thin out with the travel; the sheet itself
+        // is simply gone off the edge when the cover is dropped.
         // The spring's starting speed is the finger's, scaled to the distance
         // left, which is how this spring takes it.
         let left = max(expandedBound - player.sheetDrag, 1)
@@ -276,8 +278,7 @@ struct PlayerView: View {
             initialVelocity: Double(max(vy, 0) / left),
         )
         withAnimation(carryOn) { player.sheetDrag = expandedBound }
-        withAnimation(fadeOut) { arrived = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
             // Nothing is left to see, so the cover goes without the system's
             // own slide-down — through the flag that presents it, which is
             // what the transaction applies to. The environment's dismiss is
