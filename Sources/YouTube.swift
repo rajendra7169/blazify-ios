@@ -217,7 +217,13 @@ enum YouTube {
     /// this only has to be looked at.
     static func videoStreamURL(for videoId: String, maxHeight: Int) async -> URL? {
         let visitor = await visitorData()
-        let clients = await MainActor.run { StreamPrefs.shared.order }
+        let preferred = await MainActor.run { StreamPrefs.shared.order }
+        // The iOS client first, whatever the order for songs. A music video is
+        // usually a label's, and for those the other two do not answer — one
+        // wants a sign-in, the other calls it unplayable — so each was half a
+        // second spent to be told no before the one that says yes was asked.
+        // It is also the one handed an HLS manifest when there is one.
+        let clients = [StreamClient.ios] + preferred.filter { $0 != .ios }
 
         for client in clients {
             var context = client.context
@@ -236,9 +242,19 @@ enum YouTube {
             }
             guard let json = answer,
                   (json["playabilityStatus"] as? [String: Any])?["status"] as? String == "OK",
-                  let streaming = json["streamingData"] as? [String: Any],
-                  let formats = streaming["adaptiveFormats"] as? [[String: Any]]
+                  let streaming = json["streamingData"] as? [String: Any]
             else { continue }
+
+            // HLS when YouTube offers it: the format the player on this phone
+            // was built for. It starts on the first segment, picks its own size
+            // for the connection under the cap set on the item, seeks exactly,
+            // and rides out a thin patch by itself. The alternative below is a
+            // fragmented MP4 meant for a DASH player, handed over as a plain
+            // file — which this phone's player accepts, but only just.
+            if let hls = streaming["hlsManifestUrl"] as? String, let url = URL(string: hls) {
+                return url
+            }
+            guard let formats = streaming["adaptiveFormats"] as? [[String: Any]] else { continue }
 
             // The biggest picture that still fits the cap — anything taller is
             // data spent on detail this screen cannot show.

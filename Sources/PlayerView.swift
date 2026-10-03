@@ -455,11 +455,20 @@ struct PlayerView: View {
             )
         }
         .ignoresSafeArea()
-        .task(id: player.current?.videoId) { loadVideo() }
-        .onChange(of: prefs.videoOnMobile) { loadVideo() }
-        .onChange(of: net.isUnmetered) { loadVideo() }
+        // A new song: the picture waits for the song. Starting both at once
+        // had the picture's first fetch on the line while the song was still
+        // filling its own buffer, and the song is what has to start first.
+        .task(id: player.current?.videoId) { videoWanted = true; loadVideoIfComfortable() }
+        // The position ticks four times a second while the song plays, and
+        // the buffer reading comes with it; the moment the song is comfortable
+        // the picture is let through.
+        .onChange(of: player.currentTime) { loadVideoIfComfortable() }
+        .onChange(of: player.isPlaying) { loadVideoIfComfortable() }
+        .onChange(of: prefs.videoOnMobile) { videoWanted = true; loadVideoIfComfortable() }
+        .onChange(of: net.isUnmetered) { videoWanted = true; loadVideoIfComfortable() }
         .onAppear {
-            loadVideo()
+            videoWanted = true
+            loadVideoIfComfortable()
             offerVideoOnMobile()
         }
         .alert("Videos on mobile data", isPresented: $askVideoOnMobile) {
@@ -480,6 +489,15 @@ struct PlayerView: View {
         guard !UserDefaults.standard.bool(forKey: key) else { return }
         UserDefaults.standard.set(true, forKey: key)
         askVideoOnMobile = true
+    }
+
+    /// True from a song change until its picture has been asked for.
+    @State private var videoWanted = false
+
+    private func loadVideoIfComfortable() {
+        guard videoWanted, design == .video, player.songComfortable else { return }
+        videoWanted = false
+        loadVideo()
     }
 
     /// A video is far heavier than a picture, so it waits for an unmetered

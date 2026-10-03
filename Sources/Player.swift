@@ -96,6 +96,46 @@ final class Player: ObservableObject {
     var upNext: Track? {
         queue.indices.contains(index + 1) ? queue[index + 1] : nil
     }
+
+    /// How many seconds of the song are in hand beyond where it is playing.
+    ///
+    /// Read, not published: it is set on the same tick as the position, and
+    /// everything watching the player is drawn again for that tick anyway.
+    /// A second announcement for the same moment would only draw it all twice.
+    private(set) var bufferedAhead: TimeInterval = 0
+
+    /// Enough of the song in hand that the picture can start taking the line
+    /// without the song running dry. Android's player waits for the music to be
+    /// comfortable before the picture fetches anything, for the same reason.
+    static let comfortableAhead: TimeInterval = 6
+
+    /// Whether the picture may start fetching now: the song is not still being
+    /// opened, and either it is paused — nothing to compete with — or it has
+    /// enough in hand. A broadcast never has much in hand and is let through.
+    var songComfortable: Bool {
+        !isLoading && (!isPlaying || isCurrentLive || bufferedAhead >= Self.comfortableAhead)
+    }
+
+    /// Waits until the song is comfortable, giving up after a while so a slow
+    /// line still gets its picture eventually rather than never.
+    func waitUntilSongComfortable(upTo seconds: TimeInterval = 30) async {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !songComfortable, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+    }
+
+    private static func bufferedAhead(of item: AVPlayerItem?, at time: CMTime) -> TimeInterval {
+        guard let item, time.isNumeric else { return 0 }
+        let now = time.seconds
+        for value in item.loadedTimeRanges {
+            let range = value.timeRangeValue
+            let start = range.start.seconds, end = range.end.seconds
+            guard start.isFinite, end.isFinite else { continue }
+            if start <= now + 0.5, end > now { return end - now }
+        }
+        return 0
+    }
     var progress: Double { duration > 0 ? min(max(currentTime / duration, 0), 1) : 0 }
 
     private var avPlayer: AVPlayer?
@@ -807,9 +847,11 @@ final class Player: ObservableObject {
         // late. This opens it too — after a couple of seconds, so the song's own
         // buffer gets the connection first, the way the Android player waits for
         // the music to be comfortable before the picture takes anything.
-        Task.detached {
+        Task.detached { [weak self] in
             guard let found = await SongVideos.shared.forSong(track, maxHeight: height) else { return }
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            // Finding the address is two small requests; fetching the picture
+            // is not, and waits until the song has some seconds in hand.
+            await self?.waitUntilSongComfortable()
             await MainActor.run { VideoArtPlayers.shared.prepare(found) }
         }
 
@@ -1531,6 +1573,7 @@ final class Player: ObservableObject {
             queue: .main,
         ) { [weak self] time in
             guard let self, player === self.avPlayer, !self.isSeeking else { return }
+            self.bufferedAhead = Self.bufferedAhead(of: player.currentItem, at: time)
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
 
             // The length as the audio itself reports it.

@@ -11,6 +11,9 @@ struct SongVideo: Equatable {
     let videoId: String
     let url: URL
     let synced: Bool
+    /// The tallest picture asked for. A plain file was chosen at this size
+    /// already; an HLS stream chooses for itself and is held to it here.
+    let maxHeight: Int
 }
 
 /// Looked up once per song and remembered, a song with no video included.
@@ -62,7 +65,7 @@ actor SongVideos {
         if track.isVideo, !LocalMusic.isLocal(track.videoId) {
             guard let url = await YouTube.videoStreamURL(for: track.videoId, maxHeight: maxHeight)
             else { return nil }
-            return SongVideo(videoId: track.videoId, url: url, synced: true)
+            return SongVideo(videoId: track.videoId, url: url, synced: true, maxHeight: maxHeight)
         }
 
         // Otherwise the artist's own video, and only that. A lyric video, a fan
@@ -83,7 +86,8 @@ actor SongVideos {
         let candidate = sameCut ?? official[0]
         guard let url = await YouTube.videoStreamURL(for: candidate.videoId, maxHeight: maxHeight)
         else { return nil }
-        return SongVideo(videoId: candidate.videoId, url: url, synced: sameCut != nil)
+        return SongVideo(videoId: candidate.videoId, url: url, synced: sameCut != nil,
+                         maxHeight: maxHeight)
     }
 }
 
@@ -236,6 +240,11 @@ final class VideoArtPlayers {
         ])
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = Self.buffer
+        // For an HLS stream, which has sizes to choose from: no taller than
+        // was asked for. Twice as wide as tall so the cap is on height alone —
+        // a 480-high picture is a little wider than 16:9 and would miss a cap
+        // set at exactly that. A plain file has one size and ignores this.
+        item.preferredMaximumResolution = CGSize(width: video.maxHeight * 2, height: video.maxHeight)
         let made = AVPlayer(playerItem: item)
         made.isMuted = true              // the song is the sound
         made.actionAtItemEnd = .none
