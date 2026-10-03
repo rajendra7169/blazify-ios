@@ -42,6 +42,16 @@ struct AccountPopup: View {
                 .padding(.top, 72)
             }
             .scrollBounceBehavior(.basedOnSize)
+            // The dimmed backdrop below carries a dismiss tap, but this scroll
+            // view covers the whole screen, so every tap outside the card
+            // landed on it instead and the only way out was the cross. Its own
+            // background takes the tap and sits behind the card, so the card
+            // still gets everything aimed at the card.
+            .background(
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { isPresented = false },
+            )
         }
         .sheet(isPresented: $showLogin) { LoginView() }
         .sheet(isPresented: $showAccount) { AccountLibraryView(player: player) }
@@ -60,18 +70,28 @@ struct AccountPopup: View {
 
     private var titleBar: some View {
         HStack {
+            // The name in the Blaze gradient, which is what Android paints here
+            // and what makes this a Blazify panel rather than a settings card.
             Text("Blazify")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(palette.onSurface)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(
+                    LinearGradient(colors: [Blaze.amber, Blaze.orange],
+                                   startPoint: .leading, endPoint: .trailing),
+                )
                 .padding(.leading, 4)
             Spacer()
             Button { isPresented = false } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(palette.onSurface)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 36, height: 36)
+                    // Sitting in its own round well, as it does on Android —
+                    // a bare glyph in a corner reads as decoration.
+                    .background(Circle().fill(palette.onSurface.opacity(0.10)))
             }
+            .buttonStyle(.plain)
         }
+        .padding(.horizontal, 4)
         .padding(.bottom, 12)
     }
 
