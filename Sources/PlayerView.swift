@@ -85,6 +85,10 @@ struct PlayerView: View {
     @State private var seekFlash: String?
     @State private var flashAt = Date()
 
+    /// True while the record is being turned by hand. The turn and the sheet's
+    /// own swipe-down both watch the same finger, so one of them has to give.
+    @State private var turningRecord = false
+
     /// How far down the sheet sits — the one number, shared with the mini
     /// player so a drag that starts down there carries on up here.
     private var sheetOffset: CGFloat { player.sheetDrag }
@@ -204,6 +208,7 @@ struct PlayerView: View {
     private var sheetGesture: some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { g in
+                guard !turningRecord else { dragFrom = nil; return }
                 // Measured from wherever the sheet already is, not from the top.
                 // A drag that began on the mini player hands over to this one the
                 // moment the cover appears, and starting from zero each time
@@ -213,6 +218,10 @@ struct PlayerView: View {
             }
             .onEnded { g in
                 dragFrom = nil
+                // A turn across the record carries some downward velocity with
+                // it, and read as a flick that is the player closing itself in
+                // the middle of a seek.
+                guard !turningRecord else { return }
                 let vy = g.velocity.height                  // px/s, positive = downward
                 let value = expandedBound - player.sheetDrag  // the sheet's visible height
                 let midpoint = (expandedBound - collapsedBound) / 2
@@ -304,12 +313,33 @@ struct PlayerView: View {
                     SquareArtwork(player: player, side: stageHeight)
                 }
             case .record:
-                standardLayout {
+                // The record takes the double tap itself: it has to turn with
+                // the jump, and a tap target laid over the stage would sit on
+                // top of the record and swallow the turn.
+                standardLayout(tapToSeek: false) {
                     VinylTurntableView(
                         artURL: player.current?.artURL(size: 1080),
                         isPlaying: player.isPlaying,
                         progress: player.progress,
                         fallback: Blaze.gradient,
+                        onSeek: { back in jump(back: back) },
+                        onTurning: { hand in
+                            if hand {
+                                turningRecord = true
+                                // A turn that began with a little slope down had
+                                // started to take the sheet with it.
+                                if player.sheetDrag != 0 { springBack() }
+                            } else {
+                                // Held a moment past the finger lifting. Both
+                                // gestures end on the same touch-up and the
+                                // order is not ours to choose; cleared on the
+                                // spot, the sheet's end could read a turn's
+                                // downward velocity as a flick and close.
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    turningRecord = false
+                                }
+                            }
+                        },
                     )
                     .frame(height: stageHeight)
                     .padding(.horizontal, 32)
@@ -330,7 +360,10 @@ struct PlayerView: View {
     /// puts those rows in the same places whichever design is on.
     private var stageHeight: CGFloat { min(UIScreen.main.bounds.width - 96, 320) }
 
-    @ViewBuilder private func standardLayout<Stage: View>(@ViewBuilder stage: () -> Stage) -> some View {
+    @ViewBuilder private func standardLayout<Stage: View>(
+        tapToSeek: Bool = true,
+        @ViewBuilder stage: () -> Stage,
+    ) -> some View {
         VStack(spacing: 0) {
             header
             Spacer(minLength: 12)
@@ -339,12 +372,14 @@ struct PlayerView: View {
                 // halves are decided from where the tap landed rather than from
                 // two overlaid targets, so the stage keeps its own single taps.
                 .overlay {
-                    GeometryReader { geo in
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 2) { where_ in
-                                jump(back: where_.x < geo.size.width / 2)
-                            }
+                    if tapToSeek {
+                        GeometryReader { geo in
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) { where_ in
+                                    jump(back: where_.x < geo.size.width / 2)
+                                }
+                        }
                     }
                 }
             Spacer(minLength: 18)

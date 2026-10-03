@@ -4,19 +4,52 @@ import SwiftUI
 /// The DISC (grooves + album label) rotates at 360°/8s and freezes on pause;
 /// the sheen and the TONEARM never rotate with it — the arm pivots about its
 /// bearing, swinging out (-16°) when paused and tracking inward as the song plays.
+///
+/// The record can also be turned by hand to seek, as on Android, and a double
+/// tap sends it round a full turn so the jump is seen on the record rather than
+/// only read off the clock.
 struct VinylTurntableView: View {
     let artURL: URL?
     let isPlaying: Bool
     let progress: Double
     let fallback: LinearGradient
+    /// One step of seek, earned by a full turn of the record or by a double
+    /// tap: true to go back. Leave it out and the record cannot be turned.
+    var onSeek: ((Bool) -> Void)?
+    /// Called as a hand takes hold of the record and lets go again, so whatever
+    /// else is listening for drags can stand aside while it is being turned.
+    var onTurning: ((Bool) -> Void)?
 
     @State private var accumulated: Double = 0
     @State private var startedAt = Date()
+    /// Degrees a hand has added, which playback neither knows nor undoes.
+    @State private var manual: Double = 0
+    @State private var turning = false
+    @State private var lastAngle: Double?
+    /// Degrees turned in the drag so far, counted off in whole turns.
+    @State private var turned: Double = 0
+    @State private var flick: Flick?
 
     private static let degreesPerSecond = 45.0    // 360° / 8s
     private static let discCX = 0.46, discCY = 0.56, discR = 0.38
     private static let armBX = 0.81, armBY = 0.155
     private static let armRest = -16.0, armInner = 14.0
+    /// How long a turn given by a tap takes to play out.
+    private static let flickSeconds = 0.55
+    /// Less of a turn than this on release is a graze, not a flick.
+    private static let flickFloor = 30.0
+
+    /// A turn nobody is holding: given by a tap, or the rest of a turn a flick
+    /// started, and played out over time rather than snapped to.
+    ///
+    /// Time rather than `withAnimation` because the record's angle is already a
+    /// function of the clock — an implicit animation on a value that is also
+    /// recomputed every frame restarts itself every frame, and the turn comes
+    /// out as a crawl.
+    private struct Flick: Equatable {
+        let at: Date
+        let degrees: Double
+    }
 
     private var armAngle: Double {
         isPlaying ? Self.armInner * (1 - min(max(progress, 0), 1)) : Self.armRest
@@ -29,9 +62,11 @@ struct VinylTurntableView: View {
             let dx = dim * (Self.discCX - 0.5)
             let dy = dim * (Self.discCY - 0.5)
 
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying)) { timeline in
-                let angle = accumulated + (isPlaying
-                    ? timeline.date.timeIntervalSince(startedAt) * Self.degreesPerSecond : 0)
+            // A turn given by a tap has to be drawn on a paused record too, so
+            // the clock keeps running while one is in flight.
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0,
+                                    paused: !isPlaying && flick == nil)) { timeline in
+                let angle = spin(now: timeline.date) + manual + flickOffset(now: timeline.date)
 
                 ZStack {
                     // 1. Fake soft drop shadow under the record.
@@ -47,9 +82,9 @@ struct VinylTurntableView: View {
                     }
                     .frame(width: dim, height: dim)
 
-                    // 2. The disc — this is the only thing that spins.
-                    VinylDisc(artURL: artURL, fallback: fallback)
-                        .frame(width: discSize, height: discSize)
+                    // 2. The disc — this is the only thing that spins, and the
+                    //    only thing a hand can take hold of.
+                    disc(side: discSize)
                         .rotationEffect(.degrees(angle))
                         .offset(x: dx, y: dy)
 
@@ -65,6 +100,7 @@ struct VinylTurntableView: View {
                     }
                     .frame(width: discSize, height: discSize)
                     .offset(x: dx, y: dy)
+                    .allowsHitTesting(false)
 
                     // 4. Tonearm — pivots about its bearing, never spins with the disc.
                     Canvas { ctx, size in drawTonearm(ctx, size) }
@@ -72,8 +108,19 @@ struct VinylTurntableView: View {
                         .rotationEffect(.degrees(armAngle),
                                         anchor: UnitPoint(x: Self.armBX, y: Self.armBY))
                         .animation(.spring(response: 0.95, dampingFraction: 0.85), value: armAngle)
+                        .allowsHitTesting(false)
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
+            }
+            // Double tap to jump, and the record goes round with it. The halves
+            // are read off the tap rather than from two overlaid targets, which
+            // would sit on top of the record and swallow the turn.
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { where_ in
+                guard let onSeek else { return }
+                let back = where_.x < geo.size.width / 2
+                onSeek(back)
+                spin(by: back ? -360 : 360)
             }
         }
         .onChange(of: isPlaying) {
@@ -83,6 +130,114 @@ struct VinylTurntableView: View {
                 accumulated += Date().timeIntervalSince(startedAt) * Self.degreesPerSecond
             }
         }
+    }
+
+    /// The record, with a hand on it where there is something for a turn to do.
+    @ViewBuilder private func disc(side: CGFloat) -> some View {
+        if onSeek == nil {
+            VinylDisc(artURL: artURL, fallback: fallback)
+                .frame(width: side, height: side)
+        } else {
+            VinylDisc(artURL: artURL, fallback: fallback)
+                .frame(width: side, height: side)
+                .simultaneousGesture(turnGesture(side: side))
+        }
+    }
+
+    // MARK: Turning
+
+    /// Where playback alone has the record pointing.
+    private func spin(now: Date) -> Double {
+        guard isPlaying, !turning else { return accumulated }
+        return accumulated + now.timeIntervalSince(startedAt) * Self.degreesPerSecond
+    }
+
+    private func flickOffset(now: Date) -> Double {
+        guard let flick else { return 0 }
+        let t = min(max(now.timeIntervalSince(flick.at) / Self.flickSeconds, 0), 1)
+        // Out fast, settling in — a record shoved by hand doesn't ease in.
+        return flick.degrees * (1 - pow(1 - t, 3))
+    }
+
+    /// Send the record round on its own, folding away whatever was in flight.
+    ///
+    /// Once it has played out the turn is added to the record's own total and
+    /// the flick goes away, so the angle stays a sum of finished turns rather
+    /// than a pile of expired ones. A second tap mid-turn supersedes this one:
+    /// the wait below sees a flick that is no longer its own and leaves it be.
+    private func spin(by degrees: Double) {
+        accumulated += flickOffset(now: Date())
+        let mine = Flick(at: Date(), degrees: degrees)
+        flick = mine
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.flickSeconds) {
+            guard flick == mine else { return }
+            accumulated += degrees
+            flick = nil
+        }
+    }
+
+    /// Turning the record seeks: one step per full turn, and a quick flick that
+    /// doesn't make it all the way round still counts as one, with the record
+    /// finishing that turn on its own so it looks like it really went round.
+    ///
+    /// Simultaneous, and only acting on sideways movement, because up and down
+    /// over the record belong to the player sheet — swiping down on the record
+    /// still puts the player away.
+    private func turnGesture(side: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { g in
+                let centre = side / 2
+                let angle = atan2(g.location.y - centre, g.location.x - centre) * 180 / .pi
+                guard let was = lastAngle else {
+                    // Sideways movement is what takes hold of the record; up
+                    // and down over it belong to the player sheet. Asked only
+                    // here, at the start — a turn goes vertical halfway round,
+                    // and asking every frame would stall the record there.
+                    guard abs(g.translation.width) > abs(g.translation.height) else { return }
+                    // Freeze where playback had got to before a hand takes over,
+                    // or the record jumps back to where the clock says it is.
+                    accumulated = spin(now: Date())
+                    turning = true
+                    onTurning?(true)
+                    lastAngle = angle
+                    turned = 0
+                    return
+                }
+                var delta = angle - was
+                if delta > 180 { delta -= 360 }
+                if delta < -180 { delta += 360 }
+                lastAngle = angle
+                turned += delta
+                manual += delta
+                while turned >= 360 {
+                    onSeek?(false)
+                    turned -= 360
+                }
+                while turned <= -360 {
+                    onSeek?(true)
+                    turned += 360
+                }
+            }
+            .onEnded { _ in
+                // A drag that never took hold — a swipe down over the record,
+                // on its way to putting the player away — is left entirely
+                // alone. Restarting the clock here would drop the degrees
+                // playback had turned since, and the record would jump back.
+                guard lastAngle != nil else { return }
+                let swept = turned
+                lastAngle = nil
+                turned = 0
+                accumulated += manual
+                manual = 0
+                startedAt = Date()
+                turning = false
+                onTurning?(false)
+
+                guard abs(swept) >= Self.flickFloor else { return }
+                let forward = swept > 0
+                onSeek?(!forward)
+                spin(by: (forward ? 360 : -360) - swept)
+            }
     }
 
     // MARK: Tonearm
