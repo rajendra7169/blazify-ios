@@ -47,6 +47,10 @@ final class PlaybackPrefs: ObservableObject {
     @Published var shufflePlaylistFirst: Bool { didSet { save(shufflePlaylistFirst, "shufflePlaylistFirst") } }
     @Published var autoSkipOnError: Bool { didSet { save(autoSkipOnError, "autoSkipNextOnError") } }
 
+    /// How far a double-tap on the player, or a skip key on the lock screen,
+    /// jumps. Ten seconds is Android's default and the one most players use.
+    @Published var seekSeconds: Int { didSet { save(Double(seekSeconds), "seekAmountSeconds") } }
+
     /// Video Art is a video, which costs far more than a picture — off on mobile
     /// data until it is asked for.
     @Published var videoOnMobile: Bool { didSet { save(videoOnMobile, "videoOnMobile") } }
@@ -84,6 +88,7 @@ final class PlaybackPrefs: ObservableObject {
         normalizeVolume = flag("audioNormalization", true)
         loudnessTarget = number("loudnessLevel", -14)   // Android's default LUFS target
         speed = number("playbackSpeed", 1)
+        seekSeconds = Int(number("seekAmountSeconds", 10))
         preservePitch = flag("preservePitch", true)
         gapless = flag("gaplessPlayback", true)
         crossfade = flag("crossfadeEnabled", false)

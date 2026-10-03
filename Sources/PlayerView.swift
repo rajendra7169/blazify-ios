@@ -80,6 +80,11 @@ struct PlayerView: View {
     /// Where the sheet stood when this drag began, so a handover continues it.
     @State private var dragFrom: CGFloat?
 
+    /// "+10s" or "−10s" for a moment after a double-tap, so the jump is visible
+    /// on a screen where nothing else moves much.
+    @State private var seekFlash: String?
+    @State private var flashAt = Date()
+
     /// How far down the sheet sits — the one number, shared with the mini
     /// player so a drag that starts down there carries on up here.
     private var sheetOffset: CGFloat { player.sheetDrag }
@@ -120,6 +125,19 @@ struct PlayerView: View {
                     .animation(.easeInOut(duration: 0.25), value: lyricsMode)
                     .animation(.easeInOut(duration: 0.25), value: immersive)
             }
+            .overlay {
+                if let seekFlash {
+                    Text(seekFlash)
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 12)
+                        .background(.black.opacity(0.45), in: Capsule())
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(.easeOut(duration: 0.18), value: seekFlash)
             // NB: no clipShape here — clipping happens at the safe-area bounds,
             // which cropped the background's ignoresSafeArea and put a black band
             // under the status bar. Full-bleed matters more than the drag corners.
@@ -220,6 +238,20 @@ struct PlayerView: View {
             }
     }
 
+    /// Jump by the amount set in settings, and say so briefly.
+    private func jump(back: Bool) {
+        let step = Double(PlaybackPrefs.shared.seekSeconds)
+        guard player.duration > 0 else { return }
+        player.seek(by: back ? -step : step)
+        seekFlash = back ? "−\(Int(step))s" : "+\(Int(step))s"
+        flashAt = Date()
+        let mine = flashAt
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.7))
+            if flashAt == mine { seekFlash = nil }
+        }
+    }
+
     private func springBack() {
         withAnimation(settleSpring) { player.sheetDrag = 0 }
     }
@@ -306,6 +338,18 @@ struct PlayerView: View {
             header
             Spacer(minLength: 12)
             stage()
+                // Double-tap the left or right half to jump, as on Android. The
+                // halves are decided from where the tap landed rather than from
+                // two overlaid targets, so the stage keeps its own single taps.
+                .overlay {
+                    GeometryReader { geo in
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { where_ in
+                                jump(back: where_.x < geo.size.width / 2)
+                            }
+                    }
+                }
             Spacer(minLength: 18)
             titleAndProgress
             if !immersive {

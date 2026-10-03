@@ -7,6 +7,7 @@ import SwiftUI
 /// audio processor with no AVPlayer equivalent). Google Cast becomes AirPlay,
 /// which the system route picker already offers from the player.
 struct PlayerSettingsView: View {
+    @Environment(\.palette) private var palette
     @ObservedObject private var prefs = PlaybackPrefs.shared
     @State private var showQuality = false
     @State private var showHistory = false
@@ -63,6 +64,23 @@ struct PlayerSettingsView: View {
                         String(format: "%.1f s", $0)
                     }
                 }
+            }
+
+            SettingsGroup(title: "Seeking") {
+                SettingsSlider(symbol: "goforward", title: "Skip by",
+                               value: Binding(
+                                   get: { Double(prefs.seekSeconds) },
+                                   set: { prefs.seekSeconds = Int($0) },
+                               ),
+                               range: 5 ... 60, step: 5) {
+                    "\(Int($0)) s"
+                }
+                SettingsDivider()
+                Text("Double-tap the left or right half of the player to jump, and the skip keys on the lock screen move by the same amount.")
+                    .font(.blaze(12))
+                    .foregroundStyle(palette.onSurfaceVariant)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
             }
 
             SettingsGroup(title: "Video") {

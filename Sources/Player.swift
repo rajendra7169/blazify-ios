@@ -1628,6 +1628,16 @@ final class Player: ObservableObject {
         }
     }
 
+    /// Jump forward or back from where we are, staying inside the song.
+    ///
+    /// Clamped at both ends: seeking past the end would finish the song, which
+    /// is not what a skip key means, and seeking before zero is nothing at all.
+    func seek(by delta: Double) {
+        guard duration > 0 else { return }
+        let target = min(max(currentTime + delta, 0), max(duration - 0.5, 0))
+        seek(to: target / duration)
+    }
+
     func seek(to fraction: Double) {
         guard duration > 0, let avPlayer else { return }
         let target = fraction * duration
@@ -1654,6 +1664,23 @@ final class Player: ObservableObject {
 
     private func setupRemoteCommands() {
         let c = MPRemoteCommandCenter.shared()
+        // Skip keys on the lock screen and in Control Centre, jumping the
+        // distance set in settings. Read when the song changes rather than kept
+        // in step with the setting, which is often enough: the controls are
+        // rebuilt for every song anyway.
+        let step = Double(PlaybackPrefs.shared.seekSeconds)
+        c.skipBackwardCommand.preferredIntervals = [NSNumber(value: step)]
+        c.skipForwardCommand.preferredIntervals = [NSNumber(value: step)]
+        c.skipBackwardCommand.removeTarget(nil)
+        c.skipForwardCommand.removeTarget(nil)
+        c.skipBackwardCommand.addTarget { [weak self] _ in
+            self?.seek(by: -step)
+            return .success
+        }
+        c.skipForwardCommand.addTarget { [weak self] _ in
+            self?.seek(by: step)
+            return .success
+        }
         c.playCommand.addTarget { [weak self] _ in self?.resume(); return .success }
         c.pauseCommand.addTarget { [weak self] _ in self?.pause(); return .success }
         c.togglePlayPauseCommand.addTarget { [weak self] _ in self?.toggle(); return .success }
