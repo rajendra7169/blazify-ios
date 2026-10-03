@@ -32,6 +32,14 @@ enum VideoArtLog {
         #endif
     }
 
+    /// "file" or "hls" — the address itself is a signed one and is not
+    /// written down. Here rather than on the loader, which is bound to the
+    /// main actor, because the player's builder and the screen's coordinator
+    /// are not, and a call across that line does not compile.
+    static func kind(of url: URL) -> String {
+        url.absoluteString.contains("/hls_") || url.absoluteString.contains("manifest") ? "hls" : "file"
+    }
+
     static var text: String {
         lock.lock()
         defer { lock.unlock() }

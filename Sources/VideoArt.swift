@@ -146,7 +146,7 @@ final class SongVideoLoader: ObservableObject {
             guard loadedFor == key else { return }
             if let found {
                 VideoArtLog.note("load: found \(found.videoId) synced=\(found.synced) "
-                    + "\(Self.kind(of: found.url)) alternate=\(found.alternate.map(Self.kind(of:)) ?? "none")")
+                    + "\(VideoArtLog.kind(of: found.url)) alternate=\(found.alternate.map(VideoArtLog.kind(of:)) ?? "none")")
             } else {
                 VideoArtLog.note("load: nothing found for \(track.videoId)")
             }
@@ -155,11 +155,6 @@ final class SongVideoLoader: ObservableObject {
         }
     }
 
-    /// "file" or "hls", for the log — the address itself is a signed one and
-    /// is not written down.
-    static func kind(of url: URL) -> String {
-        url.absoluteString.contains("/hls_") || url.absoluteString.contains("manifest") ? "hls" : "file"
-    }
 
     /// Opens the song after this one, so a skip lands on a picture rather than
     /// on black. Called with whatever the queue says is next.
@@ -266,7 +261,7 @@ final class VideoArtPlayers {
         ])
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = Self.buffer
-        if SongVideoLoader.kind(of: video.url) == "hls" {
+        if VideoArtLog.kind(of: video.url) == "hls" {
             // A stream with sizes to choose from: no taller than was asked
             // for. Twice as wide as tall so the cap is on height alone — a
             // 480-high picture is a little wider than 16:9 and would miss a
@@ -284,7 +279,7 @@ final class VideoArtPlayers {
         // handled by hand in the screen's coordinator, which watches for the
         // stall and starts again when the buffer is back.
         made.automaticallyWaitsToMinimizeStalling = false
-        VideoArtLog.note("player: built for \(SongVideoLoader.kind(of: video.url)) \(video.videoId)")
+        VideoArtLog.note("player: built for \(VideoArtLog.kind(of: video.url)) \(video.videoId)")
 
         let videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
@@ -437,7 +432,7 @@ struct VideoArtView: UIViewRepresentable {
             // Nothing is heard from it, so it starts the moment it can.
             player.play()
             stalled = false
-            VideoArtLog.note("attach: \(fallingBack ? "fallback " : "")\(SongVideoLoader.kind(of: playing.url)) "
+            VideoArtLog.note("attach: \(fallingBack ? "fallback " : "")\(VideoArtLog.kind(of: playing.url)) "
                 + "\(playing.videoId) fresh=\(lent.fresh) itemStatus=\(player.currentItem?.status.rawValue ?? -1)")
 
             // Three ways this can go wrong, and all three used to look the same
