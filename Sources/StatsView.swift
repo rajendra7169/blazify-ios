@@ -32,7 +32,7 @@ struct StatsView: View {
                     ForEach(Array(songs.enumerated()), id: \.element.id) { index, track in
                         Button {
                             player.play(songs, startAt: index)
-                            player.showFullPlayer = true
+                            player.openFullPlayer()
                         } label: {
                             rankedRow(index: index, track: track)
                         }

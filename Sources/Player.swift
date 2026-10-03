@@ -57,6 +57,16 @@ final class Player: ObservableObject {
     @Published private(set) var sponsorSkipped = 0.0
     @Published var showFullPlayer = false
 
+    /// Opens the full player. Through a transaction with animations off, so
+    /// the cover does not slide itself up: the player fades in on its own,
+    /// and the two motions together — the cover's slide and the player's own
+    /// arrival — were a screen full of things moving separately.
+    func openFullPlayer() {
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { showFullPlayer = true }
+    }
+
     /// How far the full player sits below its open position, in points.
     ///
     /// Zero is fully open; a screen height is fully away. It lives here rather

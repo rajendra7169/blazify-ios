@@ -26,7 +26,7 @@ struct DownloadsView: View {
                             SongRow(track: pair.element, player: player,
                                     trailingPadding: 0) {
                                 player.play(downloads.tracks, startAt: pair.offset)
-                                player.showFullPlayer = true
+                                player.openFullPlayer()
                             }
                             .buttonStyle(.plain)
                             .listRowBackground(Color.clear)

@@ -74,10 +74,10 @@ struct PlaylistView: View {
                             let order = PlaybackPrefs.shared.shufflePlaylistFirst
                                 ? tracks.shuffled() : tracks
                             player.play(order, startAt: 0)
-                            player.showFullPlayer = true
+                            player.openFullPlayer()
                         }
                         actionButton("Shuffle", "shuffle") {
-                            player.play(tracks.shuffled(), startAt: 0); player.showFullPlayer = true
+                            player.play(tracks.shuffled(), startAt: 0); player.openFullPlayer()
                         }
                         actionButton(downloadLabel, "arrow.down.circle") {
                             Downloads.shared.downloadAll(tracks)

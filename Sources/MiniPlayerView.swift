@@ -240,7 +240,7 @@ struct MiniPlayerView: View {
         if let onOpenPlayer {
             onOpenPlayer()
         } else {
-            player.showFullPlayer = true
+            player.openFullPlayer()
         }
     }
 

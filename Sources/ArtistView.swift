@@ -86,7 +86,7 @@ struct ArtistView: View {
                 if let songs = firstSongs, !songs.isEmpty {
                     Button {
                         player.play(songs.shuffled(), startAt: 0)
-                        player.showFullPlayer = true
+                        player.openFullPlayer()
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "shuffle")
@@ -124,7 +124,7 @@ struct ArtistView: View {
                 ForEach(Array(section.songs.enumerated()), id: \.element.id) { pair in
                     SongRow(track: pair.element, player: player) {
                         player.play(section.songs, startAt: pair.offset)
-                        player.showFullPlayer = true
+                        player.openFullPlayer()
                     }
                     .padding(.leading, 16)
                     .padding(.vertical, 6)
@@ -138,7 +138,7 @@ struct ArtistView: View {
                         MusicCard(item: card) {
                             if let vid = card.videoId, !vid.isEmpty {
                                 player.play([card.asTrack], startAt: 0)
-                                player.showFullPlayer = true
+                                player.openFullPlayer()
                             }
                         }
                     }

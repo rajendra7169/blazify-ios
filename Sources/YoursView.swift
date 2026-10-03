@@ -153,7 +153,7 @@ struct YoursView: View {
                                    thumbnail: track.artURL(size: 544)?.absoluteString
                                        ?? track.thumbnail) {
                         player.play(tracks, startAt: i)
-                        player.showFullPlayer = true
+                        player.openFullPlayer()
                     }
                 }
             }
@@ -235,7 +235,7 @@ struct YoursView: View {
                                        thumbnail: songs[i].artURL(size: 544)?.absoluteString
                                            ?? songs[i].thumbnail) {
                             player.play(songs, startAt: i)
-                            player.showFullPlayer = true
+                            player.openFullPlayer()
                         }
                     }
                     if i < people.count {

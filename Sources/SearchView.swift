@@ -279,7 +279,7 @@ struct SearchView: View {
             SongRow(track: song, player: player) {
                 history.add(trimmed)
                 player.playWithRadio(song)
-                player.showFullPlayer = true
+                player.openFullPlayer()
             }
             .padding(.leading, 16)
             .padding(.vertical, 6)
@@ -365,7 +365,7 @@ struct SearchView: View {
                 // a version of that same song, so queueing them fills the queue
                 // with its own remixes instead of anything to hear next.
                 player.playWithRadio(track)
-                player.showFullPlayer = true
+                player.openFullPlayer()
             }
             .padding(.leading, 16)
             .padding(.vertical, 6)
@@ -475,7 +475,7 @@ extension SearchView {
                     searching = false
                     query = ""
                     player.play([track], startAt: 0)
-                    player.showFullPlayer = true
+                    player.openFullPlayer()
                 }
             }
         case .playlist:

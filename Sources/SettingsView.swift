@@ -170,7 +170,7 @@ struct SettingsView: View {
                 if player.current != nil {
                     MiniPlayerView(player: player) {
                         dismiss()
-                        player.showFullPlayer = true
+                        player.openFullPlayer()
                     }
                     .padding(.bottom, 6)
                 }

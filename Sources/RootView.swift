@@ -90,7 +90,7 @@ struct RootView: View {
         switch request {
         case .resume:
             if player.hasTrack, !player.isPlaying { player.toggle() }
-            player.showFullPlayer = true
+            player.openFullPlayer()
         case .favourites:
             let songs = player.favoriteTracks.shuffled()
             guard !songs.isEmpty else {
@@ -101,7 +101,7 @@ struct RootView: View {
             }
             player.isShuffled = true
             player.play(songs, startAt: 0)
-            player.showFullPlayer = true
+            player.openFullPlayer()
         case .downloads:
             let songs = Downloads.shared.tracks.shuffled()
             guard !songs.isEmpty else {
@@ -110,7 +110,7 @@ struct RootView: View {
             }
             player.isShuffled = true
             player.play(songs, startAt: 0)
-            player.showFullPlayer = true
+            player.openFullPlayer()
         case .recognise:
             showRecognition = true
         case .play(let videoId):
@@ -128,7 +128,7 @@ struct RootView: View {
                 var queue = [track]
                 queue += related.filter { $0.videoId != videoId }
                 player.play(queue, startAt: 0)
-                player.showFullPlayer = true
+                player.openFullPlayer()
             }
         }
     }
@@ -140,7 +140,7 @@ struct RootView: View {
         guard !pool.isEmpty else { return }
         player.isShuffled = true
         player.play(pool.shuffled(), startAt: 0)
-        player.showFullPlayer = true
+        player.openFullPlayer()
     }
 
     var body: some View {

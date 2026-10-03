@@ -282,12 +282,12 @@ struct SongListScreen: View {
                     let shuffled = source.shuffled()
                     guard !shuffled.isEmpty else { return }
                     player.play(shuffled, startAt: 0)
-                    player.showFullPlayer = true
+                    player.openFullPlayer()
                 }
                 circleButton("play.fill", size: 72, filled: true) {
                     guard !source.isEmpty else { return }
                     player.play(source, startAt: 0)
-                    player.showFullPlayer = true
+                    player.openFullPlayer()
                 }
                 circleButton("ellipsis", size: 48, filled: false) { showMenu = true }
             }

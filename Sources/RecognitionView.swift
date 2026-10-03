@@ -109,7 +109,7 @@ struct RecognitionView: View {
                     guard !results.isEmpty else { return }
                     await MainActor.run {
                         player.play(results, startAt: 0)
-                        player.showFullPlayer = true
+                        player.openFullPlayer()
                         dismiss()
                     }
                 }

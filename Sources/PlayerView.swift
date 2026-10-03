@@ -67,14 +67,16 @@ struct PlayerView: View {
         .interpolatingSpring(mass: 1, stiffness: 1500, damping: 77.46)
     }
 
-    /// Arriving and leaving.
-    ///
-    /// Softer and slower than the settle, because this one covers the whole
-    /// height of the screen rather than the last few points of a drag: the same
-    /// stiffness over that distance arrives like a slammed door.
-    private var travelSpring: Animation {
-        .spring(response: 0.42, dampingFraction: 0.86)
-    }
+    /// Arriving and leaving: a fade, with a little drift in the direction of
+    /// travel, the whole sheet as one piece — the way Android's sheet cross-fades
+    /// between the mini player and the full one. It used to slide up from the
+    /// bottom under a spring while the cover slid itself up under the system's
+    /// curve, with the scrim and the content fading on ramps of their own, and
+    /// read as a screen of things moving separately.
+    @State private var arrived = false
+    private let arriveDrift: CGFloat = 36
+    private var fadeIn: Animation { .easeOut(duration: 0.28) }
+    private var fadeOut: Animation { .easeIn(duration: 0.2) }
 
     /// Where the sheet stood when this drag began, so a handover continues it.
     @State private var dragFrom: CGFloat?
@@ -144,17 +146,17 @@ struct PlayerView: View {
             // NB: no clipShape here — clipping happens at the safe-area bounds,
             // which cropped the background's ignoresSafeArea and put a black band
             // under the status bar. Full-bleed matters more than the drag corners.
-            .offset(y: sheetOffset)
+            .offset(y: sheetOffset + (arrived ? 0 : arriveDrift))
         }
+        .opacity(arrived ? 1 : 0)
         .gesture(sheetGesture)
         // Settings → Lyrics → Hide the status bar, while lyrics are up.
         .statusBarHidden(lyricsMode && LyricsPrefs.shared.hideStatusBarFullscreen)
         .onAppear {
-            // However it was opened, it arrives from the bottom: put it off
-            // the screen and let it travel up, whatever the last gesture left
-            // in that number.
-            player.sheetDrag = expandedBound
-            withAnimation(travelSpring) { player.sheetDrag = 0 }
+            // Whatever the last gesture left in that number, this one starts
+            // in place and fades in.
+            player.sheetDrag = 0
+            withAnimation(fadeIn) { arrived = true }
             // Settings → Player → Keep the screen on.
             UIApplication.shared.isIdleTimerDisabled = PlaybackPrefs.shared.keepScreenOn
         }
@@ -262,16 +264,17 @@ struct PlayerView: View {
     /// the two together read as a cut. This carries it the rest of the way
     /// first, and lets the cover go once there is nothing left to see.
     private func close() {
-        withAnimation(travelSpring) { player.sheetDrag = expandedBound }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
-            // The sheet is off the bottom now and there is nothing left to
-            // animate, so the cover goes without the system's own slide-down —
-            // through the flag that presents it, which is what the transaction
-            // applies to. The environment's dismiss is not driven by it, and
-            // the cover slid down a second time.
+        // From wherever the finger left it: it fades out there, drifting on a
+        // little, rather than travelling the rest of the way to the bottom.
+        withAnimation(fadeOut) { arrived = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            // Nothing is left to see, so the cover goes without the system's
+            // own slide-down — through the flag that presents it, which is
+            // what the transaction applies to. The environment's dismiss is
+            // not driven by it, and the cover slid down a second time.
             //
-            // And the offset is left where it is. It used to be put back to
-            // zero here, a beat before the cover was actually gone: the sheet
+            // The offset is left where it is. It used to be put back to zero
+            // here, a beat before the cover was actually gone: the sheet
             // snapped back up to the top for the rest of that beat, and then
             // slid away again with the cover. Arriving sets it anyway.
             var instant = Transaction()

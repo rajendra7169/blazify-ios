@@ -14,7 +14,7 @@ struct SettingsMiniPlayer: ViewModifier {
                     // The full player belongs to the root, so this sheet has to
                     // step aside or it would open behind us.
                     dismiss()
-                    player.showFullPlayer = true
+                    player.openFullPlayer()
                 }
                 .padding(.bottom, 6)
             }

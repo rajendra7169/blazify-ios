@@ -71,7 +71,7 @@ struct HistoryView: View {
                     ForEach(Array(section.tracks.enumerated()), id: \.element.id) { index, track in
                         SongRow(track: track, player: player) {
                             player.play(section.tracks, startAt: index)
-                            player.showFullPlayer = true
+                            player.openFullPlayer()
                         }
                         .padding(.leading, 16)
                         .padding(.vertical, 6)
