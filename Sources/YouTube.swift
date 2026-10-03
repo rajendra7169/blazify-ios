@@ -216,6 +216,18 @@ enum YouTube {
     /// no audio in it at all, which is exactly right — the song is the sound and
     /// this only has to be looked at.
     static func videoStreamURL(for videoId: String, maxHeight: Int) async -> URL? {
+        await videoStream(for: videoId, maxHeight: maxHeight)?.url
+    }
+
+    /// The picture's address, and a second one to fall back on.
+    ///
+    /// The first is a plain H.264 file, which is what played before and is
+    /// known to on every phone this has been tried on. The second, when
+    /// YouTube offers one, is its HLS stream — the format this phone's player
+    /// was built for, but one whose playlists also carry VP9 sizes not every
+    /// phone decodes and whose addresses are tied to the network the lookup
+    /// was made from. It is taken only once the file has refused to play.
+    static func videoStream(for videoId: String, maxHeight: Int) async -> (url: URL, alternate: URL?)? {
         let visitor = await visitorData()
         let preferred = await MainActor.run { StreamPrefs.shared.order }
         // The iOS client first, whatever the order for songs. A music video is
@@ -245,16 +257,11 @@ enum YouTube {
                   let streaming = json["streamingData"] as? [String: Any]
             else { continue }
 
-            // HLS when YouTube offers it: the format the player on this phone
-            // was built for. It starts on the first segment, picks its own size
-            // for the connection under the cap set on the item, seeks exactly,
-            // and rides out a thin patch by itself. The alternative below is a
-            // fragmented MP4 meant for a DASH player, handed over as a plain
-            // file — which this phone's player accepts, but only just.
-            if let hls = streaming["hlsManifestUrl"] as? String, let url = URL(string: hls) {
-                return url
+            let hls = (streaming["hlsManifestUrl"] as? String).flatMap(URL.init(string:))
+            guard let formats = streaming["adaptiveFormats"] as? [[String: Any]] else {
+                if let hls { return (hls, nil) }
+                continue
             }
-            guard let formats = streaming["adaptiveFormats"] as? [[String: Any]] else { continue }
 
             // The biggest picture that still fits the cap — anything taller is
             // data spent on detail this screen cannot show.
@@ -272,7 +279,8 @@ enum YouTube {
                 else { continue }
                 if height > bestHeight { bestHeight = height; best = f }
             }
-            if let best, let u = best["url"] as? String, let url = URL(string: u) { return url }
+            if let best, let u = best["url"] as? String, let url = URL(string: u) { return (url, hls) }
+            if let hls { return (hls, nil) }
         }
         return nil
     }
@@ -966,8 +974,15 @@ enum YouTube {
         else { return [] }
 
         var out: [MoodItem] = []
-        for section in sections {
-            let items = (section["gridRenderer"] as? [String: Any])?["items"] as? [[String: Any]] ?? []
+        for (at, section) in sections.enumerated() {
+            let grid = section["gridRenderer"] as? [String: Any]
+            let items = grid?["items"] as? [[String: Any]] ?? []
+            // The page is two grids: moods and moments first, genres second.
+            // The heading says which, and the order is the fallback when the
+            // heading is in a language this does not read.
+            let heading = runsFirst((grid?["header"] as? [String: Any])?["gridHeaderRenderer"]
+                .flatMap { ($0 as? [String: Any])?["title"] }).lowercased()
+            let isGenre = heading.contains("genre") || (heading.isEmpty && at > 0)
             for item in items {
                 guard let b = item["musicNavigationButtonRenderer"] as? [String: Any] else { continue }
                 let title = runsFirst(b["buttonText"])
@@ -976,7 +991,8 @@ enum YouTube {
                 let click = (b["clickCommand"] as? [String: Any])?["browseEndpoint"] as? [String: Any]
                 out.append(MoodItem(title: title, colorARGB: color,
                                     browseId: click?["browseId"] as? String,
-                                    params: click?["params"] as? String))
+                                    params: click?["params"] as? String,
+                                    isGenre: isGenre))
             }
         }
         return out

@@ -177,6 +177,9 @@ struct MoodItem: Identifiable, Hashable {
     let colorARGB: UInt
     let browseId: String?
     let params: String?
+    /// A genre or language (Punjabi, Jazz…) rather than a mood (Chill, Focus…).
+    /// Moods are for everybody; which genres are shown first is the listener's.
+    var isGenre: Bool = false
 }
 
 /// One of the user's own editable playlists.

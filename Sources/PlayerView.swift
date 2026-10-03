@@ -583,15 +583,12 @@ struct PlayerView: View {
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
                         .opensArtist(player)
-                    // Only on the design that promised a picture, and only while
-                    // there is none: the reason, in place of a mystery.
-                    if design == .video, videoLoader.video == nil, let note = videoLoader.note {
-                        Text(note)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.55))
-                            .lineLimit(2)
-                            .padding(.top, 2)
-                    }
+                    // Nothing is said here about the picture. A song whose
+                    // video is still being found, or has none, or would not
+                    // play, shows its cover — "no video found" under the
+                    // title made the design look broken, and was no help to
+                    // anybody listening. The reasons stay in the loader for
+                    // the log.
                 }
                 Spacer(minLength: 0)
 

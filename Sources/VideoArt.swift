@@ -14,6 +14,15 @@ struct SongVideo: Equatable {
     /// The tallest picture asked for. A plain file was chosen at this size
     /// already; an HLS stream chooses for itself and is held to it here.
     let maxHeight: Int
+    /// A second address to try when the first will not play. See
+    /// YouTube.videoStream for what each one is.
+    var alternate: URL? = nil
+
+    /// The same video at its second address, with nothing left to fall to.
+    var fallenBack: SongVideo? {
+        guard let alternate else { return nil }
+        return SongVideo(videoId: videoId, url: alternate, synced: synced, maxHeight: maxHeight)
+    }
 }
 
 /// Looked up once per song and remembered, a song with no video included.
@@ -63,9 +72,10 @@ actor SongVideos {
                              candidates: Int, sameCutSeconds: Double) async -> SongVideo? {
         // A song that is itself a video already is the picture to show, and its own sound.
         if track.isVideo, !LocalMusic.isLocal(track.videoId) {
-            guard let url = await YouTube.videoStreamURL(for: track.videoId, maxHeight: maxHeight)
+            guard let found = await YouTube.videoStream(for: track.videoId, maxHeight: maxHeight)
             else { return nil }
-            return SongVideo(videoId: track.videoId, url: url, synced: true, maxHeight: maxHeight)
+            return SongVideo(videoId: track.videoId, url: found.url, synced: true, maxHeight: maxHeight,
+                             alternate: found.alternate)
         }
 
         // Otherwise the artist's own video, and only that. A lyric video, a fan
@@ -84,10 +94,10 @@ actor SongVideos {
             track.duration > 0 && $0.duration > 0 && abs($0.duration - track.duration) <= sameCutSeconds
         }
         let candidate = sameCut ?? official[0]
-        guard let url = await YouTube.videoStreamURL(for: candidate.videoId, maxHeight: maxHeight)
+        guard let found = await YouTube.videoStream(for: candidate.videoId, maxHeight: maxHeight)
         else { return nil }
-        return SongVideo(videoId: candidate.videoId, url: url, synced: sameCut != nil,
-                         maxHeight: maxHeight)
+        return SongVideo(videoId: candidate.videoId, url: found.url, synced: sameCut != nil,
+                         maxHeight: maxHeight, alternate: found.alternate)
     }
 }
 
@@ -372,11 +382,19 @@ struct VideoArtView: UIViewRepresentable {
         /// song, and the song comes first.
         private let patience: UInt64 = 15
 
-        func attach(to view: PlayerContainerView, video: SongVideo) {
+        /// True once the second address has been tried for the current video.
+        private var fellBack = false
+
+        func attach(to view: PlayerContainerView, video: SongVideo, fallingBack: Bool = false) {
             // Lent out rather than built: a player kept from the last time this
             // screen was open already holds what it fetched, so reopening shows
             // a picture instead of buffering one.
-            let lent = VideoArtPlayers.shared.player(for: video)
+            //
+            // The second address is played under the first one's name, so the
+            // screen's own idea of which video this is does not change and
+            // the next update does not tear it down for being different.
+            let playing = fallingBack ? (video.fallenBack ?? video) : video
+            let lent = VideoArtPlayers.shared.player(for: playing)
             let player = lent.player
             self.player = player
             self.current = video
@@ -393,10 +411,21 @@ struct VideoArtView: UIViewRepresentable {
             // from the outside: the item refuses, the layer never has a frame to
             // show, or it simply never arrives.
             let item = player.currentItem
-            statusObs = item?.observe(\.status, options: [.new]) { [weak self] item, _ in
+            statusObs = item?.observe(\.status, options: [.new]) { [weak self, weak view] item, _ in
                 guard item.status == .failed else { return }
                 let reason = item.error?.localizedDescription ?? "the video would not load"
-                Task { @MainActor [weak self] in self?.onTrouble(reason) }
+                Task { @MainActor [weak self, weak view] in
+                    guard let self else { return }
+                    // The first address refused: the second one, once, before
+                    // giving up on the picture for this song.
+                    if !self.fellBack, video.alternate != nil, let view {
+                        self.fellBack = true
+                        self.stopWatching()
+                        self.attach(to: view, video: video, fallingBack: true)
+                        return
+                    }
+                    self.onTrouble(reason)
+                }
             }
             readyObs = view.playerLayer.observe(\.isReadyForDisplay, options: [.new]) { [weak self, weak player] layer, _ in
                 guard layer.isReadyForDisplay else { return }
@@ -443,6 +472,7 @@ struct VideoArtView: UIViewRepresentable {
                 stop()
                 placed = false
                 lead = 0.8
+                fellBack = false
                 attach(to: view, video: video)
             }
             guard let player else { return }
@@ -574,6 +604,16 @@ struct VideoArtView: UIViewRepresentable {
         /// The screen is going. Everything watching it goes with it — the
         /// picture itself is left where it is, paused, for when it comes back.
         func stop() {
+            stopWatching()
+            output = nil
+            player = nil
+            current = nil
+            VideoArtPlayers.shared.rest()
+        }
+
+        /// Only the watchers, for when a different player is about to be
+        /// attached for the same video.
+        private func stopWatching() {
             if let endObs { NotificationCenter.default.removeObserver(endObs) }
             endObs = nil
             statusObs = nil
@@ -582,10 +622,6 @@ struct VideoArtView: UIViewRepresentable {
             watchdog = nil
             bandsLook?.cancel()
             bandsLook = nil
-            output = nil
-            player = nil
-            current = nil
-            VideoArtPlayers.shared.rest()
         }
     }
 }
