@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Settings: profile header, a search field that
 /// filters the top-level rows, quick toggles for theme mode / dynamic / pure
@@ -253,6 +254,10 @@ struct SettingsView: View {
             Button("Send it as an email") { BugReport.openEmail() }
             Button("Open the issue tracker") { BugReport.openTracker() }
             Button("Copy it to the clipboard") { BugReport.copyDetails() }
+            // The picture behind the player is the one thing that cannot be
+            // debugged from a desk: its log is what to paste into a report
+            // about it.
+            Button("Copy the Video Art log") { UIPasteboard.general.string = VideoArtLog.text }
             Button("Cancel", role: .cancel) {}
         } message: {
             // Shown, not merely attached. Nothing about somebody's phone should

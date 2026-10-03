@@ -252,8 +252,12 @@ enum YouTube {
                                     userAgent: client.userAgent, visitor: visitor,
                                     body: body, login: true)
             }
+            let status = (answer?["playabilityStatus"] as? [String: Any])
+            VideoArtLog.note("stream: \(client.rawValue) for \(videoId) → "
+                + "\(answer == nil ? "no answer" : (status?["status"] as? String ?? "?"))"
+                + ((status?["reason"] as? String).map { " (\($0.prefix(40)))" } ?? ""))
             guard let json = answer,
-                  (json["playabilityStatus"] as? [String: Any])?["status"] as? String == "OK",
+                  status?["status"] as? String == "OK",
                   let streaming = json["streamingData"] as? [String: Any]
             else { continue }
 
@@ -279,7 +283,11 @@ enum YouTube {
                 else { continue }
                 if height > bestHeight { bestHeight = height; best = f }
             }
-            if let best, let u = best["url"] as? String, let url = URL(string: u) { return (url, hls) }
+            if let best, let u = best["url"] as? String, let url = URL(string: u) {
+                VideoArtLog.note("stream: file \(bestHeight)p itag \(best["itag"] ?? "?")\(hls == nil ? "" : ", hls alternate")")
+                return (url, hls)
+            }
+            VideoArtLog.note("stream: no H.264 file ≤\(maxHeight)p in \(formats.count) formats\(hls == nil ? "" : ", using hls")")
             if let hls { return (hls, nil) }
         }
         return nil

@@ -493,10 +493,28 @@ struct PlayerView: View {
 
     /// True from a song change until its picture has been asked for.
     @State private var videoWanted = false
+    /// When the picture started waiting for the song, so the wait has an end.
+    @State private var videoWaitingSince: Date?
 
+    /// The song first, then the picture — but never no picture. If the song
+    /// has not got comfortable within a few seconds, whatever the reason, the
+    /// picture is asked for anyway: a late picture is a small thing, and a
+    /// gate that never opens is the design not working at all.
     private func loadVideoIfComfortable() {
-        guard videoWanted, design == .video, player.songComfortable else { return }
+        guard videoWanted, design == .video else { return }
+        let waited = videoWaitingSince.map { Date().timeIntervalSince($0) } ?? 0
+        guard player.songComfortable || waited >= 8 else {
+            if videoWaitingSince == nil {
+                videoWaitingSince = Date()
+                VideoArtLog.note("gate: waiting for the song — loading=\(player.isLoading) "
+                    + "playing=\(player.isPlaying) ahead=\(Int(player.bufferedAhead))s")
+            }
+            return
+        }
+        VideoArtLog.note("gate: open after \(Int(waited))s — loading=\(player.isLoading) "
+            + "playing=\(player.isPlaying) ahead=\(Int(player.bufferedAhead))s")
         videoWanted = false
+        videoWaitingSince = nil
         loadVideo()
     }
 

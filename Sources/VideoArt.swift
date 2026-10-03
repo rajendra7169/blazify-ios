@@ -87,6 +87,7 @@ actor SongVideos {
         let query = track.artist.isEmpty ? track.title : "\(track.title) \(track.artist)"
         let results = await YouTube.search(query, scope: .videos)
         let official = results.prefix(candidates).filter(\.isOfficialVideo)
+        VideoArtLog.note("lookup: \"\(query)\" → \(results.count) results, \(official.count) official")
         guard !official.isEmpty else { return nil }
 
         // The same cut as the song follows it in step; a different cut runs on its own.
@@ -121,6 +122,7 @@ final class SongVideoLoader: ObservableObject {
 
     func load(for track: Track?, allowed: Bool, maxHeight: Int) {
         guard allowed else {
+            VideoArtLog.note("load: not allowed on this connection (mobile data, videos off)")
             video = nil
             loadedFor = nil
             note = String(localized: "Videos stay off on mobile data — Settings › Player and audio")
@@ -137,13 +139,26 @@ final class SongVideoLoader: ObservableObject {
         loadedFor = key
         video = nil
         note = String(localized: "Looking for a video…")
+        VideoArtLog.note("load: looking for \(track.videoId) \"\(track.title)\" isVideo=\(track.isVideo) up to \(maxHeight)p")
         Task {
             let found = await SongVideos.shared.forSong(track, maxHeight: maxHeight)
             // A later song may have overtaken this lookup while it ran.
             guard loadedFor == key else { return }
+            if let found {
+                VideoArtLog.note("load: found \(found.videoId) synced=\(found.synced) "
+                    + "\(Self.kind(of: found.url)) alternate=\(found.alternate.map(Self.kind(of:)) ?? "none")")
+            } else {
+                VideoArtLog.note("load: nothing found for \(track.videoId)")
+            }
             video = found
             note = found == nil ? String(localized: "No video found for this song") : nil
         }
+    }
+
+    /// "file" or "hls", for the log — the address itself is a signed one and
+    /// is not written down.
+    static func kind(of url: URL) -> String {
+        url.absoluteString.contains("/hls_") || url.absoluteString.contains("manifest") ? "hls" : "file"
     }
 
     /// Opens the song after this one, so a skip lands on a picture rather than
@@ -159,6 +174,7 @@ final class SongVideoLoader: ObservableObject {
 
     /// The picture was found but would not play. The cover stays, and this says so.
     func trouble(_ reason: String) {
+        VideoArtLog.note("trouble: \(reason)")
         guard video != nil else { return }
         video = nil
         note = reason
@@ -250,19 +266,25 @@ final class VideoArtPlayers {
         ])
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = Self.buffer
-        // For an HLS stream, which has sizes to choose from: no taller than
-        // was asked for. Twice as wide as tall so the cap is on height alone —
-        // a 480-high picture is a little wider than 16:9 and would miss a cap
-        // set at exactly that. A plain file has one size and ignores this.
-        item.preferredMaximumResolution = CGSize(width: video.maxHeight * 2, height: video.maxHeight)
+        if SongVideoLoader.kind(of: video.url) == "hls" {
+            // A stream with sizes to choose from: no taller than was asked
+            // for. Twice as wide as tall so the cap is on height alone — a
+            // 480-high picture is a little wider than 16:9 and would miss a
+            // cap set at exactly that. Left off a plain file, which has one
+            // size, so nothing about that path is different from when it
+            // was known to play.
+            item.preferredMaximumResolution = CGSize(width: video.maxHeight * 2, height: video.maxHeight)
+        }
         let made = AVPlayer(playerItem: item)
         made.isMuted = true              // the song is the sound
         made.actionAtItemEnd = .none
-        // Left on, so that when the buffer does run dry the player waits for
-        // it to fill and carries on by itself. With it off a stall put the
-        // rate to zero and left it there; the fast first start this was turned
-        // off for is had from playImmediately(atRate:) instead.
-        made.automaticallyWaitsToMinimizeStalling = true
+        // Off, as it was when this was known to play: play() starts the moment
+        // there is a frame, with no wait for a safe amount of buffer. What
+        // that leaves — a stall puts the rate to zero and leaves it there — is
+        // handled by hand in the screen's coordinator, which watches for the
+        // stall and starts again when the buffer is back.
+        made.automaticallyWaitsToMinimizeStalling = false
+        VideoArtLog.note("player: built for \(SongVideoLoader.kind(of: video.url)) \(video.videoId)")
 
         let videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
@@ -344,9 +366,18 @@ struct VideoArtView: UIViewRepresentable {
 
         private var statusObs: NSKeyValueObservation?
         private var readyObs: NSKeyValueObservation?
+        private var controlObs: NSKeyValueObservation?
+        private var keepUpObs: NSKeyValueObservation?
         /// The end-of-video watcher, kept so it can be taken down: these are
         /// not removed by name, and one was left behind for every song.
         private var endObs: NSObjectProtocol?
+        private var stallObs: NSObjectProtocol?
+        /// True from a stall until the buffer is back and play() has been
+        /// called again. While it is, the sync loop leaves the player alone.
+        private var stalled = false
+        /// What the song last said: playing or not. The stall recovery needs
+        /// to know whether to start again.
+        private var wanted = false
         private var watchdog: Task<Void, Never>?
         private var output: AVPlayerItemVideoOutput?
         private var bandsLook: Task<Void, Never>?
@@ -403,23 +434,35 @@ struct VideoArtView: UIViewRepresentable {
             view.playerLayer.videoGravity = .resizeAspectFill
             // Whatever the song before it was zoomed to, this one starts square.
             view.playerLayer.transform = CATransform3DIdentity
-            // Nothing is heard from it, so it starts the moment it can — with
-            // whatever it has, not after the usual wait for a safe amount.
-            player.playImmediately(atRate: 1)
+            // Nothing is heard from it, so it starts the moment it can.
+            player.play()
+            stalled = false
+            VideoArtLog.note("attach: \(fallingBack ? "fallback " : "")\(SongVideoLoader.kind(of: playing.url)) "
+                + "\(playing.videoId) fresh=\(lent.fresh) itemStatus=\(player.currentItem?.status.rawValue ?? -1)")
 
             // Three ways this can go wrong, and all three used to look the same
             // from the outside: the item refuses, the layer never has a frame to
             // show, or it simply never arrives.
             let item = player.currentItem
             statusObs = item?.observe(\.status, options: [.new]) { [weak self, weak view] item, _ in
+                if item.status == .readyToPlay {
+                    VideoArtLog.note("item: ready, duration=\(item.duration.seconds.isFinite ? Int(item.duration.seconds) : -1)s")
+                }
                 guard item.status == .failed else { return }
                 let reason = item.error?.localizedDescription ?? "the video would not load"
+                if let error = item.error as NSError? {
+                    VideoArtLog.note("item: FAILED \(error.domain) \(error.code) — \(error.localizedDescription)"
+                        + (error.userInfo[NSUnderlyingErrorKey].map { " / under: \($0)" } ?? ""))
+                } else {
+                    VideoArtLog.note("item: FAILED with no error")
+                }
                 Task { @MainActor [weak self, weak view] in
                     guard let self else { return }
                     // The first address refused: the second one, once, before
                     // giving up on the picture for this song.
                     if !self.fellBack, video.alternate != nil, let view {
                         self.fellBack = true
+                        VideoArtLog.note("item: trying the alternate address")
                         self.stopWatching()
                         self.attach(to: view, video: video, fallingBack: true)
                         return
@@ -429,10 +472,33 @@ struct VideoArtView: UIViewRepresentable {
             }
             readyObs = view.playerLayer.observe(\.isReadyForDisplay, options: [.new]) { [weak self, weak player] layer, _ in
                 guard layer.isReadyForDisplay else { return }
+                VideoArtLog.note("layer: first frame, rate=\(player?.rate ?? -1)")
                 self?.watchdog?.cancel()
                 // The picture is up; from here it fetches well ahead of itself.
                 player?.currentItem?.preferredForwardBufferDuration = VideoArtPlayers.deepBuffer
                 Task { @MainActor [weak self] in self?.onFirstFrame() }
+            }
+            // The player's own account of itself, for the log: playing, paused,
+            // or waiting, and why.
+            controlObs = player.observe(\.timeControlStatus, options: [.new]) { player, _ in
+                let why = player.reasonForWaitingToPlay.map { " (\($0.rawValue))" } ?? ""
+                VideoArtLog.note("player: \(player.timeControlStatus.rawValue == 0 ? "paused" : player.timeControlStatus.rawValue == 1 ? "waiting" : "playing")\(why) rate=\(player.rate)")
+            }
+            // A stall is the buffer running dry. With the player's own waiting
+            // off, that leaves the rate at zero for good — so the buffer is
+            // watched, and play() is called again once it says it can keep up.
+            if let stallObs { NotificationCenter.default.removeObserver(stallObs) }
+            stallObs = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemPlaybackStalled, object: item, queue: .main,
+            ) { [weak self, weak player] _ in
+                self?.stalled = true
+                VideoArtLog.note("item: stalled at \(Int(player?.currentTime().seconds ?? 0))s")
+            }
+            keepUpObs = item?.observe(\.isPlaybackLikelyToKeepUp, options: [.new]) { [weak self, weak player] item, _ in
+                guard item.isPlaybackLikelyToKeepUp, let self, self.stalled else { return }
+                self.stalled = false
+                VideoArtLog.note("item: buffer back, \(self.wanted ? "playing again" : "left paused")")
+                if self.wanted { player?.play() }
             }
             // A few frames are looked at, spread out, for the black bands some
             // videos carry above and below the picture.
@@ -447,9 +513,13 @@ struct VideoArtView: UIViewRepresentable {
             }
 
             watchdog?.cancel()
-            watchdog = Task { [weak self, weak view] in
+            watchdog = Task { [weak self, weak view, weak player] in
                 try? await Task.sleep(nanoseconds: (self?.patience ?? 15) * 1_000_000_000)
                 guard !Task.isCancelled, let view, !view.playerLayer.isReadyForDisplay else { return }
+                let item = player?.currentItem
+                VideoArtLog.note("watchdog: no frame after 15s — itemStatus=\(item?.status.rawValue ?? -1) "
+                    + "bufferEmpty=\(item?.isPlaybackBufferEmpty ?? false) keepUp=\(item?.isPlaybackLikelyToKeepUp ?? false) "
+                    + "loaded=\(item?.loadedTimeRanges.count ?? 0) rate=\(player?.rate ?? -1)")
                 await MainActor.run { self?.onTrouble("The video never started playing") }
             }
 
@@ -477,29 +547,19 @@ struct VideoArtView: UIViewRepresentable {
             }
             guard let player else { return }
             defer { lastPosition = position }
+            wanted = isPlaying
 
             guard isPlaying else {
-                // Not by rate: a player waiting on its buffer has a rate of
-                // zero already, and left alone it would start up on its own
-                // the moment the buffer filled, under a song that is paused.
-                if player.timeControlStatus != .paused { player.pause() }
+                if player.rate != 0 { player.pause() }
                 return
             }
-            switch player.timeControlStatus {
-            case .paused:
-                player.playImmediately(atRate: 1)
-            case .waitingToPlayAtSpecifiedRate:
-                // Its buffer ran dry and it is filling it. Everything below
-                // would only get in the way — a seek now throws away what it
-                // has just fetched, and seeking every quarter second, as this
-                // used to while stalled, is why a stall was for good. It comes
-                // back by itself, and the drift it has by then is one jump.
-                return
-            case .playing:
-                break
-            @unknown default:
-                break
-            }
+            // Its buffer ran dry and it is filling it. Everything below would
+            // only get in the way — a seek now throws away what it has just
+            // fetched, and seeking every quarter second, as this used to while
+            // stalled, is why a stall was for good. The keep-up watcher starts
+            // it again, and the drift it has by then is one jump.
+            if stalled { return }
+            if player.rate == 0 { player.play() }
             guard player.currentItem?.status == .readyToPlay else { return }
 
             // The listener dragged the progress bar. Both kinds of picture have
@@ -616,8 +676,13 @@ struct VideoArtView: UIViewRepresentable {
         private func stopWatching() {
             if let endObs { NotificationCenter.default.removeObserver(endObs) }
             endObs = nil
+            if let stallObs { NotificationCenter.default.removeObserver(stallObs) }
+            stallObs = nil
             statusObs = nil
             readyObs = nil
+            controlObs = nil
+            keepUpObs = nil
+            stalled = false
             watchdog?.cancel()
             watchdog = nil
             bandsLook?.cancel()
