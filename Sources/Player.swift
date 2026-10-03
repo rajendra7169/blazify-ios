@@ -924,6 +924,30 @@ final class Player: ObservableObject {
         }
     }
 
+    /// Start a radio from a song: it plays, and what follows is songs like it.
+    ///
+    /// The queue becomes this song and then its neighbours, rather than being
+    /// appended to — "start radio" on a song in the middle of an album means
+    /// leave the album behind, not play the rest of it first.
+    func startRadio(from track: Track) {
+        // An imported file has no catalogue id, so there is no radio to build
+        // from it — asking would only spin the loading state on a doomed call.
+        guard !LocalMusic.isLocal(track.videoId), !track.videoId.isEmpty else { return }
+        play([track], startAt: 0)
+        Task { @MainActor in
+            let shelves = await YouTube.related(videoId: track.videoId)
+            let fresh = shelves
+                .flatMap(\.items)
+                .filter { $0.browseId == nil }
+                .map(\.asTrack)
+                .filter { !$0.videoId.isEmpty && $0.videoId != track.videoId }
+            guard !fresh.isEmpty, self.current?.videoId == track.videoId else { return }
+            self.queue.append(contentsOf: fresh)
+            self.originalQueue = self.queue
+            self.saveQueue()
+        }
+    }
+
     /// Pull the last song's related tracks in and carry on playing.
     private func extendWithRadio(from track: Track) {
         // An imported file has no catalogue id, so there's no radio to build
