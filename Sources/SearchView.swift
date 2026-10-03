@@ -36,6 +36,9 @@ struct SearchView: View {
     @State private var suggestions: [String] = []
     @State private var suggestedSongs: [Track] = []
     @State private var moods: [MoodItem] = []
+    @ObservedObject private var taste = GenreTaste.shared
+    /// Every genre, or only the listener's own and a few more.
+    @State private var showAllGenres = false
     @State private var searching = false
     @State private var didSearch = false
     /// Cancels an in-flight suggestion fetch when another keystroke lands.
@@ -104,6 +107,9 @@ struct SearchView: View {
         .task {
             if moods.isEmpty { moods = await YouTube.moods() }
             browseArt.warm(for: moods)
+            // Reads the genre pages through, once a day, to learn which of
+            // them are this listener's. See GenreTaste.
+            await taste.refresh(moods)
         }
     }
 
@@ -187,19 +193,61 @@ struct SearchView: View {
         }
 
         if !moods.isEmpty {
+            let tiles = taste.order(moods)
+            let moodTiles = tiles.filter { !$0.isGenre }
+            let genreTiles = tiles.filter(\.isGenre)
+            // The listener's own genres, and a little beyond them — never fewer
+            // than a few rows, so somebody with no history yet still has
+            // somewhere to go. The rest are a tap away rather than a page of
+            // languages nobody here has played.
+            let shown = showAllGenres ? genreTiles.count : max(6, min(genreTiles.count, taste.count(of: genreTiles) + 2))
+            let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+
             Text("Browse")
                 .font(.blaze(18, .bold))
                 .foregroundStyle(palette.onSurface)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
-                                GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                ForEach(moods.prefix(12)) { mood in
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(moodTiles) { mood in
                     browseTile(mood)
                 }
             }
             .padding(.horizontal, 16)
+
+            if !genreTiles.isEmpty {
+                Text("Genres")
+                    .font(.blaze(18, .bold))
+                    .foregroundStyle(palette.onSurface)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 22)
+                    .padding(.bottom, 10)
+
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(genreTiles.prefix(shown)) { genre in
+                        browseTile(genre)
+                    }
+                }
+                .padding(.horizontal, 16)
+
+                if genreTiles.count > 6 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) { showAllGenres.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(showAllGenres ? "Fewer genres" : "All genres")
+                            Image(systemName: showAllGenres ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .font(.blaze(14, .semibold))
+                        .foregroundStyle(palette.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         } else if history.queries.isEmpty {
             Text("Search for a song, artist or album")
                 .font(.blaze(14))
@@ -255,6 +303,9 @@ struct SearchView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
+        // Watched, not taken: the link still opens the page; this only notes
+        // that a genre was chosen by hand, which counts towards its place.
+        .simultaneousGesture(TapGesture().onEnded { taste.noteOpened(mood) })
     }
 
     /// Where each fanned cover sits and how far it leans, measured from the tile's
