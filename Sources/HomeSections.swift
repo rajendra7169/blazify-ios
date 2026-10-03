@@ -220,6 +220,12 @@ struct HomeSectionScreen: View {
     @State private var loading = true
     @State private var next: String?
     @State private var extending = false
+    @ObservedObject private var downloads = Downloads.shared
+
+    /// What a shelf of songs is topped up to when the service offers no page of
+    /// its own. Enough to be worth opening, few enough not to spend somebody's
+    /// evening fetching a list they only wanted to glance at.
+    private let wanted = 50
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
 
@@ -326,9 +332,31 @@ struct HomeSectionScreen: View {
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+
+            // Keeps the whole shelf, skipping whatever is already kept — a
+            // button that re-downloads forty songs to add the one that is
+            // missing is a button nobody presses twice.
+            Button {
+                for track in songs where downloads.state(track.videoId) == .none {
+                    downloads.download(track)
+                }
+            } label: {
+                label(allKept ? "checkmark.circle.fill" : "arrow.down.circle",
+                      allKept ? "Downloaded" : "Download all")
+                    .foregroundStyle(allKept ? Blaze.amber : palette.onSurface)
+                    .background(palette.onSurface.opacity(0.10))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(allKept)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
+    }
+
+    /// True once every song here is on the phone.
+    private var allKept: Bool {
+        !songs.isEmpty && songs.allSatisfy { downloads.state($0.videoId) == .done }
     }
 
     private func label(_ icon: String, _ text: String) -> some View {
@@ -344,7 +372,10 @@ struct HomeSectionScreen: View {
         // What is already on screen shows at once; the full shelf replaces it.
         await MainActor.run { if items.isEmpty { items = section.items } }
         guard let browseId = section.browseId, !browseId.isEmpty else {
+            // No endpoint behind this row at all — which is the very case the
+            // top-up exists for, so it must not be skipped on the way out.
             await MainActor.run { loading = false }
+            await topUp()
             return
         }
         let page = await YouTube.shelfPage(browseId: browseId, params: section.params)
@@ -352,6 +383,49 @@ struct HomeSectionScreen: View {
             if !page.items.isEmpty { items = page.items }
             next = page.next
             loading = false
+        }
+        await topUp()
+    }
+
+    /// Fill out a shelf the service has no page for.
+    ///
+    /// Rows like "Keep listening" are assembled for the home screen and have no
+    /// endpoint behind them, so opening one showed exactly the handful that had
+    /// already fitted across the screen — a "see all" that showed no more than
+    /// the row it came from. Where there is nothing more to ask for, songs like
+    /// the ones already here are the honest answer: each seed contributes its
+    /// neighbours until the page is worth having.
+    ///
+    /// Only for shelves that are songs. A row of albums topped up with loose
+    /// tracks would be a different row by the end of it.
+    private func topUp() async {
+        guard next == nil, isSongList, items.count < wanted else { return }
+        await MainActor.run { extending = true }
+
+        var gathered = items
+        var known = Set(items.compactMap(\.videoId))
+        // The first few, not all of them: each seed is a request, and the point
+        // is a fuller page rather than an exhaustive one.
+        for seed in items.prefix(4) {
+            guard gathered.count < wanted, let id = seed.videoId, !id.isEmpty else { break }
+            let shelves = await YouTube.related(videoId: id)
+            let fresh = shelves
+                .flatMap(\.items)
+                .filter { $0.browseId == nil }
+                .filter { item in
+                    guard let v = item.videoId, !v.isEmpty else { return false }
+                    return !known.contains(v)
+                }
+            for item in fresh where gathered.count < wanted {
+                if let v = item.videoId { known.insert(v) }
+                gathered.append(item)
+            }
+        }
+
+        let found = gathered
+        await MainActor.run {
+            items = found
+            extending = false
         }
     }
 
