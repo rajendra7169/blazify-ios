@@ -160,6 +160,10 @@ struct PlayerSettingsView: View {
                                subtitle: "Save a song offline when you favourite it",
                                isOn: $prefs.autoDownloadOnLike)
                 SettingsDivider()
+                SettingsToggle(symbol: "wifi", title: "Download on Wi-Fi only",
+                               subtitle: "An album is a few hundred megabytes",
+                               isOn: $prefs.downloadOnWifiOnly)
+                SettingsDivider()
                 SettingsToggle(symbol: "sun.max", title: "Keep the screen on",
                                subtitle: "While the full player is open",
                                isOn: $prefs.keepScreenOn)

@@ -51,6 +51,11 @@ final class PlaybackPrefs: ObservableObject {
     /// jumps. Ten seconds is Android's default and the one most players use.
     @Published var seekSeconds: Int { didSet { save(Double(seekSeconds), "seekAmountSeconds") } }
 
+    /// Keep downloads off mobile data. A song is a few megabytes and an album
+    /// is a few hundred, which is somebody's data allowance rather than an
+    /// inconvenience.
+    @Published var downloadOnWifiOnly: Bool { didSet { save(downloadOnWifiOnly, "downloadOnWifiOnly") } }
+
     /// Video Art is a video, which costs far more than a picture — off on mobile
     /// data until it is asked for.
     @Published var videoOnMobile: Bool { didSet { save(videoOnMobile, "videoOnMobile") } }
@@ -89,6 +94,10 @@ final class PlaybackPrefs: ObservableObject {
         loudnessTarget = number("loudnessLevel", -14)   // Android's default LUFS target
         speed = number("playbackSpeed", 1)
         seekSeconds = Int(number("seekAmountSeconds", 10))
+        // Off by default, as on Android: a setting that silently stops
+        // downloads working would be reported as a bug, not noticed as a
+        // kindness.
+        downloadOnWifiOnly = flag("downloadOnWifiOnly", false)
         preservePitch = flag("preservePitch", true)
         gapless = flag("gaplessPlayback", true)
         crossfade = flag("crossfadeEnabled", false)

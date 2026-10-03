@@ -234,6 +234,11 @@ final class Downloads: ObservableObject {
         var req = URLRequest(url: url)
         req.setValue(YouTube.visionUA, forHTTPHeaderField: "User-Agent")
         req.setValue("bytes=\(from)-\(to)", forHTTPHeaderField: "Range")
+        // Set per request rather than on the session, which is built once and
+        // shared: a setting changed while the app is running has to take effect
+        // on the next download, not on the next launch. With this off, iOS
+        // fails the request rather than quietly using mobile data.
+        req.allowsCellularAccess = !PlaybackPrefs.shared.downloadOnWifiOnly
         let (data, response) = try await session.data(for: req)
         var total = data.count
         if let http = response as? HTTPURLResponse,
