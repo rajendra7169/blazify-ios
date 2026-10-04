@@ -15,6 +15,17 @@ enum ImageCache {
         return c
     }()
 
+    /// Fetches and decodes an image ahead of the view that will ask for it,
+    /// under the key that view will use — the URL at the size it names, with
+    /// no draw size given. For the player's cover of the song after this one.
+    static func prefetch(_ url: URL?) async {
+        guard let target = ThumbSize.url(url, points: nil), !target.isFileURL else { return }
+        let key = "\(target.absoluteString)|0" as NSString
+        guard store.object(forKey: key) == nil else { return }
+        guard let data = await ArtFetch.data(from: target), let decoded = UIImage(data: data) else { return }
+        store.setObject(decoded, forKey: key, cost: Int(decoded.size.width * decoded.size.height * 4))
+    }
+
     /// Disk-backed URL cache so art survives an app relaunch. Google serves
     /// these with long cache headers, so URLSession honours them for us.
     static func configureDiskCache() {
@@ -76,6 +87,10 @@ struct RemoteImage<Placeholder: View>: View {
     /// Crop to fill, or letterbox the whole image in. Appearance → Fill the
     /// artwork frame flips this on the player.
     var fill = true
+    /// Fade from one picture to the next instead of cutting. For the player's
+    /// cover, which changes on every skip in front of whoever pressed it; a
+    /// row in a list that scrolls is better off with the cut.
+    var crossfade = false
     @ViewBuilder var placeholder: () -> Placeholder
 
     @State private var image: UIImage?
@@ -94,10 +109,13 @@ struct RemoteImage<Placeholder: View>: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: fill ? .fill : .fit)
+                    .id(ObjectIdentifier(image))
+                    .transition(.opacity)
             } else {
                 placeholder()
             }
         }
+        .animation(crossfade ? Animation.easeInOut(duration: 0.3) : nil, value: image.map { ObjectIdentifier($0) })
         .task(id: "\(resolved?.absoluteString ?? "")|\(decodePixels)") { await load() }
     }
 

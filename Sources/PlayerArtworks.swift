@@ -32,7 +32,7 @@ struct SquareArtwork: View {
                 ArtPlaceholder()
             } else {
                 RemoteImage(url: player.current?.artURL(size: 1080),
-                            fill: look.cropAlbumArt) { ArtPlaceholder() }
+                            fill: look.cropAlbumArt, crossfade: true) { ArtPlaceholder() }
             }
         }
         .frame(width: side, height: side)

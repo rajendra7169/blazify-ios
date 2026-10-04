@@ -1217,6 +1217,11 @@ final class Player: ObservableObject {
             await LyricsCache.shared.warm(videoId: vid, title: next.title,
                                           artist: next.artist, duration: next.duration)
         }
+        // And its cover at the size the player draws it. The skip is instant
+        // now, and the one thing that still arrived late was the picture: the
+        // old cover stayed up until the new one had downloaded, which was
+        // about when the clock started.
+        Task.detached { await ImageCache.prefetch(next.artURL(size: 1080)) }
     }
 
     /// Fetch the current song's lyrics in the background, so the lyrics pane
@@ -1616,10 +1621,16 @@ final class Player: ObservableObject {
         artColor = Blaze.amber
         loadArtwork(track.thumbnailURL)
 
+        // The position goes back to nought BEFORE the new length is set, as a
+        // load does it: the other way round drew the last song's position
+        // against this song's length for a frame — a bar that leapt and fell
+        // back on every skip, now that a skip is instant. The observer brings
+        // the real position a quarter of a second later.
+        //
         // Never `player.currentItem.duration` — that is precisely the doubled
         // figure this whole dance exists to avoid.
+        currentTime = 0
         duration = realDuration > 0 ? realDuration : track.duration
-        currentTime = player.currentTime().seconds
         isPlaying = true
 
         countPlay(track)

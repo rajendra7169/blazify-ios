@@ -564,9 +564,21 @@ struct VideoArtView: UIViewRepresentable {
             // Its buffer ran dry and it is filling it. Everything below would
             // only get in the way — a seek now throws away what it has just
             // fetched, and seeking every quarter second, as this used to while
-            // stalled, is why a stall was for good. The keep-up watcher starts
-            // it again, and the drift it has by then is one jump.
-            if stalled { return }
+            // stalled, is why a stall was for good. It is let go the moment the
+            // item has something again — asked here, every tick, and not only
+            // by the keep-up watcher: a stall that follows one of this loop's
+            // own exact seeks arrives with "likely to keep up" already true, so
+            // the watcher had nothing to notice, and the picture stood still
+            // two minutes into a forty-minute song, for good.
+            if stalled {
+                guard let item = player.currentItem,
+                      item.isPlaybackLikelyToKeepUp || item.isPlaybackBufferFull || !item.isPlaybackBufferEmpty
+                else { return }
+                stalled = false
+                VideoArtLog.note("item: buffer back at \(Int(player.currentTime().seconds))s, playing again")
+                player.play()
+                return
+            }
             if player.rate == 0 { player.play() }
             guard player.currentItem?.status == .readyToPlay else { return }
 
