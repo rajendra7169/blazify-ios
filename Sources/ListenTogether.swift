@@ -47,7 +47,10 @@ final class ListenTogether: ObservableObject {
     private var applyingRemote = false
 
  /// Blazify the default room server.
-    static let defaultServer = "wss://metroserverx.meowery.eu/ws"
+    /// Blazify's own server. The community server it borrowed until now
+    /// allows only clients on its list to host rooms, and since September
+    /// Blazify was not on it: every "Create room" was refused.
+    static let defaultServer = "wss://blazify-together.onrender.com/ws"
 
     /// Whatever the Together settings say, falling back to the default.
     private var serverURL: URL {
