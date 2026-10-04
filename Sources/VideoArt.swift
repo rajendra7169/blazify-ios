@@ -90,14 +90,21 @@ actor SongVideos {
         VideoArtLog.note("lookup: \"\(query)\" → \(results.count) results, \(official.count) official")
         guard !official.isEmpty else { return nil }
 
-        // The same cut as the song follows it in step; a different cut runs on its own.
-        let sameCut = official.first {
-            track.duration > 0 && $0.duration > 0 && abs($0.duration - track.duration) <= sameCutSeconds
-        }
-        let candidate = sameCut ?? official[0]
+        // The official video closest in length to the song, rather than the
+        // first one found. An album track is often longer than its video —
+        // a 6:50 song with videos of 5:03 and 6:24 — and the first result was
+        // the short one, which ended with most of the song still to go. The
+        // same length as the song follows it in step; any other length runs
+        // on its own and goes round again when it ends.
+        let closest = track.duration > 0
+            ? official.min { abs($0.duration - track.duration) < abs($1.duration - track.duration) }
+            : nil
+        let candidate = closest ?? official[0]
+        let synced = closest.map { $0.duration > 0 && abs($0.duration - track.duration) <= sameCutSeconds } ?? false
+        VideoArtLog.note("lookup: chose \(candidate.videoId) (\(Int(candidate.duration))s for a \(Int(track.duration))s song, \(synced ? "in step" : "its own cut"))")
         guard let found = await YouTube.videoStream(for: candidate.videoId, maxHeight: maxHeight)
         else { return nil }
-        return SongVideo(videoId: candidate.videoId, url: found.url, synced: sameCut != nil,
+        return SongVideo(videoId: candidate.videoId, url: found.url, synced: synced,
                          maxHeight: maxHeight, alternate: found.alternate)
     }
 }
