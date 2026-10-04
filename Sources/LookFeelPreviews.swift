@@ -37,9 +37,13 @@ struct LookFeelThemePreview: View {
             navBar
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 10)
- // Room for the frame's notch, which the frame draws above this.
-        .padding(.top, 8)
+        // Room for the frame's notch, which the frame draws over this at its
+        // own size while this is scaled to fit: at the smallest frame the old
+        // 18pt here shrank to 14 and the notch sat on the wordmark. And the
+        // bar below ends close to the bottom edge, as the real one does, not
+        // a strip above it.
+        .padding(.top, 30)
+        .padding(.bottom, 5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.scaffold)
     }

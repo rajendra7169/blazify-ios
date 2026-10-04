@@ -45,7 +45,21 @@ struct PlayerDesignPicker: View {
         }
         .background(Blaze.scaffold.ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .onAppear { current = PlayerDesign(rawValue: activeID) ?? .classic }
+        .onAppear {
+            current = PlayerDesign(rawValue: activeID) ?? .classic
+            // The Video Art page is the last of six; by the time it is swiped
+            // to, its picture should be found and a little of it fetched. Left
+            // to the page itself, the first look at it was a few seconds of
+            // black while the lookup and the fetch ran from nothing.
+            if let track = player.current,
+               Reachability.shared.isUnmetered || PlaybackPrefs.shared.videoOnMobile {
+                let height = Reachability.shared.isUnmetered ? 480 : 360
+                Task {
+                    guard let found = await SongVideos.shared.forSong(track, maxHeight: height) else { return }
+                    await MainActor.run { VideoArtPlayers.shared.prepare(found) }
+                }
+            }
+        }
     }
 
     private var topBar: some View {
@@ -623,6 +637,22 @@ private struct CassettePreview: View {
     }
 }
 
+/// The song's cover, from the player's own copy when it has one — at once,
+/// rather than black while a size nothing had cached is fetched.
+private struct PreviewCover: View {
+    @ObservedObject var player: Player
+
+    var body: some View {
+        if let image = player.artworkImage {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            RemoteImage(url: player.current?.artURL(size: 720)) { Color.black }
+        }
+    }
+}
+
 private struct VideoArtPreview: View {
     @ObservedObject var player: Player
     /// The same lookup the player itself uses, so the mock shows the moving
@@ -635,7 +665,7 @@ private struct VideoArtPreview: View {
         ZStack {
             GeometryReader { g in
                 ZStack {
-                    RemoteImage(url: player.current?.artURL(size: 720)) { Color.black }
+                    PreviewCover(player: player)
                         .frame(width: g.size.width, height: g.size.height)
                         .clipped()
 
@@ -707,7 +737,7 @@ private struct FullArtPreview: View {
             // Explicit size: RemoteImage fills to its natural size otherwise and
             // would burst out of the phone frame.
             GeometryReader { g in
-                RemoteImage(url: player.current?.artURL(size: 720)) { Color.black }
+                PreviewCover(player: player)
                     .frame(width: g.size.width, height: g.size.height)
                     .clipped()
             }

@@ -169,6 +169,10 @@ final class Player: ObservableObject {
     private var preparedVideoId: String?
     private var endHandled = false
     private var artwork: MPMediaItemArtwork?
+    /// The same cover, as a picture, for a screen that wants it at once —
+    /// the design previews showed black while they fetched a size of their
+    /// own that nothing had cached, with this already in hand.
+    @Published private(set) var artworkImage: UIImage?
 
     init() {
         configureSession()
@@ -1119,6 +1123,7 @@ final class Player: ObservableObject {
         endHandled = false
         lastError = nil
         artwork = nil
+        artworkImage = nil
         artColor = Blaze.amber
         loadArtwork(track.thumbnailURL)
         updateNowPlaying()
@@ -1607,6 +1612,7 @@ final class Player: ObservableObject {
         isLoading = false
         lastError = nil
         artwork = nil
+        artworkImage = nil
         artColor = Blaze.amber
         loadArtwork(track.thumbnailURL)
 
@@ -1864,6 +1870,7 @@ final class Player: ObservableObject {
         if url.isFileURL {
             guard let data = try? Data(contentsOf: url), let img = UIImage(data: data) else { return }
             artwork = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
+            artworkImage = img
             artColor = img.gradientSeed
             AppTheme.shared.setArtworkSeed(img.gradientSeed)
             updateNowPlaying()
@@ -1875,6 +1882,7 @@ final class Player: ObservableObject {
             let seed = img.gradientSeed
             DispatchQueue.main.async {
                 self.artwork = art
+                self.artworkImage = img
                 self.artColor = seed
                 AppTheme.shared.setArtworkSeed(seed)
                 self.updateNowPlaying()
