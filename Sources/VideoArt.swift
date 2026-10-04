@@ -481,13 +481,19 @@ struct VideoArtView: UIViewRepresentable {
                     self.onTrouble(reason)
                 }
             }
-            readyObs = view.playerLayer.observe(\.isReadyForDisplay, options: [.new]) { [weak self, weak player] layer, _ in
+            readyObs = view.playerLayer.observe(\.isReadyForDisplay, options: [.new]) { [weak self, weak player, weak view] layer, _ in
                 guard layer.isReadyForDisplay else { return }
                 VideoArtLog.note("layer: first frame, rate=\(player?.rate ?? -1)")
                 self?.watchdog?.cancel()
                 // The picture is up; from here it fetches well ahead of itself.
                 player?.currentItem?.preferredForwardBufferDuration = VideoArtPlayers.deepBuffer
-                Task { @MainActor [weak self] in self?.onFirstFrame() }
+                Task { @MainActor [weak self, weak view] in
+                    self?.onFirstFrame()
+                    // The looks for black bands start from here, as on Android —
+                    // counted from the attach they began before there was a frame
+                    // to look at, and the early ones found nothing.
+                    if let view { self?.startBandLooks(in: view) }
+                }
             }
             // The player's own account of itself, for the log: playing, paused,
             // or waiting, and why.
@@ -511,17 +517,8 @@ struct VideoArtView: UIViewRepresentable {
                 VideoArtLog.note("item: buffer back, \(self.wanted ? "playing again" : "left paused")")
                 if self.wanted { player?.play() }
             }
-            // A few frames are looked at, spread out, for the black bands some
-            // videos carry above and below the picture.
             self.bands = 1
             bandsLook?.cancel()
-            bandsLook = Task { [weak self, weak view] in
-                for wait in [0.4, 1.2, 2.0, 4.0, 8.0] {
-                    try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
-                    guard !Task.isCancelled, let self, let view else { return }
-                    await self.lookForBands(in: view)
-                }
-            }
 
             watchdog?.cancel()
             watchdog = Task { [weak self, weak view, weak player] in
@@ -619,22 +616,54 @@ struct VideoArtView: UIViewRepresentable {
             placed = true
         }
 
-        /// Reads one frame and, if it has bands, brings the picture in past them.
+        /// A few frames are looked at, spread out, for the black bands some
+        /// videos carry above and below the picture — a cinema-shaped film in
+        /// a television-shaped frame. The thinnest bands seen are kept, so one
+        /// dark scene is not taken for bands.
         @MainActor
-        private func lookForBands(in view: PlayerContainerView) {
-            guard let output, let player else { return }
-            let time = player.currentTime()
+        private func startBandLooks(in view: PlayerContainerView) {
+            bandsLook?.cancel()
+            bandsLook = Task { [weak self, weak view] in
+                for wait in [0.3, 1.0, 2.0, 4.0, 8.0] {
+                    try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                    guard !Task.isCancelled, let self, let view else { return }
+                    await self.lookForBands(in: view)
+                }
+            }
+        }
+
+        /// Reads one frame and, if it has bands, brings the picture in past them.
+        ///
+        /// The frame output goes to sleep when nobody has asked it for a frame
+        /// in a while — and between looks nobody has — after which it answers
+        /// that there is nothing new, for good. So it is asked to wake first,
+        /// given a moment, and read at the time it says is current. This is why
+        /// the bands were found on Android and not here: the same video, the
+        /// same arithmetic, and an output that had stopped handing out frames.
+        @MainActor
+        private func lookForBands(in view: PlayerContainerView) async {
+            self.output?.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.1)
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled, let output = self.output else { return }
+            let time = output.itemTime(forHostTime: CACurrentMediaTime())
             guard output.hasNewPixelBuffer(forItemTime: time),
                   let buffer = output.copyPixelBuffer(forItemTime: time,
                                                       itemTimeForDisplay: nil)
-            else { return }
+            else {
+                VideoArtLog.note("bands: no frame to read at \(Int(time.seconds))s")
+                return
+            }
 
             guard let rows = Self.brightness(of: buffer),
                   let share = Letterbox.share(rows: rows)
-            else { return }
+            else {
+                VideoArtLog.note("bands: frame too dark to judge at \(Int(time.seconds))s")
+                return
+            }
 
             bands = min(bands, share)
             let zoom = Letterbox.zoom(for: bands == 1 ? 0 : bands)
+            VideoArtLog.note("bands: \(Int(share * 100))% at \(Int(time.seconds))s, least \(Int(bands * 100))% → zoom \(String(format: "%.2f", zoom))")
             guard abs(view.playerLayer.transform.m11 - CGFloat(zoom)) > 0.001 else { return }
             CATransaction.begin()
             CATransaction.setAnimationDuration(0.6)
