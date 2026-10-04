@@ -880,7 +880,9 @@ final class Player: ObservableObject {
             guard let found = await SongVideos.shared.forSong(track, maxHeight: height) else { return }
             // Finding the address is two small requests; fetching the picture
             // is not, and waits until the song has some seconds in hand.
-            await self?.waitUntilSongComfortable()
+            // A short wait, not the full one: a few seconds of song in hand is
+            // enough for the picture's first second to be fetched beside it.
+            await self?.waitUntilSongComfortable(upTo: 4)
             await MainActor.run { VideoArtPlayers.shared.prepare(found) }
         }
 

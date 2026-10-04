@@ -230,30 +230,41 @@ enum YouTube {
     static func videoStream(for videoId: String, maxHeight: Int) async -> (url: URL, alternate: URL?)? {
         let visitor = await visitorData()
         let preferred = await MainActor.run { StreamPrefs.shared.order }
-        // The iOS client last, whatever the order for songs. Putting it first
-        // was a mistake made from a desk: it answers for every video, and the
-        // file addresses it hands out play from here — and on the phone the
-        // video server refuses every one of them, 403, while the addresses the
-        // other two clients hand out play. The log from the phone was the
-        // proof. So the two that are known to play are asked first, and the
-        // iOS client only for the label videos they will not answer for.
         let clients = preferred.filter { $0 != .ios } + [StreamClient.ios]
 
-        for client in clients {
-            var context = client.context
-            if let visitor { context["visitorData"] = visitor }
-            let body: [String: Any] = [
-                "context": ["client": context],
-                "videoId": videoId,
-                "contentCheckOk": true, "racyCheckOk": true,
-            ]
-            var answer = await post(musicPlayer, name: client.number, version: client.version,
-                                    userAgent: client.userAgent, visitor: visitor, body: body)
-            if refusedWithoutSignIn(answer), Auth.shared.isLoggedIn {
-                answer = await post(musicPlayer, name: client.number, version: client.version,
-                                    userAgent: client.userAgent, visitor: visitor,
-                                    body: body, login: true)
+        // All three clients are asked at once and the answers taken in the
+        // order of preference. Asked one after another, a label's video — the
+        // common music video — cost two refusals, each a round trip and each
+        // retried with the account, before the client that says yes was
+        // reached: several seconds of a fourteen-second wait for a picture
+        // that Android shows in two.
+        let answers = await withTaskGroup(of: (Int, [String: Any]?).self) { group -> [Int: [String: Any]?] in
+            for (at, client) in clients.enumerated() {
+                group.addTask {
+                    var context = client.context
+                    if let visitor { context["visitorData"] = visitor }
+                    let body: [String: Any] = [
+                        "context": ["client": context],
+                        "videoId": videoId,
+                        "contentCheckOk": true, "racyCheckOk": true,
+                    ]
+                    var answer = await post(musicPlayer, name: client.number, version: client.version,
+                                            userAgent: client.userAgent, visitor: visitor, body: body)
+                    if refusedWithoutSignIn(answer), Auth.shared.isLoggedIn {
+                        answer = await post(musicPlayer, name: client.number, version: client.version,
+                                            userAgent: client.userAgent, visitor: visitor,
+                                            body: body, login: true)
+                    }
+                    return (at, answer)
+                }
             }
+            var out: [Int: [String: Any]?] = [:]
+            for await (at, answer) in group { out[at] = answer }
+            return out
+        }
+
+        for (at, client) in clients.enumerated() {
+            let answer = answers[at] ?? nil
             let status = (answer?["playabilityStatus"] as? [String: Any])
             VideoArtLog.note("stream: \(client.rawValue) for \(videoId) → "
                 + "\(answer == nil ? "no answer" : (status?["status"] as? String ?? "?"))"
@@ -270,11 +281,8 @@ enum YouTube {
             }
 
             // The biggest picture that still fits the cap — anything taller is
-            // data spent on detail this screen cannot show.
-            //
-            // H.264 only. An mp4 can also carry AV1, which most iPhones cannot
-            // decode: the sound plays on and the picture stays black, which is
-            // the worst way for this to fail.
+            // data spent on detail this screen cannot show. H.264 only: an mp4
+            // can also carry AV1, which most iPhones cannot decode.
             var best: [String: Any]?
             var bestHeight = -1
             for f in formats {

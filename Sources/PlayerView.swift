@@ -508,13 +508,14 @@ struct PlayerView: View {
     @State private var videoWaitingSince: Date?
 
     /// The song first, then the picture — but never no picture. If the song
-    /// has not got comfortable within a few seconds, whatever the reason, the
+    /// has not got comfortable within three seconds, whatever the reason, the
     /// picture is asked for anyway: a late picture is a small thing, and a
-    /// gate that never opens is the design not working at all.
+    /// gate that never opens is the design not working at all. Three, not
+    /// eight: the eight were most of a fourteen-second wait for a picture.
     private func loadVideoIfComfortable() {
         guard videoWanted, design == .video else { return }
         let waited = videoWaitingSince.map { Date().timeIntervalSince($0) } ?? 0
-        guard player.songComfortable || waited >= 8 else {
+        guard player.songComfortable || waited >= 3 else {
             if videoWaitingSince == nil {
                 videoWaitingSince = Date()
                 VideoArtLog.note("gate: waiting for the song — loading=\(player.isLoading) "

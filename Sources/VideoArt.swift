@@ -536,9 +536,14 @@ struct VideoArtView: UIViewRepresentable {
             endObs = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem, queue: .main,
-            ) { [weak player] _ in
+            ) { [weak self, weak player] _ in
                 let length = player?.currentItem?.duration.seconds ?? 0
                 let from = length.isFinite && length > 0 ? min(6, length / 4) : 0
+                VideoArtLog.note("item: reached its end at \(Int(length))s, going round again from \(Int(from))s")
+                // The buffer is empty at the end of a file, which is what a
+                // stall looks like; a stall flag left set here held the sync
+                // loop back from the restart.
+                self?.stalled = false
                 player?.seek(to: CMTime(seconds: from, preferredTimescale: 600))
                 player?.play()
             }
@@ -571,8 +576,10 @@ struct VideoArtView: UIViewRepresentable {
             // the watcher had nothing to notice, and the picture stood still
             // two minutes into a forty-minute song, for good.
             if stalled {
-                guard let item = player.currentItem,
-                      item.isPlaybackLikelyToKeepUp || item.isPlaybackBufferFull || !item.isPlaybackBufferEmpty
+                guard let item = player.currentItem else { return }
+                let length = item.duration.seconds
+                let atEnd = length.isFinite && length > 0 && player.currentTime().seconds >= length - 0.5
+                guard item.isPlaybackLikelyToKeepUp || item.isPlaybackBufferFull || !item.isPlaybackBufferEmpty || atEnd
                 else { return }
                 stalled = false
                 VideoArtLog.note("item: buffer back at \(Int(player.currentTime().seconds))s, playing again")
@@ -589,6 +596,16 @@ struct VideoArtView: UIViewRepresentable {
 
             guard video.synced else {
                 if !placed || moved { place(player, at: position, songLength: songLength) }
+                // Shorter than the song: round again. The end notice does this
+                // too; this catches an end the notice never announced.
+                let length = player.currentItem?.duration.seconds ?? 0
+                let at = player.currentTime().seconds
+                if length.isFinite, length > 1, at.isFinite, at >= length - 0.25, player.rate == 0 {
+                    let from = min(6, length / 4)
+                    VideoArtLog.note("item: at its end (\(Int(at))/\(Int(length))s) with no notice, going round again")
+                    player.seek(to: CMTime(seconds: from, preferredTimescale: 600))
+                    player.play()
+                }
                 return
             }
 
@@ -658,11 +675,12 @@ struct VideoArtView: UIViewRepresentable {
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled, let output = self.output else { return }
             let time = output.itemTime(forHostTime: CACurrentMediaTime())
-            guard output.hasNewPixelBuffer(forItemTime: time),
-                  let buffer = output.copyPixelBuffer(forItemTime: time,
-                                                      itemTimeForDisplay: nil)
-            else {
-                VideoArtLog.note("bands: no frame to read at \(Int(time.seconds))s")
+            // Asked outright. The "has a new buffer" check that gated this
+            // answered no on some phones while the picture was plainly moving,
+            // and the look was skipped; a copy that comes back empty says the
+            // same thing without the gate.
+            guard let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) else {
+                VideoArtLog.note("bands: no frame to read at \(Int(time.seconds))s (new=\(output.hasNewPixelBuffer(forItemTime: time)))")
                 return
             }
 
