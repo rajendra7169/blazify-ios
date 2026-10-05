@@ -40,6 +40,7 @@ struct PlaylistView: View {
     }
 
     var body: some View {
+        ScrollViewReader { scroller in
         ScrollView {
             VStack(spacing: 16) {
                 RemoteImage(url: item.thumbnailURL, size: 220) {
@@ -126,6 +127,7 @@ struct PlaylistView: View {
                             SongRow(track: pair.element, player: player) {
                                 player.play(tracks, startAt: pair.offset)
                             }
+                            .id(pair.element.videoId)
                             .padding(.leading, 16)
                             .padding(.vertical, 6)
                             .buttonStyle(.plain)
@@ -161,6 +163,16 @@ struct PlaylistView: View {
             Text(notice ?? "")
         }
         .task { await load() }
+        // Opens on the playing song once the songs are in, when it is one of
+        // them. A moment's wait: a lazy list scrolled before it has laid
+        // itself out lands somewhere near, not on, the row.
+        .onChange(of: loading) {
+            guard !loading, let id = player.current?.videoId, tracks.contains(where: { $0.videoId == id }) else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                scroller.scrollTo(id, anchor: .center)
+            }
+        }
+        }
     }
 
     private func actionButton(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {

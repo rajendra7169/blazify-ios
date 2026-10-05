@@ -57,7 +57,6 @@ struct SongListScreen: View {
     @State private var query = ""
     @State private var showMenu = false
     @State private var showShare = false
-    @StateObject private var rows = VisibleRows()
     /// The song whose ⋮ menu asked for Add to playlist.
     @State private var playlistTrack: Track?
     /// Artist opened from a song's ⋮ menu.
@@ -134,7 +133,6 @@ struct SongListScreen: View {
                     // So the pill knows whether the playing song is on screen,
                     // and has somewhere to scroll back to.
                     .id(track.videoId)
-                    .tracksVisibility(track.videoId, in: rows)
                 }
 
                 if shown.isEmpty {
@@ -167,15 +165,15 @@ struct SongListScreen: View {
             }
             .playerBottomPadding()
         }
-        .overlay(alignment: .bottom) {
-            JumpToPlayingButton(target: player.current?.videoId,
-                                isVisible: rows.contains(player.current?.videoId)) {
-                if let id = player.current?.videoId {
-                    withAnimation { scroller.scrollTo(id, anchor: .center) }
-                }
+        // Opens on the playing song, when it is in this list — in place of
+        // the pill that offered to jump there, which was asked for and then
+        // found to be in the way. A moment's wait: a lazy list scrolled before
+        // it has laid itself out lands somewhere near, not on, the row.
+        .onAppear {
+            guard let id = player.current?.videoId, shown.contains(where: { $0.videoId == id }) else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                scroller.scrollTo(id, anchor: .center)
             }
-            .playerBottomPadding()
-            .animation(.easeOut(duration: 0.18), value: rows.contains(player.current?.videoId))
         }
         }
         .sheet(isPresented: $showShare) {
