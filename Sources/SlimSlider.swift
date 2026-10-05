@@ -76,7 +76,7 @@ struct SlimTrack: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
-            let filled = min(max(w * fraction, 8), w)
+            let filled = fraction.isFinite ? min(max(w * fraction, 8), w) : 8
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.24)).frame(height: 8)
                 Capsule().fill(active).frame(width: filled, height: 8)

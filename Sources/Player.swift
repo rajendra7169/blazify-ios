@@ -136,7 +136,13 @@ final class Player: ObservableObject {
         }
         return 0
     }
-    var progress: Double { duration > 0 ? min(max(currentTime / duration, 0), 1) : 0 }
+    var progress: Double {
+        // A position that is not a number — a player asked for its time
+        // before it has one answers with one — would put a width that is not
+        // a number on the bar, which then draws whatever it drew last.
+        guard duration > 0, currentTime.isFinite, duration.isFinite else { return 0 }
+        return min(max(currentTime / duration, 0), 1)
+    }
 
     private var avPlayer: AVPlayer?
     private var timeObserver: Any?
@@ -1118,6 +1124,7 @@ final class Player: ObservableObject {
         // to and fell back. That is the bounce on every skip.
         currentTime = 0
         duration = track.duration
+        VideoArtLog.note("load: \(track.title) from nothing, at 0 of \(Int(duration))s")
         // Only now that the position is reset — saving earlier stored the
         // previous song's position against this song's index.
         saveQueue()
@@ -1470,12 +1477,19 @@ final class Player: ObservableObject {
         preparedPlayer = nil
         preparedIndex = nil
         preparedVideoId = nil
+        // The bar's two numbers first, before the song changes under them:
+        // nought, and the new length. Nothing that draws between here and
+        // the end of this handover can then show the last song's position
+        // against this song's length.
+        currentTime = 0
+        duration = preparedDuration > 0 ? preparedDuration : queue[target].duration
         avPlayer = prepared
         index = target
         prepared.play()
         prepared.rate = Float(PlaybackPrefs.shared.speed)
         adoptPlayingTrack(realDuration: preparedDuration)
         preparedDuration = 0
+        VideoArtLog.note("skip: handed over to \(queue[target].title) at 0 of \(Int(duration))s")
         return true
     }
 
@@ -1652,7 +1666,7 @@ final class Player: ObservableObject {
             forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
             queue: .main,
         ) { [weak self] time in
-            guard let self, player === self.avPlayer, !self.isSeeking else { return }
+            guard let self, player === self.avPlayer, !self.isSeeking, time.isNumeric else { return }
             self.bufferedAhead = Self.bufferedAhead(of: player.currentItem, at: time)
             self.currentTime = time.seconds.isFinite ? time.seconds : 0
 
