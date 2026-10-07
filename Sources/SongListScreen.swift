@@ -412,20 +412,51 @@ struct SongRowMenu: View {
 
     var body: some View {
         Menu {
-            Button { player.playNext(track) } label: {
-                Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
+            // The four reached for most, as a row of tiles at the top — Download
+            // among them, as on Android and in the player's menu, not near the foot.
+            ControlGroup {
+                Button { player.playNext(track) } label: {
+                    Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                }
+                Button {
+                    if let onAddToPlaylist { onAddToPlaylist() } else { playlistTrack = track }
+                } label: {
+                    Label("Add to playlist", systemImage: "plus.circle")
+                }
+                if LocalMusic.isLocal(track.videoId) {
+                    // A file only this phone has is already kept, and cannot be shared.
+                    Button { player.addToQueue([track]) } label: {
+                        Label("Add to queue", systemImage: "text.badge.plus")
+                    }
+                } else {
+                    switch downloads.state(track.videoId) {
+                    case .done:
+                        Button(role: .destructive) { downloads.remove(track.videoId) } label: {
+                            Label("Remove download", systemImage: "checkmark.circle.fill")
+                        }
+                    case .downloading:
+                        Button { downloads.remove(track.videoId) } label: {
+                            Label("Downloading", systemImage: "arrow.down.circle.dotted")
+                        }
+                    case .none:
+                        Button { downloads.download(track) } label: {
+                            Label("Download", systemImage: "arrow.down.circle")
+                        }
+                    }
+                    Button { share() } label: {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                }
             }
-            Button { player.addToQueue([track]) } label: {
-                Label("Add to queue", systemImage: "text.badge.plus")
+
+            if !LocalMusic.isLocal(track.videoId) {
+                Button { player.addToQueue([track]) } label: {
+                    Label("Add to queue", systemImage: "text.badge.plus")
+                }
             }
             Button { player.setFavorite(track, liked: !isFavorite) } label: {
                 Label(isFavorite ? "Remove from favourites" : "Add to favourites",
                       systemImage: isFavorite ? "heart.slash" : "heart")
-            }
-            Button {
-                if let onAddToPlaylist { onAddToPlaylist() } else { playlistTrack = track }
-            } label: {
-                Label("Add to playlist", systemImage: "plus.circle")
             }
             Button { dial.toggle(track) } label: {
                 Label(dial.isPinned(track.videoId)
@@ -440,15 +471,6 @@ struct SongRowMenu: View {
                     Label("Remove from this phone", systemImage: "trash")
                 }
             } else {
-                if isDownloaded {
-                    Button(role: .destructive) { downloads.remove(track.videoId) } label: {
-                        Label("Remove download", systemImage: "trash")
-                    }
-                } else {
-                    Button { downloads.download(track) } label: {
-                        Label("Download", systemImage: "arrow.down.circle")
-                    }
-                }
                 Button {
                     if let onOpenArtist { onOpenArtist() } else { openArtist() }
                 } label: {
@@ -471,9 +493,6 @@ struct SongRowMenu: View {
                         Label(blocked ? "Unblock \(name)" : "Block \(name)",
                               systemImage: blocked ? "person.crop.circle.badge.checkmark" : "nosign")
                     }
-                }
-                Button { share() } label: {
-                    Label("Share", systemImage: "square.and.arrow.up")
                 }
             }
         } label: {
