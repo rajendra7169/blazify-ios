@@ -285,7 +285,14 @@ struct SearchView: View {
                         RemoteImage(url: URL(string: cover), size: 56) { Color.black.opacity(0.15) }
                             .frame(width: 56, height: 56)
                             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                            .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                            // A painted shadow, not a live one: three tilted covers on every
+                            // tile made dozens of blurred shadows to redraw on each frame,
+                            // which is what made Search on Android crawl.
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(Color.black.opacity(0.28))
+                                    .offset(x: 1, y: 3)
+                            )
                             .rotationEffect(.degrees(place.angle))
                             .offset(x: place.x, y: place.y)
                     }
