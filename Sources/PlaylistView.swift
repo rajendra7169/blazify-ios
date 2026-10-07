@@ -7,6 +7,8 @@ struct PlaylistView: View {
     let item: HomeItem
     @ObservedObject var player: Player
     @ObservedObject private var downloads = Downloads.shared
+    /// Whether this one is in the user's library, as far as this phone knows.
+    @State private var saved = false
     @ObservedObject private var dial = SpeedDial.shared
 
     @ObservedObject private var auth = Auth.shared
@@ -69,22 +71,7 @@ struct PlaylistView: View {
                 .padding(.horizontal, 24)
 
                 if !tracks.isEmpty {
-                    HStack(spacing: 10) {
-                        actionButton("Play", "play.fill") {
-                            // Settings → Player → Shuffle playlists on open.
-                            let order = PlaybackPrefs.shared.shufflePlaylistFirst
-                                ? tracks.shuffled() : tracks
-                            player.play(order, startAt: 0)
-                            player.openFullPlayer()
-                        }
-                        actionButton("Shuffle", "shuffle") {
-                            player.play(tracks.shuffled(), startAt: 0); player.openFullPlayer()
-                        }
-                        actionButton(downloadLabel, "arrow.down.circle") {
-                            Downloads.shared.downloadAll(tracks)
-                        }
-                    }
-                    .padding(.horizontal, 16)
+                    actionRow
                 }
 
                 if loading {
@@ -141,9 +128,6 @@ struct PlaylistView: View {
         }
         .background(palette.scaffold.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { editMenu }
-        }
         .alert("Rename playlist", isPresented: $renaming) {
             TextField("Name", text: $newTitle)
             Button("Cancel", role: .cancel) {}
@@ -162,7 +146,10 @@ struct PlaylistView: View {
         } message: {
             Text(notice ?? "")
         }
-        .task { await load() }
+        .task {
+            saved = SavedPlaylists.contains(item.browseId ?? "")
+            await load()
+        }
         // Opens on the playing song once the songs are in, when it is one of
         // them. A moment's wait: a lazy list scrolled before it has laid
         // itself out lands somewhere near, not on, the row.
@@ -175,19 +162,94 @@ struct PlaylistView: View {
         }
     }
 
-    private func actionButton(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                Text(title).font(.blaze(15, .semibold))
+    /// Save and download on the left, Play in the middle, shuffle and more on
+    /// the right — the Android app's row. Always five places, so Play stays in
+    /// the middle whatever the page offers.
+    private var actionRow: some View {
+        HStack {
+            if auth.isLoggedIn, let id = item.browseId, !id.isEmpty {
+                roundButton(saved ? "heart.fill" : "heart",
+                            tint: saved ? Color(hex: 0xFF5A5F) : nil) { toggleSaved(id) }
+            } else {
+                Color.clear.frame(width: 46, height: 46)
             }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(palette.heroGradient)
-            .clipShape(Capsule())
+            Spacer()
+            downloadButton
+            Spacer()
+            Button {
+                // Settings → Player → Shuffle playlists on open.
+                let order = PlaybackPrefs.shared.shufflePlaylistFirst ? tracks.shuffled() : tracks
+                player.play(order, startAt: 0)
+                player.openFullPlayer()
+            } label: {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 68, height: 68)
+                    .background(palette.heroGradient)
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play")
+            Spacer()
+            roundButton("shuffle") {
+                player.play(tracks.shuffled(), startAt: 0)
+                player.openFullPlayer()
+            }
+            Spacer()
+            if isEditable || !(item.browseId ?? "").isEmpty {
+                editMenu
+            } else {
+                Color.clear.frame(width: 46, height: 46)
+            }
+        }
+        .frame(maxWidth: 360)
+        .padding(.horizontal, 20)
+    }
+
+    @ViewBuilder private var downloadButton: some View {
+        let states = tracks.map { downloads.state($0.videoId) }
+        if states.allSatisfy({ $0 == .done }) {
+            roundButton("checkmark.circle.fill", tint: palette.accent) {}
+                .disabled(true)
+                .accessibilityLabel("Downloaded")
+        } else if states.contains(.downloading) {
+            BlazeLoader(size: 30)
+                .frame(width: 46, height: 46)
+                .background(palette.onSurface.opacity(0.10))
+                .clipShape(Circle())
+        } else {
+            roundButton("arrow.down") { Downloads.shared.downloadAll(tracks) }
+                .accessibilityLabel(downloadLabel)
+        }
+    }
+
+    private func roundButton(_ icon: String, tint: Color? = nil, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(tint ?? palette.onSurface)
+                .frame(width: 46, height: 46)
+                .background(palette.onSurface.opacity(0.10))
+                .clipShape(Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func toggleSaved(_ id: String) {
+        let next = !saved
+        saved = next
+        SavedPlaylists.set(id, next)
+        Task {
+            if await !YouTube.ratePlaylist(browseId: id, like: next) {
+                await MainActor.run {
+                    saved = !next
+                    SavedPlaylists.set(id, !next)
+                    notice = "Couldn't update your library. Try again in a moment."
+                }
+            }
+        }
     }
 
     /// The ⋮ menu: pinning it, for any playlist, and the editing items for one of
@@ -222,9 +284,12 @@ struct PlaylistView: View {
                     }
                 }
             } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.blaze(17, .semibold))
-                    .foregroundStyle(palette.accent)
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(palette.onSurface)
+                    .frame(width: 46, height: 46)
+                    .background(palette.onSurface.opacity(0.10))
+                    .clipShape(Circle())
             }
         }
     }
@@ -305,5 +370,23 @@ struct PlaylistView: View {
             tracks = t
             loading = false
         }
+    }
+}
+
+
+/// The playlists and albums saved to the library from this phone, so the heart
+/// shows filled when one is opened again. YouTube does not say which are saved
+/// without a request per page; this remembers the answer it was given.
+enum SavedPlaylists {
+    private static let key = "savedPlaylistIds"
+
+    static func contains(_ id: String) -> Bool {
+        !id.isEmpty && (UserDefaults.standard.stringArray(forKey: key) ?? []).contains(id)
+    }
+
+    static func set(_ id: String, _ saved: Bool) {
+        var ids = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+        if saved { ids.insert(id) } else { ids.remove(id) }
+        UserDefaults.standard.set(Array(ids), forKey: key)
     }
 }

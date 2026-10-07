@@ -1311,6 +1311,30 @@ enum YouTube {
         return json["error"] == nil
     }
 
+    /// Save a playlist or album to the user's YouTube Music library, or take it
+    /// out — the heart beside Play. The same `like` call as a song's, aimed at the
+    /// playlist; a browse id's "VL" is not part of the playlist's own id.
+    @discardableResult
+    static func ratePlaylist(browseId: String, like: Bool) async -> Bool {
+        guard Auth.shared.isLoggedIn, !browseId.isEmpty else { return false }
+        let playlistId = browseId.hasPrefix("VL") ? String(browseId.dropFirst(2)) : browseId
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "target": ["playlistId": playlistId],
+        ]
+        let endpoint = "https://music.youtube.com/youtubei/v1/like/"
+            + (like ? "like" : "removelike") + "?prettyPrint=false"
+        let json = await post(endpoint, name: "67", version: remixVersion,
+                              userAgent: webUA, visitor: visitor, body: body, login: true)
+        guard let json else { return false }
+        return json["error"] == nil
+    }
+
     /// The user's Liked songs (the "LM" auto-playlist).
     static func likedSongs() async -> [Track] {
         guard Auth.shared.isLoggedIn else { return [] }
