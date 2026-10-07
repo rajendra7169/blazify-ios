@@ -28,7 +28,7 @@ struct LocalMusicView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { picking = true } label: {
                     if local.importing || local.findingArt {
-                        ProgressView().tint(palette.accent)
+                        BlazeLoader(size: 26)
                     } else {
                         Image(systemName: "plus")
                     }

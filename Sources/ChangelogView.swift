@@ -66,7 +66,7 @@ struct ChangelogView: View {
                         .padding(.horizontal, 32)
 
                     if loading {
-                        ProgressView()
+                        BlazeLoader(size: 64)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 80)
                     } else if releases.isEmpty {

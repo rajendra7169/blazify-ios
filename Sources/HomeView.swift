@@ -73,7 +73,7 @@ struct HomeView: View {
                             // marker per token — otherwise the old one stays on screen,
                             // never re-appears, and loading stops after one page.
                             if let token = feed.continuation {
-                                ProgressView()
+                                BlazeLoader(size: 44)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 24)
                                     .id(token)

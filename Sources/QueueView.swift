@@ -145,7 +145,7 @@ struct QueueView: View {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { playlistName = ""; showSave = true } label: {
                             if saving {
-                                ProgressView().tint(palette.accent)
+                                BlazeLoader(size: 26)
                             } else {
                                 Image(systemName: "text.badge.plus")
                             }

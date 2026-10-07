@@ -133,7 +133,7 @@ struct SpotifyImportDialog: View {
                 .font(.blaze(14))
                 .foregroundStyle(palette.onSurface)
             if total == 0 {
-                ProgressView().tint(palette.accent)
+                BlazeLoader(size: 44)
             } else {
                 ProgressView(value: Double(done), total: Double(total))
                     .tint(palette.accent)

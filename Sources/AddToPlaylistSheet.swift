@@ -98,7 +98,7 @@ struct AddToPlaylistSheet: View {
             Spacer(minLength: 0)
 
             if busyID == playlist.id {
-                ProgressView().tint(palette.onSurface)
+                BlazeLoader(size: 26)
             } else if addedID == playlist.id {
                 Image(systemName: "checkmark").foregroundStyle(palette.accent)
             }

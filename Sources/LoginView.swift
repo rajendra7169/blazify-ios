@@ -27,8 +27,10 @@ struct LoginView: View {
 
                 if validating {
                     Color.black.opacity(0.5).ignoresSafeArea()
-                    ProgressView("Signing in…")
-                        .tint(Blaze.amber)
+                    VStack(spacing: 10) {
+                        BlazeLoader(size: 64, tint: Blaze.amber)
+                        Text("Signing in…")
+                    }
                         .foregroundStyle(.white)
                         .padding(24)
                         .background(Blaze.surface)

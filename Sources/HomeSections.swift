@@ -271,8 +271,7 @@ struct HomeSectionScreen: View {
                 }
 
                 if loading || extending {
-                    ProgressView()
-                        .tint(palette.accent)
+                    BlazeLoader(size: 44)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 24)
                 }
