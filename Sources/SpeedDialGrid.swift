@@ -53,8 +53,6 @@ struct SpeedDialGrid: View {
             ZStack(alignment: .bottomLeading) {
                 RemoteImage(url: URL(string: pin.thumbnail), size: side) {
                     palette.onSurface.opacity(0.06)
-                        .overlay(Image(systemName: pin.kind == .artist ? "person.fill" : "music.note")
-                            .foregroundStyle(palette.onSurfaceVariant))
                 }
                 .frame(width: side, height: side)
                 .clipped()

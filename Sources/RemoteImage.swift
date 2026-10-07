@@ -91,6 +91,10 @@ struct RemoteImage<Placeholder: View>: View {
     /// cover, which changes on every skip in front of whoever pressed it; a
     /// row in a list that scrolls is better off with the cut.
     var crossfade = false
+    /// The Blazify logo in black and white over the placeholder, while the
+    /// picture loads and where there is none. Off for faces — a profile picture
+    /// with a logo on it reads as the wrong person.
+    var logo = true
     @ViewBuilder var placeholder: () -> Placeholder
 
     @State private var image: UIImage?
@@ -113,6 +117,8 @@ struct RemoteImage<Placeholder: View>: View {
                     .transition(.opacity)
             } else {
                 placeholder()
+                    // ArtPlaceholder carries the mark already; two would sit on top of each other.
+                    .overlay { if logo, Placeholder.self != ArtPlaceholder.self { ArtLogoMark() } }
             }
         }
         .animation(crossfade ? Animation.easeInOut(duration: 0.3) : nil, value: image.map { ObjectIdentifier($0) })
@@ -174,5 +180,27 @@ struct RemoteImage<Placeholder: View>: View {
             return nil
         }
         return UIImage(cgImage: cg)
+    }
+}
+
+
+/// The mark every cover shows until its picture comes: the Blazify logo in black
+/// and white, half the cover's shorter side, quiet against whatever tile the
+/// cover sits on. The same as the Android app's.
+struct ArtLogoMark: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height) * 0.5
+            Image(bundleImage: "blaze_logo")
+                .resizable()
+                .scaledToFit()
+                .saturation(0)
+                .opacity(palette.dark ? 0.47 : 0.37)
+                .frame(width: side, height: side)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .allowsHitTesting(false)
     }
 }

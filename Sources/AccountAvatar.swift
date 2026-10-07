@@ -13,7 +13,7 @@ struct AccountAvatar: View {
 
     var body: some View {
         if auth.isLoggedIn, let photo = auth.accountPhoto, let url = URL(string: photo) {
-            RemoteImage(url: url, size: size) { Circle().fill(palette.heroGradient) }
+            RemoteImage(url: url, size: size, logo: false) { Circle().fill(palette.heroGradient) }
                 .frame(width: size, height: size)
                 .clipShape(Circle())
         } else {

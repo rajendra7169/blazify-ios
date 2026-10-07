@@ -729,11 +729,6 @@ struct MusicCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 RemoteImage(url: item.thumbnailURL, size: look.gridItemSize.cardWidth) {
                     palette.onSurface.opacity(0.06)
-                        .overlay(
-                            Image(systemName: item.isCircular ? "person.fill" : "music.note")
-                                .font(.system(size: 40))
-                                .foregroundStyle(palette.onSurface.opacity(0.35)),
-                        )
                 }
                 .frame(width: look.gridItemSize.cardWidth, height: look.gridItemSize.cardWidth)
                 .clipShape(RoundedRectangle(cornerRadius: item.isCircular ? 70 : 12))

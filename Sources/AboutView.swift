@@ -103,7 +103,7 @@ struct AboutView: View {
     private var developerCard: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 18) {
-                RemoteImage(url: avatar, size: 96) {
+                RemoteImage(url: avatar, size: 96, logo: false) {
                     Circle().fill(palette.surfaceHigh)
                         .overlay(Image(systemName: "person.fill")
                             .font(.blaze(34))

@@ -2,19 +2,14 @@ import SwiftUI
 
 /// Shared placeholder for missing art.
 struct ArtPlaceholder: View {
+    @Environment(\.palette) private var palette
+
+    /// A cover with no picture: a quiet tile with the Blazify logo in black and
+    /// white, as every cover shows while its picture loads. It was an amber
+    /// gradient, which read as a picture of its own rather than as none.
     var body: some View {
-        GeometryReader { g in
-            ZStack {
-                Blaze.gradient
-                Image(bundleImage: "blaze_logo_white")
-                    .resizable()
-                    .scaledToFit()
-                    // Half the tile, so it reads at a 48pt row and at full
-                    // player size without a size parameter at every call site.
-                    .frame(width: g.size.width * 0.5, height: g.size.height * 0.5)
-                    .frame(width: g.size.width, height: g.size.height)
-            }
-        }
+        palette.onSurface.opacity(0.06)
+            .overlay { ArtLogoMark() }
     }
 }
 

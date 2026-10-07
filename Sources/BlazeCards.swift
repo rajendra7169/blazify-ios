@@ -160,9 +160,6 @@ struct BlazeMusicCard: View {
             VStack(alignment: isCircular ? .center : .leading, spacing: 0) {
                 RemoteImage(url: thumbnail.flatMap { URL(string: $0) }, size: look.gridItemSize.cardWidth) {
                     palette.onSurface.opacity(0.06)
-                        .overlay(Image(systemName: fallbackIcon)
-                            .font(.system(size: 40))
-                            .foregroundStyle(palette.onSurface.opacity(0.35)))
                 }
                 .frame(width: look.gridItemSize.cardWidth, height: look.gridItemSize.cardWidth)
                 .clipShape(isCircular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 12)))
