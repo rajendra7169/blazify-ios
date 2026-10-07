@@ -1841,23 +1841,14 @@ final class Player: ObservableObject {
 
     private func setupRemoteCommands() {
         let c = MPRemoteCommandCenter.shared()
-        // Skip keys on the lock screen and in Control Centre, jumping the
-        // distance set in settings. Read when the song changes rather than kept
-        // in step with the setting, which is often enough: the controls are
-        // rebuilt for every song anyway.
-        let step = Double(PlaybackPrefs.shared.seekSeconds)
-        c.skipBackwardCommand.preferredIntervals = [NSNumber(value: step)]
-        c.skipForwardCommand.preferredIntervals = [NSNumber(value: step)]
-        c.skipBackwardCommand.removeTarget(nil)
-        c.skipForwardCommand.removeTarget(nil)
-        c.skipBackwardCommand.addTarget { [weak self] _ in
-            self?.seek(by: -step)
-            return .success
-        }
-        c.skipForwardCommand.addTarget { [weak self] _ in
-            self?.seek(by: step)
-            return .success
-        }
+        // Next and previous on the lock screen, in the Dynamic Island and in
+        // Control Centre, as Android has them. iOS shows its jump-by-seconds
+        // keys instead of these whenever those are switched on, so they stay
+        // off: the jump distance from settings is for the player's own buttons.
+        c.skipBackwardCommand.isEnabled = false
+        c.skipForwardCommand.isEnabled = false
+        c.nextTrackCommand.isEnabled = true
+        c.previousTrackCommand.isEnabled = true
         c.playCommand.addTarget { [weak self] _ in self?.resume(); return .success }
         c.pauseCommand.addTarget { [weak self] _ in self?.pause(); return .success }
         c.togglePlayPauseCommand.addTarget { [weak self] _ in self?.toggle(); return .success }
