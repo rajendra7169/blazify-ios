@@ -719,11 +719,13 @@ struct PlayerView: View {
             sideButton("backward.end.fill", label: "Previous song") { player.prev() }
 
             Button { player.toggle() } label: {
+                // The theme's colour, which follows the artwork when dynamic
+                // theming is on, as the Android player's play button does.
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(palette.onAccent)
                     .frame(width: 72, height: 72)
-                    .background(Color.white)
+                    .background(palette.accent)
                     .clipShape(RoundedRectangle(cornerRadius: player.isPlaying ? 24 : 36))
                     .animation(.linear(duration: 0.09), value: player.isPlaying)
             }
