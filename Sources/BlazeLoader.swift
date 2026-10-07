@@ -85,14 +85,14 @@ enum LoaderStory {
     /// One full hop and landing of an ear cup.
     static let cupBounce: CGFloat = 0.9
 
-    static func draw(in gc: inout GraphicsContext, t: CGFloat, colors c: LoaderColors) {
+    static func draw(in gc: inout GraphicsContext, t: CGFloat, colors c: LoaderColors, quiet: Bool = false) {
         let u = t.truncatingRemainder(dividingBy: seconds) / seconds
         let shading = GraphicsContext.Shading.linearGradient(
             Gradient(colors: [c.top, c.bottom]),
             startPoint: CGPoint(x: 512, y: 180), endPoint: CGPoint(x: 512, y: 780))
 
         // A warm glow gathering behind the logo while it is whole.
-        let glow = envelope(u, 0.08, 0.45, 0.78, 1)
+        let glow = quiet ? 0 : envelope(u, 0.08, 0.45, 0.78, 1)
         if glow > 0 {
             let r = 300 * (0.5 + 0.5 * glow)
             let rect = CGRect(x: 512 - r, y: 560 - r, width: 2 * r, height: 2 * r)
@@ -103,7 +103,8 @@ enum LoaderStory {
 
         // Sound rolling out of the ear cups, and music notes rising off the flame,
         // while the logo is whole.
-        let alive = envelope(u, 0.48, 0.56, 0.76, 0.88)
+        // Not on the launch screen's logo, which stops whole and flies to the header.
+        let alive = quiet ? 0 : envelope(u, 0.48, 0.56, 0.76, 0.88)
         if alive > 0 {
             for start: CGFloat in [0, 0.8] {
                 let k = (t + start).truncatingRemainder(dividingBy: 1.6) / 1.6
@@ -145,8 +146,9 @@ enum LoaderStory {
         // The ear cups float down into place, then bounce, one after the other.
         let cups = envelope(u, 0.34, 0.50, 0.78, 0.92)
         if cups > 0 {
-            drawCup(&gc, LoaderPaths.cupLeft, t: t, offset: 0, shown: cups, color: c.cups)
-            drawCup(&gc, LoaderPaths.cupRight, t: t, offset: cupBounce / 2, shown: cups, color: c.cups)
+            // On the launch screen they come down and stay down, ready to land.
+            drawCup(&gc, LoaderPaths.cupLeft, t: t, offset: 0, shown: cups, color: c.cups, bounce: !quiet)
+            drawCup(&gc, LoaderPaths.cupRight, t: t, offset: cupBounce / 2, shown: cups, color: c.cups, bounce: !quiet)
         }
 
         // The flame grows around the play button and keeps swaying.
@@ -178,13 +180,15 @@ enum LoaderStory {
     }
 
     private static func drawCup(_ gc: inout GraphicsContext, _ path: Path, t: CGFloat, offset: CGFloat,
-                                shown: CGFloat, color: Color) {
+                                shown: CGFloat, color: Color, bounce: Bool = true) {
         let b = path.boundingRect
         // A small hop, then a soft squash as it lands.
         let p = (t + offset).truncatingRemainder(dividingBy: cupBounce) / cupBounce
         var lift: CGFloat = 0
         var squash: CGFloat = 0
-        if p < 0.55 { lift = sin(.pi * p / 0.55) } else { squash = sin(.pi * (p - 0.55) / 0.45) }
+        if bounce {
+            if p < 0.55 { lift = sin(.pi * p / 0.55) } else { squash = sin(.pi * (p - 0.55) / 0.45) }
+        }
         let hop = 16 * lift * shown
         var g = gc
         g.opacity = Double(shown)

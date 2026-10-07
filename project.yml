@@ -43,7 +43,12 @@ targets:
           - CFBundleURLName: com.rajendra.blazifyplayer
             CFBundleURLSchemes:
               - blazify
-        UILaunchScreen: {}
+        # Black, with the amber play button the launch story starts from; the app
+        # takes over from that exact frame (LaunchOverlay).
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchPlay
+          UIImageRespectsSafeAreaInsets: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
     settings:
