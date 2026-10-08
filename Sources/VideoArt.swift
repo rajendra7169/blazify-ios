@@ -495,10 +495,12 @@ struct VideoArtView: UIViewRepresentable {
                 // The picture is up; from here it fetches well ahead of itself.
                 player?.currentItem?.preferredForwardBufferDuration = VideoArtPlayers.deepBuffer
                 Task { @MainActor [weak self, weak view] in
+                    // The first look for black bands comes before the picture is
+                    // shown, and its zoom is put in at once, so the picture fades in
+                    // already framed. Shown first and zoomed after, the zoom could be
+                    // watched happening; on Android it never was.
+                    if let self, let view { await self.lookForBands(in: view, animated: false) }
                     self?.onFirstFrame()
-                    // The looks for black bands start from here, as on Android —
-                    // counted from the attach they began before there was a frame
-                    // to look at, and the early ones found nothing.
                     if let view { self?.startBandLooks(in: view) }
                 }
             }
@@ -660,7 +662,7 @@ struct VideoArtView: UIViewRepresentable {
         private func startBandLooks(in view: PlayerContainerView) {
             bandsLook?.cancel()
             bandsLook = Task { [weak self, weak view] in
-                for wait in [0.3, 1.0, 2.0, 4.0, 8.0] {
+                for wait in [1.0, 2.0, 4.0, 8.0] {
                     try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                     guard !Task.isCancelled, let self, let view else { return }
                     await self.lookForBands(in: view)
@@ -677,7 +679,7 @@ struct VideoArtView: UIViewRepresentable {
         /// the bands were found on Android and not here: the same video, the
         /// same arithmetic, and an output that had stopped handing out frames.
         @MainActor
-        private func lookForBands(in view: PlayerContainerView) async {
+        private func lookForBands(in view: PlayerContainerView, animated: Bool = true) async {
             self.output?.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.1)
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled, let output = self.output else { return }
@@ -702,7 +704,7 @@ struct VideoArtView: UIViewRepresentable {
             let zoom = Letterbox.zoom(for: bands == 1 ? 0 : bands)
             VideoArtLog.note("bands: \(Int(share * 100))% at \(Int(time.seconds))s, least \(Int(bands * 100))% → zoom \(String(format: "%.2f", zoom))")
             guard abs(view.zoom - CGFloat(zoom)) > 0.001 else { return }
-            view.setZoom(CGFloat(zoom), animated: true)
+            view.setZoom(CGFloat(zoom), animated: animated)
         }
 
         /// A coarse grid of brightnesses off one frame: enough to find a band,

@@ -416,54 +416,61 @@ struct PlayerView: View {
 
     /// The song's own video behind the player, muted and in step. The still
     /// artwork stands in while it is being looked up, or when there is none.
+    /// How much of the screen, from the top, the Video design's picture fills — Android's figure.
+    private static let videoStageShare: CGFloat = 0.70
+
     @ViewBuilder private var videoArtBackground: some View {
         GeometryReader { geo in
-            ZStack {
-                // The artwork fills the same place, always: while the video is
-                // being found, while it is loading, and for a song that has none.
-                // It is the cover underneath — never the app's own flame, which is
-                // what a song's picture is not.
-                RemoteImage(url: player.current?.artURL(size: 1280)) {
-                    Color.black
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipped()
+            // The picture has the top 70% of the screen, as on Android, and is cut
+            // to fill that — not the whole screen. Filling the whole height blew a
+            // television-shaped video up to the phone's full height and cut away
+            // most of its width, where Android, filling only the part above the
+            // progress bar, kept far more of the picture.
+            let stage = geo.size.height * Self.videoStageShare
+            ZStack(alignment: .top) {
+                Color.black
+                ZStack {
+                    // The artwork fills the same place, always: while the video is
+                    // being found, while it is loading, and for a song that has none.
+                    // It is the cover underneath — never the app's own flame, which is
+                    // what a song's picture is not.
+                    RemoteImage(url: player.current?.artURL(size: 1280)) {
+                        Color.black
+                    }
+                    .frame(width: geo.size.width, height: stage)
+                    .clipped()
 
-                if let v = videoLoader.video {
-                    VideoArtView(video: v,
-                                 position: player.currentTime,
-                                 isPlaying: player.isPlaying,
-                                 songLength: player.duration,
-                                 onTrouble: { videoLoader.trouble($0) },
-                                 onFirstFrame: { videoShowing = true })
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                        .opacity(videoShowing ? 1 : 0)
+                    if let v = videoLoader.video {
+                        VideoArtView(video: v,
+                                     position: player.currentTime,
+                                     isPlaying: player.isPlaying,
+                                     songLength: player.duration,
+                                     onTrouble: { videoLoader.trouble($0) },
+                                     onFirstFrame: { videoShowing = true })
+                            .frame(width: geo.size.width, height: stage)
+                            .clipped()
+                            .opacity(videoShowing ? 1 : 0)
+                    }
                 }
+                .frame(width: geo.size.width, height: stage)
+                .clipped()
+                .animation(.easeInOut(duration: 0.6), value: videoShowing)
+                // A new song is the artwork again until its own picture arrives, so
+                // skipping never leaves the song before it playing on the screen.
+                .onChange(of: player.current?.videoId) { videoShowing = false }
+                .onChange(of: videoLoader.video) { if videoLoader.video == nil { videoShowing = false } }
+                // Clear down to the middle of the picture, then fading into the page
+                // the controls sit on — Android's stage fade, over the same stage.
+                .overlay(
+                    LinearGradient(stops: [
+                        .init(color: .clear, location: 0.0),
+                        .init(color: .clear, location: 0.50),
+                        .init(color: .black.opacity(0.85), location: 0.85),
+                        .init(color: .black, location: 1.0),
+                    ], startPoint: .top, endPoint: .bottom),
+                )
             }
-            .animation(.easeInOut(duration: 0.6), value: videoShowing)
-            // A new song is the artwork again until its own picture arrives, so
-            // skipping never leaves the song before it playing on the screen.
-            .onChange(of: player.current?.videoId) { videoShowing = false }
-            .onChange(of: videoLoader.video) { if videoLoader.video == nil { videoShowing = false } }
-            // The picture is left alone down to the middle of the screen and only
-            // then fades into the page the controls sit on — the same stage fade
-            // the Android Video design uses. Dimming it from the top, as the still
-            // artwork is dimmed, was throwing a veil over the one design whose
-            // whole point is the picture.
-            .overlay(
-                // Android gives the picture the top 70% of the screen and fades it
-                // out over the lower half of that — so it is clear at the top, gone
-                // by the progress bar, and the controls stand on solid black. These
-                // are those same places measured against the whole screen.
-                LinearGradient(stops: [
-                    .init(color: .clear, location: 0.0),
-                    .init(color: .clear, location: 0.30),
-                    .init(color: .black.opacity(0.85), location: 0.55),
-                    .init(color: .black, location: 0.66),
-                    .init(color: .black, location: 1.0),
-                ], startPoint: .top, endPoint: .bottom),
-            )
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
         .ignoresSafeArea()
         // A new song: the picture waits for the song. Starting both at once
