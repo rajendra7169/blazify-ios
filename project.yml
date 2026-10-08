@@ -47,8 +47,6 @@ targets:
         # takes over from that exact frame (LaunchOverlay).
         UILaunchScreen:
           UIColorName: LaunchBackground
-          UIImageName: LaunchPlay
-          UIImageRespectsSafeAreaInsets: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
     settings:
