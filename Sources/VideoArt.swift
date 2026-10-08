@@ -447,7 +447,7 @@ struct VideoArtView: UIViewRepresentable {
             view.playerLayer.player = player
             view.playerLayer.videoGravity = .resizeAspectFill
             // Whatever the song before it was zoomed to, this one starts square.
-            view.playerLayer.transform = CATransform3DIdentity
+            view.setZoom(1, animated: false)
             // Nothing is heard from it, so it starts the moment it can.
             player.play()
             stalled = false
@@ -701,11 +701,8 @@ struct VideoArtView: UIViewRepresentable {
             bands = min(bands, share)
             let zoom = Letterbox.zoom(for: bands == 1 ? 0 : bands)
             VideoArtLog.note("bands: \(Int(share * 100))% at \(Int(time.seconds))s, least \(Int(bands * 100))% → zoom \(String(format: "%.2f", zoom))")
-            guard abs(view.playerLayer.transform.m11 - CGFloat(zoom)) > 0.001 else { return }
-            CATransaction.begin()
-            CATransaction.setAnimationDuration(0.6)
-            view.playerLayer.transform = CATransform3DMakeScale(CGFloat(zoom), CGFloat(zoom), 1)
-            CATransaction.commit()
+            guard abs(view.zoom - CGFloat(zoom)) > 0.001 else { return }
+            view.setZoom(CGFloat(zoom), animated: true)
         }
 
         /// A coarse grid of brightnesses off one frame: enough to find a band,
@@ -768,10 +765,48 @@ struct VideoArtView: UIViewRepresentable {
     }
 }
 
-/// A plain view whose layer is the player's, so the picture resizes with it.
+/// A view holding the player's picture in a layer of its own, sized to the view.
+///
+/// The zoom that takes a film's black bands off the screen makes that layer
+/// larger than the view, centred, with the overflow clipped. It used to be a
+/// scale set on the view's own layer, which UIKit and SwiftUI also look after:
+/// the bands were found and the zoom worked out, but the picture on the iPhone
+/// stayed where it was, band and all, while Android's came in past them.
 final class PlayerContainerView: UIView {
-    override static var layerClass: AnyClass { AVPlayerLayer.self }
-    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    let playerLayer = AVPlayerLayer()
+    private(set) var zoom: CGFloat = 1
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = true
+        layer.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        playerLayer.frame = zoomedFrame
+        CATransaction.commit()
+    }
+
+    func setZoom(_ zoom: CGFloat, animated: Bool) {
+        self.zoom = zoom
+        CATransaction.begin()
+        if animated {
+            CATransaction.setAnimationDuration(0.6)
+        } else {
+            CATransaction.setDisableActions(true)
+        }
+        playerLayer.frame = zoomedFrame
+        CATransaction.commit()
+    }
+
+    private var zoomedFrame: CGRect {
+        bounds.insetBy(dx: -bounds.width * (zoom - 1) / 2, dy: -bounds.height * (zoom - 1) / 2)
+    }
 }
 
 /// How much of a frame is black band at the top and again at the bottom.
