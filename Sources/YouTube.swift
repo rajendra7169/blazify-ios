@@ -167,6 +167,46 @@ enum YouTube {
         }
     }
 
+    // Which stream source to ask first, learnt as songs play.
+    //
+    // The order in Settings is where it starts, but YouTube turns sources away
+    // without warning — for days one would answer nothing but "confirm you're
+    // not a bot" — and asking a refused source first for every song, then
+    // giving up on the song when the next one's address would not play on the
+    // phone, skipped five or six songs for every one that played. So the
+    // source that last worked is asked first, and one that was refused, or
+    // whose address the phone could not play, waits at the back for a while.
+    private static let sourceLock = NSLock()
+    private static var lastWorked: StreamClient?
+    private static var benchedUntil: [StreamClient: Date] = [:]
+    private static var sourceOf: [String: StreamClient] = [:]
+    private static let benchFor: TimeInterval = 10 * 60
+
+    private static func ordered(_ chosen: [StreamClient]) -> [StreamClient] {
+        sourceLock.withLock {
+            let now = Date()
+            let benched = chosen.filter { (benchedUntil[$0] ?? .distantPast) > now }
+            var fresh = chosen.filter { !benched.contains($0) }
+            if let lastWorked, let at = fresh.firstIndex(of: lastWorked) {
+                fresh.insert(fresh.remove(at: at), at: 0)
+            }
+            return fresh + benched
+        }
+    }
+
+    private static func bench(_ client: StreamClient) {
+        sourceLock.withLock {
+            benchedUntil[client] = Date().addingTimeInterval(benchFor)
+            if lastWorked == client { lastWorked = nil }
+        }
+    }
+
+    /// The phone could not play this address: the source that gave it goes to the back.
+    static func streamFailed(_ url: URL) {
+        let client = sourceLock.withLock { sourceOf[url.absoluteString] }
+        if let client { bench(client) }
+    }
+
     static func streamURL(for videoId: String) async -> (url: URL, duration: Double)? {
         // A stream link is good for one connection and one only — the first
         // request is served and every later one is refused outright. Handing
@@ -186,7 +226,7 @@ enum YouTube {
         // Settings → Stream sources: walk the chosen order until one client
         // answers. Any single client can start being refused; the chain is what
         // keeps playback working when that happens.
-        let clients = await MainActor.run { StreamPrefs.shared.order }
+        let clients = ordered(await MainActor.run { StreamPrefs.shared.order })
         // Highest bitrate, lowest, or whatever the connection can carry.
         let wantsLowest = await MainActor.run {
             let quality = PlaybackPrefs.shared.quality
@@ -196,7 +236,15 @@ enum YouTube {
 
         for client in clients {
             guard let picked = await resolve(videoId, with: client, visitor: visitor,
-                                             wantsLowest: wantsLowest) else { continue }
+                                             wantsLowest: wantsLowest) else {
+                bench(client)
+                continue
+            }
+            sourceLock.withLock {
+                lastWorked = client
+                sourceOf[picked.url.absoluteString] = client
+                if sourceOf.count > 200 { sourceOf.removeAll() }
+            }
             if isLive(videoId) { return (picked.url, picked.duration) }
             urlCacheLock.withLock {
                 // Two minutes. Long enough to cover a prefetch followed by the

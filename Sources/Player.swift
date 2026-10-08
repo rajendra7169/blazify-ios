@@ -1275,7 +1275,17 @@ final class Player: ObservableObject {
         let videoId = track.videoId
 
         Task {
-            guard let fresh = await YouTube.streamURL(for: videoId) else { return }
+            guard let fresh = await YouTube.streamURL(for: videoId) else {
+                // No source would give another link: say so and move on, rather
+                // than sit on the song that failed with nothing happening.
+                await MainActor.run {
+                    guard self.current?.videoId == videoId else { return }
+                    self.isLoading = false
+                    self.lastError = "Couldn't load this track. Try again."
+                    if PlaybackPrefs.shared.autoSkipOnError { _ = self.next() }
+                }
+                return
+            }
             await MainActor.run {
                 guard self.current?.videoId == videoId else { return }
                 self.playStream(fresh.url, realDuration: fresh.duration, resumeAt: resumeFrom)
@@ -1312,6 +1322,9 @@ final class Player: ObservableObject {
                     // song — so fetch another and carry on from the same second
                     // before giving up on it. Long recordings are the ones this
                     // saves: they are the only ones that outlast one connection.
+                    // The source that gave the refused link is asked last next
+                    // time, so the new link comes from a different one.
+                    if let url = (item.asset as? AVURLAsset)?.url { YouTube.streamFailed(url) }
                     if self.reopen() { return }
                     self.isLoading = false
                     self.lastError = item.error?.localizedDescription ?? "Playback failed"
