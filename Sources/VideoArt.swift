@@ -386,6 +386,7 @@ struct VideoArtView: UIViewRepresentable {
         /// not removed by name, and one was left behind for every song.
         private var endObs: NSObjectProtocol?
         private var stallObs: NSObjectProtocol?
+        private var errorLogObs: NSObjectProtocol?
         /// True from a stall until the buffer is back and play() has been
         /// called again. While it is, the sync loop leaves the player alone.
         private var stalled = false
@@ -513,6 +514,18 @@ struct VideoArtView: UIViewRepresentable {
             // A stall is the buffer running dry. With the player's own waiting
             // off, that leaves the rate at zero for good — so the buffer is
             // watched, and play() is called again once it says it can keep up.
+            // The player's own record of what went wrong — a refused piece, a picture it
+            // could not decode — goes into the log as it happens, so a picture that goes
+            // dark while the clock runs says why.
+            if let errorLogObs { NotificationCenter.default.removeObserver(errorLogObs) }
+            errorLogObs = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemNewErrorLogEntry, object: item, queue: .main,
+            ) { [weak player] _ in
+                guard let event = player?.currentItem?.errorLog()?.events.last else { return }
+                VideoArtLog.note("item: error \(event.errorDomain) \(event.errorStatusCode)"
+                    + (event.errorComment.map { " — \($0.prefix(80))" } ?? "")
+                    + " at \(Int(player?.currentTime().seconds ?? 0))s")
+            }
             if let stallObs { NotificationCenter.default.removeObserver(stallObs) }
             stallObs = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemPlaybackStalled, object: item, queue: .main,
@@ -754,6 +767,8 @@ struct VideoArtView: UIViewRepresentable {
             endObs = nil
             if let stallObs { NotificationCenter.default.removeObserver(stallObs) }
             stallObs = nil
+            if let errorLogObs { NotificationCenter.default.removeObserver(errorLogObs) }
+            errorLogObs = nil
             statusObs = nil
             readyObs = nil
             controlObs = nil

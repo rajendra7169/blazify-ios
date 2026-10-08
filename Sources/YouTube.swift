@@ -294,11 +294,13 @@ enum YouTube {
                 if height > bestHeight { bestHeight = height; best = f }
             }
             if let best, let u = best["url"] as? String, let url = URL(string: u) {
-                // From the iOS client, whose file addresses the phone's video
-                // server has refused, the HLS stream — a different kind of
-                // address, signed differently — goes first, and the file is
-                // the fallback. From the other two the file is what plays.
-                if client == .ios, let hls {
+                // The HLS stream goes first whenever there is one, and the file is
+                // the fallback. The file is a fragmented video-only mp4 made for
+                // another kind of player: the phone's own played it for a couple of
+                // minutes, then — reopened or moved along — kept its clock running
+                // and drew nothing, a black picture over a song still playing. HLS
+                // is the phone's own format, held to the same height as the file.
+                if let hls {
                     VideoArtLog.note("stream: hls from \(client.rawValue), file \(bestHeight)p itag \(best["itag"] ?? "?") as alternate")
                     return (hls, url)
                 }
