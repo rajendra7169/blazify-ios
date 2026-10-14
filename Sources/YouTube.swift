@@ -128,6 +128,55 @@ enum YouTube {
     }
 
     private static var cachedVisitor: String?
+    /// When the visitor id was fetched. One kept from the moment the app was
+    /// opened lived as long as the app did — days, for one left in the
+    /// background — so it is fetched again once it is a few hours old.
+    private static var visitorFetchedAt: Date?
+    private static let visitorMaxAge: TimeInterval = 6 * 60 * 60
+    private static let visitorLock = NSLock()
+
+    /// The connection every request to YouTube goes through, replaceable.
+    ///
+    /// The shared one cannot be replaced, and after hours in the background
+    /// it was still holding connections the system had long since closed.
+    private static var session = URLSession(configuration: .default)
+    private static let sessionLock = NSLock()
+    private static var currentSession: URLSession { sessionLock.withLock { session } }
+
+    /// What opening the app afresh gives the network side, without closing it.
+    ///
+    /// Left in the background for a few hours, the app came back holding a
+    /// visitor id and connections from when it was opened, and every song's
+    /// lookup failed: the setting that skips a song that won't play then ran
+    /// through the whole queue, and only closing the app and opening it again
+    /// made the same songs play. This is that reopening, for the parts that go
+    /// stale: a new visitor id, new connections, and every source back in its
+    /// place in the order.
+    static func freshStart() {
+        visitorLock.withLock {
+            cachedVisitor = nil
+            visitorFetchedAt = nil
+        }
+        urlCacheLock.withLock { urlCache.removeAll() }
+        sourceLock.withLock {
+            lastWorked = nil
+            benchedUntil.removeAll()
+            sourceOf.removeAll()
+        }
+        let old = sessionLock.withLock { () -> URLSession in
+            let old = session
+            session = URLSession(configuration: .default)
+            return old
+        }
+        // Let go of the old one later, not now: a request that picked it up a
+        // moment ago would start on a session already let go, and iOS stops
+        // the whole app for that rather than failing the one request.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 120) {
+            old.finishTasksAndInvalidate()
+        }
+        VideoArtLog.note("fresh start: new visitor id, new connections, sources reset")
+    }
+
     /// Resolved streams cached until near their expiry (lets us prefetch).
     private static var urlCache: [String: (url: URL, duration: Double, expires: Date)] = [:]
     /// Concurrent downloads and the player's prefetch all touch the cache —
@@ -240,6 +289,7 @@ enum YouTube {
                 bench(client)
                 continue
             }
+            VideoArtLog.note("audio: \(client.rawValue) gave \(videoId)")
             sourceLock.withLock {
                 lastWorked = client
                 sourceOf[picked.url.absoluteString] = client
@@ -397,10 +447,18 @@ enum YouTube {
                                 userAgent: client.userAgent, visitor: visitor,
                                 body: body, login: true)
         }
+        // Why a source said no is written down: "it skips every song" can only
+        // be fixed from the reason, and the reason is gone once the song is.
+        let status = answer?["playabilityStatus"] as? [String: Any]
         guard let json = answer,
-              (json["playabilityStatus"] as? [String: Any])?["status"] as? String == "OK",
+              status?["status"] as? String == "OK",
               let streaming = json["streamingData"] as? [String: Any]
-        else { return nil }
+        else {
+            VideoArtLog.note("audio: \(client.rawValue) for \(videoId) → "
+                + (answer == nil ? "no answer" : (status?["status"] as? String ?? "?"))
+                + ((status?["reason"] as? String).map { " (\($0.prefix(40)))" } ?? ""))
+            return nil
+        }
 
         // A broadcast that is on air has no formats to choose between: YouTube
         // serves it as a playlist of segments instead, which is what a 24/7
@@ -435,7 +493,10 @@ enum YouTube {
             let rate = (f["bitrate"] as? Int) ?? (f["averageBitrate"] as? Int) ?? 0
             if wantsLowest ? (rate < bestRate) : (rate > bestRate) { bestRate = rate; best = f }
         }
-        guard let best, let u = best["url"] as? String, let url = URL(string: u) else { return nil }
+        guard let best, let u = best["url"] as? String, let url = URL(string: u) else {
+            VideoArtLog.note("audio: \(client.rawValue) for \(videoId) → no audio/mp4 in \(formats.count) formats")
+            return nil
+        }
 
         var dur = (Double(best["approxDurationMs"] as? String ?? "") ?? 0) / 1000
         if dur <= 0, let ls = details?["lengthSeconds"] as? String {
@@ -1892,20 +1953,35 @@ enum YouTube {
         if login {
             for (key, value) in Auth.shared.headers() { req.setValue(value, forHTTPHeaderField: key) }
         }
-        guard let (data, _) = try? await URLSession.shared.data(for: req),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let data: Data
+        do {
+            data = try await currentSession.data(for: req).0
+        } catch {
+            let e = error as NSError
+            VideoArtLog.note("request \(url.lastPathComponent) as \(name) failed: \(e.domain) \(e.code)")
+            return nil
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return json
     }
 
     // MARK: - visitorData (music.youtube.com/sw.js_data)
 
     private static func visitorData() async -> String? {
-        if let cachedVisitor { return cachedVisitor }
+        let kept = visitorLock.withLock { () -> String? in
+            guard let cachedVisitor, let at = visitorFetchedAt,
+                  Date().timeIntervalSince(at) < visitorMaxAge else { return nil }
+            return cachedVisitor
+        }
+        if let kept { return kept }
         guard let url = URL(string: "https://music.youtube.com/sw.js_data") else { return nil }
         var req = URLRequest(url: url)
         req.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
         req.setValue("SOCS=CAI", forHTTPHeaderField: "Cookie")
-        guard let (data, _) = try? await URLSession.shared.data(for: req), data.count > 5 else { return nil }
+        guard let (data, _) = try? await currentSession.data(for: req), data.count > 5 else {
+            // Not to be left without one: the old id is better than none.
+            return visitorLock.withLock { cachedVisitor }
+        }
         let jsonData = data.subdata(in: 5..<data.count)   // strip ")]}'\n"
         guard
             let arr = try? JSONSerialization.jsonObject(with: jsonData) as? [Any],
@@ -1915,7 +1991,13 @@ enum YouTube {
         for item in a2 {
             if let s = item as? String, s.count >= 3, s.hasPrefix("Cg") {
                 let third = s[s.index(s.startIndex, offsetBy: 2)]
-                if third == "t" || third == "s" { cachedVisitor = s; return s }
+                if third == "t" || third == "s" {
+                    visitorLock.withLock {
+                        cachedVisitor = s
+                        visitorFetchedAt = Date()
+                    }
+                    return s
+                }
             }
         }
         return nil

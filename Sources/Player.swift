@@ -195,7 +195,31 @@ final class Player: ObservableObject {
         // Backgrounding is the moment worth persisting the position.
         NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main,
-        ) { [weak self] _ in self?.saveQueue() }
+        ) { [weak self] _ in
+            self?.saveQueue()
+            self?.backgroundedAt = Date()
+        }
+        // Back after a long spell away: start the network side afresh before
+        // anything is asked of it, as opening the app does. Coming back after
+        // a few hours used to mean every song failing until the app was closed.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main,
+        ) { [weak self] _ in
+            guard let self, let away = self.backgroundedAt else { return }
+            self.backgroundedAt = nil
+            guard Date().timeIntervalSince(away) >= 10 * 60 else { return }
+            self.lastFreshStart = Date()
+            YouTube.freshStart()
+        }
+        // The phone's media services restarted underneath us, which happens
+        // after long spells in the background. Every audio object made before
+        // is dead from that moment: the session's setup is gone, and the
+        // players fail whatever they are given. Apple's answer is to set the
+        // session up again and build the players anew — what closing and
+        // reopening the app did by accident.
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main,
+        ) { [weak self] _ in self?.mediaServicesWereReset() }
         // Being killed. A music app that is playing is not suspended, so when
         // it is swiped away this is called, and it matters: the equaliser's
         // tap is in the middle of rendering, and a process cut off there
@@ -381,6 +405,8 @@ final class Player: ObservableObject {
     // MARK: - Queue control
 
     func play(_ tracks: [Track], startAt: Int) {
+        // A new choice gets a clean slate, whatever failed before it.
+        failedInARow = 0
         originalQueue = tracks
         queue = tracks
         index = startAt
@@ -1177,19 +1203,13 @@ final class Player: ObservableObject {
             await MainActor.run {
                 guard self.current?.videoId == videoId else { return }
                 guard let stream else {
-                    self.isLoading = false
-                    self.lastError = "Couldn't load this track. Try again."
                     // The player still holds the song before this one. Left
                     // there, pressing play — on the lock screen, in the mini
                     // player, anywhere — starts THAT song again while the screen
                     // shows the one that failed, which is how a tap came to play
                     // something nobody chose.
                     self.discardPlayer()
-                    // And move on, if that is what the setting says: a song with
-                    // no address is not going to get one by being stared at.
-                    if PlaybackPrefs.shared.autoSkipOnError, self.index + 1 < self.queue.count {
-                        _ = self.next(auto: true)
-                    }
+                    self.songFailed("Couldn't load this track. Try again.", auto: true)
                     return
                 }
                 self.currentTime = 0
@@ -1257,6 +1277,76 @@ final class Player: ObservableObject {
     private var reopenCount = 0
     private var reopenFor: String?
 
+    /// Songs that failed one after another, with none playing in between.
+    private var failedInARow = 0
+    /// When the app last started afresh without being closed. Once a minute
+    /// at most: a song that will not play is not helped by doing it again.
+    private var lastFreshStart = Date.distantPast
+    /// When the app went into the background, so its return knows how long.
+    private var backgroundedAt: Date?
+
+    /// A song would not play. Move on, as the setting says — but not forever.
+    ///
+    /// Skipping was written for one bad song. When the fault was the app's own
+    /// — hours in the background left it with a stale visitor id and dead
+    /// connections — every song failed the same way, and it skipped through
+    /// the whole queue, song after song, until the app was closed and opened
+    /// again. So the first failure starts afresh, as opening the app does, and
+    /// tries the same song once more: the one somebody tapped is the one that
+    /// plays. A run of failures after that stops on a song and says so, rather
+    /// than spending the queue on a connection that is not there.
+    private func songFailed(_ message: String, auto: Bool) {
+        isLoading = false
+        lastError = message
+        failedInARow += 1
+        VideoArtLog.note("song failed (\(failedInARow) in a row): \(current?.title ?? "?") — \(message)")
+        if Date().timeIntervalSince(lastFreshStart) > 60 {
+            freshStart()
+            loadCurrent()
+            return
+        }
+        if failedInARow >= 4 {
+            discardPlayer()
+            lastError = "Nothing would play. Check your connection, then try again."
+            return
+        }
+        guard PlaybackPrefs.shared.autoSkipOnError else { return }
+        if auto {
+            guard index + 1 < queue.count else { return }
+            _ = next(auto: true)
+        } else {
+            _ = next()
+        }
+    }
+
+    /// What opening the app gives playback, without closing it: the network
+    /// side afresh, and the audio session set up again.
+    private func freshStart() {
+        lastFreshStart = Date()
+        YouTube.freshStart()
+        configureSession()
+    }
+
+    /// Everything audio was rebuilt by the phone: set the session up again,
+    /// let go of every player made before, and carry on from the same second.
+    private func mediaServicesWereReset() {
+        VideoArtLog.note("media services were reset: session and players rebuilt")
+        let position = currentTime
+        let wasPlaying = isPlaying
+        configureSession()
+        cancelCrossfade()
+        discardPrepared()
+        discardPlayer()
+        guard let track = current else { return }
+        // Picked up by the next load, the same way a restored session is.
+        resumeVideoId = track.videoId
+        resumePosition = position
+        currentTime = position
+        guard wasPlaying else { return }
+        playWhenReady = true
+        loadCurrent()
+    }
+
     /// Fetch a fresh link and carry on where the last one stopped.
     ///
     /// Returns whether it is being attempted, so the caller knows not to report
@@ -1280,9 +1370,7 @@ final class Player: ObservableObject {
                 // than sit on the song that failed with nothing happening.
                 await MainActor.run {
                     guard self.current?.videoId == videoId else { return }
-                    self.isLoading = false
-                    self.lastError = "Couldn't load this track. Try again."
-                    if PlaybackPrefs.shared.autoSkipOnError { _ = self.next() }
+                    self.songFailed("Couldn't load this track. Try again.", auto: false)
                 }
                 return
             }
@@ -1316,8 +1404,17 @@ final class Player: ObservableObject {
             guard let self else { return }
             DispatchQueue.main.async {
                 switch item.status {
-                case .readyToPlay: self.isLoading = false
+                case .readyToPlay:
+                    self.isLoading = false
+                    self.failedInARow = 0
                 case .failed:
+                    // What the phone's player said, and what the server said to
+                    // it, for the log a report carries.
+                    let e = item.error as NSError?
+                    let under = e?.userInfo[NSUnderlyingErrorKey] as? NSError
+                    let http = item.errorLog()?.events.last.map { " HTTP \($0.errorStatusCode)" } ?? ""
+                    VideoArtLog.note("audio item failed: \(e?.domain ?? "?") \(e?.code ?? 0)"
+                        + (under.map { " / \($0.domain) \($0.code)" } ?? "") + http)
                     // A refused link is the ordinary failure here, not a broken
                     // song — so fetch another and carry on from the same second
                     // before giving up on it. Long recordings are the ones this
@@ -1326,10 +1423,7 @@ final class Player: ObservableObject {
                     // time, so the new link comes from a different one.
                     if let url = (item.asset as? AVURLAsset)?.url { YouTube.streamFailed(url) }
                     if self.reopen() { return }
-                    self.isLoading = false
-                    self.lastError = item.error?.localizedDescription ?? "Playback failed"
-                    // Don't strand the queue on one bad stream.
-                    if PlaybackPrefs.shared.autoSkipOnError { _ = self.next() }
+                    self.songFailed(item.error?.localizedDescription ?? "Playback failed", auto: false)
                 default: break
                 }
             }
@@ -1391,6 +1485,7 @@ final class Player: ObservableObject {
                 guard let self else { return }
                 self.currentTime = target
                 guard wanted else { return }
+                self.configureSession()
                 p.play()
                 p.rate = Float(PlaybackPrefs.shared.speed)
             }
@@ -1406,6 +1501,9 @@ final class Player: ObservableObject {
             updateNowPlaying()
             return
         }
+        // The session may have been let go while the app sat in the
+        // background — another app's sound, a call that did not hand it back.
+        configureSession()
         p.play()
         // Rate has to be set after play(), which resets it to 1.
         p.rate = Float(PlaybackPrefs.shared.speed)
@@ -1884,11 +1982,13 @@ final class Player: ObservableObject {
             // it the way the play button in the app does rather than telling the
             // lock screen it is playing over silence.
             if hasTrack {
+                failedInARow = 0
                 playWhenReady = true
                 loadCurrent()
             }
             return
         }
+        configureSession()
         avPlayer.play()
         isPlaying = true
         updateNowPlaying()
