@@ -13,11 +13,10 @@ struct MiniPlayerView: View {
     var onOpenPlayer: (() -> Void)?
     /// Only the ring reads this, but the view is small — observing is cheap.
     @ObservedObject private var clock: PlaybackClock
-    @State private var showArtist = false
+    @State private var artist: ArtistRoute?
     /// How far the mini player has been dragged down, while a finger is on it.
     @State private var dragDown: CGFloat = 0
     @State private var showAddToPlaylist = false
-    @State private var resolvedArtistId: String?
 
     init(player: Player, onOpenPlayer: (() -> Void)? = nil) {
         self.player = player
@@ -151,11 +150,7 @@ struct MiniPlayerView: View {
                         }
                     },
             )
-            .fullScreenCover(isPresented: $showArtist) {
-                if let id = track.artistId ?? resolvedArtistId {
-                    ArtistView(browseId: id, player: player)
-                }
-            }
+            .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistSheet(track: track)
             }
@@ -247,15 +242,14 @@ struct MiniPlayerView: View {
     /// Open the artist, resolving the channel id by name when the row didn't
     /// carry one (search rows do; downloads and some carousels don't).
     private func openArtist(_ track: Track) {
-        if track.artistId != nil {
-            showArtist = true
+        if let id = track.artistId {
+            artist = ArtistRoute(id: id)
             return
         }
         Task {
             let id = await YouTube.resolveArtistId(name: track.artist)
             await MainActor.run {
-                resolvedArtistId = id
-                if id != nil { showArtist = true }
+                artist = id.map(ArtistRoute.init)
             }
         }
     }

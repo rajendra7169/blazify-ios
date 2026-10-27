@@ -21,11 +21,22 @@ extension View {
     }
 }
 
+/// An artist page waiting to open.
+///
+/// Every artist page is presented from one of these rather than from a flag and
+/// an id kept side by side. With the flag, the cover could be built before the
+/// id had reached it: it opened holding nothing, and a full-screen cover with
+/// nothing in it has no Close button and no swipe to dismiss, so the app was
+/// stuck on a blank screen until it was restarted (issue #21). Here the page is
+/// made from the id it was opened with, so it cannot open empty.
+struct ArtistRoute: Identifiable, Equatable {
+    let id: String
+}
+
 private struct OpensArtist: ViewModifier {
     @ObservedObject var player: Player
 
-    @State private var artistId: String?
-    @State private var showArtist = false
+    @State private var artist: ArtistRoute?
     /// True while a name is being turned into a channel, so a second tap on a
     /// slow network doesn't start the same search again.
     @State private var looking = false
@@ -34,18 +45,13 @@ private struct OpensArtist: ViewModifier {
         content
             .contentShape(Rectangle())
             .onTapGesture { open() }
-            .fullScreenCover(isPresented: $showArtist) {
-                if let artistId {
-                    ArtistView(browseId: artistId, player: player)
-                }
-            }
+            .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
     }
 
     private func open() {
         guard let track = player.current, !track.artist.isEmpty, !looking else { return }
         if let id = track.artistId, !id.isEmpty {
-            artistId = id
-            showArtist = true
+            artist = ArtistRoute(id: id)
             return
         }
         // Rows from some shelves carry no channel id. Looking the name up is
@@ -57,8 +63,7 @@ private struct OpensArtist: ViewModifier {
             let found = await YouTube.resolveArtistId(name: track.artist)
             await MainActor.run {
                 looking = false
-                artistId = found
-                if found != nil { showArtist = true }
+                artist = found.map(ArtistRoute.init)
             }
         }
     }

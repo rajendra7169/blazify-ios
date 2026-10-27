@@ -10,8 +10,7 @@ struct PlayerMenuSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showAddToPlaylist = false
     @State private var showRepeatTimes = false
-    @State private var artistId: String?
-    @State private var showArtist = false
+    @State private var artist: ArtistRoute?
     @State private var copied = false
 
     var onQueue: () -> Void
@@ -147,11 +146,7 @@ struct PlayerMenuSheet: View {
             RepeatTimesSheet(player: player)
         }
         .sheet(isPresented: $showTogether) { TogetherView() }
-        .fullScreenCover(isPresented: $showArtist) {
-            if let artistId {
-                ArtistView(browseId: artistId, player: player)
-            }
-        }
+        .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
     }
 
     /// The five icon actions Android heads this sheet with, in its order:
@@ -224,8 +219,7 @@ struct PlayerMenuSheet: View {
     private func openArtist() {
         guard let track = player.current else { return }
         if let id = track.artistId, !id.isEmpty {
-            artistId = id
-            showArtist = true
+            artist = ArtistRoute(id: id)
             return
         }
         // Some rows carry no channel id; look it up by name rather than
@@ -233,8 +227,7 @@ struct PlayerMenuSheet: View {
         Task {
             let found = await YouTube.resolveArtistId(name: track.artist)
             await MainActor.run {
-                artistId = found
-                if found != nil { showArtist = true }
+                artist = found.map(ArtistRoute.init)
             }
         }
     }

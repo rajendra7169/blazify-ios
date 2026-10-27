@@ -8,11 +8,19 @@ struct LoginView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var validating = false
     @State private var failed = false
+    /// Until Google's first page has drawn. Without this the sheet was an empty
+    /// page for as long as the network took, which reads as the app having hung.
+    @State private var pageLoading = true
+    /// Why Google's page didn't arrive, said rather than left blank.
+    @State private var loadError: String?
+    /// Bumped by Try again: a new web view, starting the sign-in afresh.
+    @State private var attempt = 0
 
     var body: some View {
         NavigationStack {
             ZStack {
-                LoginWebView { cookie, visitor, dataSyncId in
+                LoginWebView(onLoading: { pageLoading = $0 },
+                             onFailure: { loadError = $0 }) { cookie, visitor, dataSyncId in
                     guard !validating else { return }
                     validating = true
                     Task {
@@ -23,7 +31,36 @@ struct LoginView: View {
                         }
                     }
                 }
+                .id(attempt)
                 .ignoresSafeArea(edges: .bottom)
+
+                if let loadError {
+                    Blaze.surface.ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        Image(systemName: "wifi.exclamationmark")
+                            .font(.system(size: 34))
+                            .foregroundStyle(.white.opacity(0.6))
+                        Text("Couldn't open Google sign-in")
+                            .font(.system(size: 17, weight: .semibold))
+                        Text(loadError)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                        Button("Try again") {
+                            self.loadError = nil
+                            pageLoading = true
+                            attempt += 1
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Blaze.amber)
+                        .padding(.top, 4)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 32)
+                } else if pageLoading, !validating {
+                    Blaze.surface.ignoresSafeArea()
+                    BlazeLoader(size: 64, tint: Blaze.amber)
+                }
 
                 if validating {
                     Color.black.opacity(0.5).ignoresSafeArea()
@@ -55,10 +92,12 @@ struct LoginView: View {
 }
 
 private struct LoginWebView: UIViewRepresentable {
+    let onLoading: (Bool) -> Void
+    let onFailure: (String) -> Void
     /// (cookie, visitorData, dataSyncId)
     let onCapture: (String, String?, String?) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(onCapture: onCapture) }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
@@ -72,12 +111,28 @@ private struct LoginWebView: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
     final class Coordinator: NSObject, WKNavigationDelegate {
-        private let onCapture: (String, String?, String?) -> Void
+        private let parent: LoginWebView
         private var captured = false
 
-        init(onCapture: @escaping (String, String?, String?) -> Void) { self.onCapture = onCapture }
+        init(_ parent: LoginWebView) { self.parent = parent }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!,
+                     withError error: Error) {
+            failed(error)
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            failed(error)
+        }
+
+        /// A page Google replaced with the next one is not a failure, only noise.
+        private func failed(_ error: Error) {
+            if (error as NSError).code == NSURLErrorCancelled { return }
+            DispatchQueue.main.async { self.parent.onFailure(error.localizedDescription) }
+        }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            DispatchQueue.main.async { self.parent.onLoading(false) }
             guard !captured, webView.url?.host?.contains("music.youtube.com") == true else { return }
 
             webView.evaluateJavaScript("window.yt && yt.config_ ? yt.config_.VISITOR_DATA : null") { visitor, _ in
@@ -111,7 +166,7 @@ private struct LoginWebView: UIViewRepresentable {
             let cookieString = byName.values.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
 
             captured = true
-            DispatchQueue.main.async { self.onCapture(cookieString, visitorData, dataSyncId) }
+            DispatchQueue.main.async { self.parent.onCapture(cookieString, visitorData, dataSyncId) }
         }
     }
 }

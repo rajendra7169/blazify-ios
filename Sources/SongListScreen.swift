@@ -60,8 +60,7 @@ struct SongListScreen: View {
     /// The song whose ⋮ menu asked for Add to playlist.
     @State private var playlistTrack: Track?
     /// Artist opened from a song's ⋮ menu.
-    @State private var artistId: String?
-    @State private var showArtist = false
+    @State private var artist: ArtistRoute?
 
     /// The active filter's songs, or the plain list when there are no filters.
     private var source: [Track] {
@@ -212,11 +211,7 @@ struct SongListScreen: View {
             Button("Cancel", role: .cancel) {}
         }
         .sheet(item: $playlistTrack) { AddToPlaylistSheet(track: $0) }
-        .fullScreenCover(isPresented: $showArtist) {
-            if let artistId {
-                ArtistView(browseId: artistId, player: player)
-            }
-        }
+        .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
     }
 
     // MARK: Filter capsules
@@ -352,15 +347,13 @@ struct SongListScreen: View {
     /// Resolve the channel when the row didn't carry one (downloads often don't).
     private func openArtist(_ track: Track) {
         if let id = track.artistId {
-            artistId = id
-            showArtist = true
+            artist = ArtistRoute(id: id)
             return
         }
         Task {
             let id = await YouTube.resolveArtistId(name: track.artist)
             await MainActor.run {
-                artistId = id
-                if id != nil { showArtist = true }
+                artist = id.map(ArtistRoute.init)
             }
         }
     }
@@ -404,8 +397,7 @@ struct SongRowMenu: View {
     @ObservedObject private var dial = SpeedDial.shared
 
     @State private var playlistTrack: Track?
-    @State private var artistId: String?
-    @State private var showArtist = false
+    @State private var artist: ArtistRoute?
 
     private var isFavorite: Bool { player.favorites.contains(track.videoId) }
     private var isDownloaded: Bool { downloads.isDownloaded(track.videoId) }
@@ -503,25 +495,19 @@ struct SongRowMenu: View {
                 .contentShape(Rectangle())
         }
         .sheet(item: $playlistTrack) { AddToPlaylistSheet(track: $0) }
-        .fullScreenCover(isPresented: $showArtist) {
-            if let artistId {
-                ArtistView(browseId: artistId, player: player)
-            }
-        }
+        .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
     }
 
     /// Resolve the channel when the row didn't carry one (downloads often don't).
     private func openArtist() {
         if let id = track.artistId {
-            artistId = id
-            showArtist = true
+            artist = ArtistRoute(id: id)
             return
         }
         Task {
             let id = await YouTube.resolveArtistId(name: track.artist)
             await MainActor.run {
-                artistId = id
-                if id != nil { showArtist = true }
+                artist = id.map(ArtistRoute.init)
             }
         }
     }
