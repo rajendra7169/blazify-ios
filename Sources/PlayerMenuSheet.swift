@@ -10,6 +10,8 @@ struct PlayerMenuSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showAddToPlaylist = false
     @State private var showRepeatTimes = false
+    @State private var showSpeed = false
+    @ObservedObject private var playback = PlaybackPrefs.shared
     @State private var artist: ArtistRoute?
     @State private var copied = false
 
@@ -108,6 +110,13 @@ struct PlayerMenuSheet: View {
 
                     row("slider.horizontal.3", "Equaliser") { dismiss(); onEqualizer() }
 
+                    // Here as well as in Settings, because speed is changed with
+                    // a song playing, to hear the difference (issue #21).
+                    row("gauge.with.dots.needle.67percent",
+                        playback.speed == 1 ? String(localized: "Speed and pitch")
+                            : String(localized: "Speed and pitch (\(SpeedSheet.label(playback.speed)))"),
+                        tint: playback.speed == 1 ? .white : Blaze.amber) { showSpeed = true }
+
                     if let url = shareURL {
                         ShareLink(item: url) {
                             rowLabel("square.and.arrow.up", "Share", tint: .white)
@@ -145,6 +154,7 @@ struct PlayerMenuSheet: View {
         .sheet(isPresented: $showRepeatTimes) {
             RepeatTimesSheet(player: player)
         }
+        .sheet(isPresented: $showSpeed) { SpeedSheet() }
         .sheet(isPresented: $showTogether) { TogetherView() }
         .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
     }
@@ -354,6 +364,84 @@ struct RepeatTimesSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Blaze.surface.ignoresSafeArea())
         .presentationDetents([.medium])
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// Speed and pitch from the player's menu: the same two settings as Settings ›
+/// Player and audio, without leaving the song to reach them.
+struct SpeedSheet: View {
+    @ObservedObject private var prefs = PlaybackPrefs.shared
+
+    private let presets: [Double] = [0.75, 1, 1.25, 1.5, 2]
+
+    /// "1.25×", without the trailing zeros "1.00×" would carry.
+    static func label(_ speed: Double) -> String {
+        let rounded = (speed * 100).rounded() / 100
+        return rounded.formatted(.number.precision(.fractionLength(0...2))) + "×"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "gauge.with.dots.needle.67percent")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Blaze.amber)
+                Text("Speed and pitch")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                Spacer(minLength: 0)
+                Text(Self.label(prefs.speed))
+                    .font(.system(size: 20, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Blaze.amber)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 22)
+            .padding(.bottom, 12)
+
+            Slider(value: $prefs.speed, in: PlaybackPrefs.speedRange, step: 0.05)
+                .tint(Blaze.amber)
+                .padding(.horizontal, 20)
+
+            HStack(spacing: 8) {
+                ForEach(presets, id: \.self) { speed in
+                    let chosen = abs(prefs.speed - speed) < 0.001
+                    Button { prefs.speed = speed } label: {
+                        Text(Self.label(speed))
+                            .font(.system(size: 14, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(chosen ? Color.black : Color.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
+                            .background(chosen ? Blaze.amber : Color.white.opacity(0.08))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+
+            Toggle(isOn: $prefs.preservePitch) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Keep pitch")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.white)
+                    Text("Stop voices rising as the speed goes up")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            .tint(Blaze.amber)
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Blaze.surface.ignoresSafeArea())
+        .presentationDetents([.height(300)])
         .preferredColorScheme(.dark)
     }
 }
