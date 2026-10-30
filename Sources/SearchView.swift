@@ -139,16 +139,15 @@ struct SearchView: View {
                 .focused($fieldFocused)
                 .onSubmit { run(trimmed) }
                 .onChange(of: query) {
+                    // Emptied by hand counts as cleared: recent searches and Browse
+                    // come back instead of the last results sitting under an empty box.
+                    if trimmed.isEmpty, didSearch { clearSearch() }
                     if suppressSuggest { suppressSuggest = false } else { suggest() }
                 }
 
             if !query.isEmpty {
                 Button {
-                    query = ""
-                    results = []
-                    suggestions = []
-                    suggestedSongs = []
-                    didSearch = false
+                    clearSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .accessibilityLabel("Clear search")
@@ -433,6 +432,17 @@ struct SearchView: View {
     // MARK: Actions
 
     /// Debounced so a fast typist fires one request, not one per keystroke.
+    /// Back to an empty search. The album and artist cards go too: left behind,
+    /// they kept the last results on screen under an empty box.
+    private func clearSearch() {
+        query = ""
+        results = []
+        cards = []
+        suggestions = []
+        suggestedSongs = []
+        didSearch = false
+    }
+
     private func suggest() {
         suggestTask?.cancel()
         results = []
