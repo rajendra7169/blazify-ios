@@ -42,6 +42,18 @@ else
     status=1
 fi
 
+# Two types of one name in different files. Each file parses alone, so only the
+# cloud Mac would see the clash, and it has cost a build.
+echo
+echo "Checking for types declared twice…"
+DUPLICATES=$(cat Sources/*.swift | grep -oE '^(public |final |indirect )*(struct|class|enum|actor|protocol) [A-Za-z_][A-Za-z0-9_]*' | awk '{print $NF}' | sort | uniq -d)
+if [ -z "$DUPLICATES" ]; then
+    echo "  ok"
+else
+    echo "$DUPLICATES" | sed 's/^/  declared twice: /'
+    status=1
+fi
+
 # The handful of files that stand on their own — no app types, no networking —
 # can be checked properly, and their logic can even be run. Add to this list
 # only files that compile alone against plain Foundation.

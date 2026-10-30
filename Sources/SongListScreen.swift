@@ -211,7 +211,7 @@ struct SongListScreen: View {
             Button("Cancel", role: .cancel) {}
         }
         .sheet(item: $playlistTrack) { AddToPlaylistSheet(track: $0) }
-        .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
+        .fullScreenCover(item: $artist) { ArtistView(browseId: $0.browseId, player: player) }
     }
 
     // MARK: Filter capsules
@@ -347,7 +347,7 @@ struct SongListScreen: View {
     /// Resolve the channel when the row didn't carry one (downloads often don't).
     private func openArtist(_ track: Track) {
         if let id = track.artistId {
-            artist = ArtistRoute(id: id)
+            artist = ArtistRoute(browseId: id)
             return
         }
         Task {
@@ -495,13 +495,13 @@ struct SongRowMenu: View {
                 .contentShape(Rectangle())
         }
         .sheet(item: $playlistTrack) { AddToPlaylistSheet(track: $0) }
-        .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
+        .fullScreenCover(item: $artist) { ArtistView(browseId: $0.browseId, player: player) }
     }
 
     /// Resolve the channel when the row didn't carry one (downloads often don't).
     private func openArtist() {
         if let id = track.artistId {
-            artist = ArtistRoute(id: id)
+            artist = ArtistRoute(browseId: id)
             return
         }
         Task {

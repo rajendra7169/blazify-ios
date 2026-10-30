@@ -156,7 +156,7 @@ struct PlayerMenuSheet: View {
         }
         .sheet(isPresented: $showSpeed) { SpeedSheet() }
         .sheet(isPresented: $showTogether) { TogetherView() }
-        .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
+        .fullScreenCover(item: $artist) { ArtistView(browseId: $0.browseId, player: player) }
     }
 
     /// The five icon actions Android heads this sheet with, in its order:
@@ -229,7 +229,7 @@ struct PlayerMenuSheet: View {
     private func openArtist() {
         guard let track = player.current else { return }
         if let id = track.artistId, !id.isEmpty {
-            artist = ArtistRoute(id: id)
+            artist = ArtistRoute(browseId: id)
             return
         }
         // Some rows carry no channel id; look it up by name rather than

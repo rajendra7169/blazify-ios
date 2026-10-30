@@ -150,7 +150,7 @@ struct MiniPlayerView: View {
                         }
                     },
             )
-            .fullScreenCover(item: $artist) { ArtistView(browseId: $0.id, player: player) }
+            .fullScreenCover(item: $artist) { ArtistView(browseId: $0.browseId, player: player) }
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistSheet(track: track)
             }
@@ -243,7 +243,7 @@ struct MiniPlayerView: View {
     /// carry one (search rows do; downloads and some carousels don't).
     private func openArtist(_ track: Track) {
         if let id = track.artistId {
-            artist = ArtistRoute(id: id)
+            artist = ArtistRoute(browseId: id)
             return
         }
         Task {

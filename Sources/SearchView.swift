@@ -861,8 +861,17 @@ struct SongRow: View {
 }
 
 
+/// An artist page waiting to open.
+///
 /// `navigationDestination(item:)` needs something Identifiable, and a bare
 /// browseId String isn't.
+///
+/// Every artist page is presented from one of these rather than from a flag and
+/// an id kept side by side. With the flag, the cover could be built before the
+/// id had reached it: it opened holding nothing, and a full-screen cover with
+/// nothing in it has no Close button and no swipe to dismiss, so the app was
+/// stuck on a blank screen until it was restarted (issue #21). Here the page is
+/// made from the id it was opened with, so it cannot open empty.
 struct ArtistRoute: Identifiable, Hashable {
     let browseId: String
     var id: String { browseId }
