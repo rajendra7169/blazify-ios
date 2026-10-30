@@ -499,6 +499,9 @@ struct GreetingCard: View {
     @Environment(\.palette) private var palette
     @ObservedObject private var auth = Auth.shared
     @ObservedObject private var dial = SpeedDial.shared
+    /// With no connection the buttons offer what is saved here instead, so they
+    /// need to know when that is.
+    @ObservedObject private var net = Reachability.shared
     /// The card can start something playing, so it needs the player.
     @ObservedObject var player: Player
     /// Which song each button is offering. One cover per button, so pressing one
@@ -655,6 +658,12 @@ struct GreetingCard: View {
     /// before anybody has pinned their first song. Local files can't seed a
     /// queue, and a blocked artist doesn't get offered.
     private var speedPool: [Track] {
+        // Offline: the dial's own songs that are saved here, then everything else that is.
+        if !net.isOnline {
+            let pinned = Set(dial.songs.map(\.videoId))
+            let saved = savedTracks
+            return saved.filter { pinned.contains($0.videoId) } + saved.filter { !pinned.contains($0.videoId) }
+        }
         let pinned = dial.songs.filter { !LocalMusic.isLocal($0.videoId) }
         if !pinned.isEmpty { return pinned }
         return PlayHistory.mostPlayed(.all, limit: 40)
@@ -666,10 +675,25 @@ struct GreetingCard: View {
     /// it does not — signed out there is no such mix, and the button still has to
     /// start something.
     private var forYouPool: [Track] {
+        if !net.isOnline { return savedTracks }
         let mix = supermix.filter { !LocalMusic.isLocal($0.videoId) }.withoutBlockedArtists()
         if !mix.isEmpty { return mix }
         return Array(PlayHistory.recent.prefix(40))
             .filter { !LocalMusic.isLocal($0.videoId) }
+            .withoutBlockedArtists()
+    }
+
+    /// Every song that plays with no connection: downloads, your own files, and
+    /// songs from your history and favourites whose audio is kept on the device.
+    /// With no connection both buttons play from these rather than starting
+    /// songs that cannot load. Kept in a fixed order so the cover rotation in
+    /// `CardOrder` holds; `play` shuffles what follows the cover.
+    private var savedTracks: [Track] {
+        var seen = Set<String>()
+        let kept = (PlayHistory.recent + PlayHistory.mostPlayed(.all, limit: 200) + player.favoriteTracks)
+            .filter { Downloads.shared.isDownloaded($0.videoId) || AudioCache.shared.isCached($0.videoId) }
+        return (Downloads.shared.tracks + LocalMusic.shared.tracks + kept)
+            .filter { !$0.videoId.isEmpty && seen.insert($0.videoId).inserted }
             .withoutBlockedArtists()
     }
 
@@ -681,7 +705,10 @@ struct GreetingCard: View {
     /// steps to the next song in the same order, and only this button's does.
     private func play(_ order: [Track], cover: Binding<String?>) {
         guard !order.isEmpty else { return }
-        player.play(order, startAt: 0)
+        // Offline the songs after the cover are shuffled: they are what is saved
+        // here, not a mix with an order of its own.
+        let queue = net.isOnline ? order : [order[0]] + order.dropFirst().shuffled()
+        player.play(queue, startAt: 0)
         cover.wrappedValue = CardOrder.next(after: order, id: \.videoId)
     }
 
