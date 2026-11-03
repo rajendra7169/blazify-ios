@@ -114,7 +114,7 @@ struct LibraryCollectionView: View {
             }
         }
         .navigationDestination(item: $route) { LibraryRouteView(route: $0, player: player) }
-        .task(id: auth.isLoggedIn) { await load() }
+        .task(id: auth.generation) { await load() }
     }
 
     private func load() async {

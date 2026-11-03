@@ -17,6 +17,12 @@ struct AccountPopup: View {
     @State private var confirmLogout = false
     @State private var showTogether = false
     @State private var showDeveloper = false
+    /// The accounts list under the card's arrow.
+    @State private var expanded = false
+    @State private var channels: [YouTube.AccountChannel] = []
+    @State private var loadingChannels = false
+    @State private var switching = false
+    @State private var switchFailed = false
     @State private var moreContent = UserDefaults.standard.object(forKey: "useLoginForBrowse") as? Bool ?? true
     @State private var autoSync = UserDefaults.standard.object(forKey: "ytmSync") as? Bool ?? true
 
@@ -57,7 +63,9 @@ struct AccountPopup: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: showDeveloper)
-        .sheet(isPresented: $showLogin) { LoginView() }
+        // Adding starts from an empty sign-in page; otherwise Google sees the
+        // account already in use and hands it straight back.
+        .sheet(isPresented: $showLogin) { LoginView(freshStart: true) }
         .sheet(isPresented: $showAccount) { AccountLibraryView(player: player) }
         .sheet(isPresented: $showTokenSheet) { tokenSheet }
         .sheet(isPresented: $showTogether) { TogetherView() }
@@ -70,6 +78,14 @@ struct AccountPopup: View {
         } message: {
             Text("Downloaded songs are always kept.")
         }
+        .alert("Couldn't switch account", isPresented: $switchFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("That account didn't answer. It may have been signed out: check your connection, or remove it and add it again.")
+        }
+        // A session from before there was a list joins it the first time
+        // this opens, so it can be switched back to.
+        .onAppear { auth.rememberCurrent() }
     }
 
     private var card: some View {
@@ -208,54 +224,332 @@ struct AccountPopup: View {
 
     // MARK: Account card
 
+    /// Who is signed in, and every other account on this phone one tap away
+    /// beneath it.
+    ///
+    /// The photo carries a small "+1" when other accounts are saved, so it is
+    /// plain there is somewhere to switch to. The arrow opens the list in
+    /// place: the channels of this account, the other accounts, a row to add
+    /// another, and Log out last. Signed out, the card offers to add an
+    /// account, and still lists any saved ones to go back to.
     private var accountCard: some View {
-        Button {
-            if auth.isLoggedIn { showAccount = true } else { showLogin = true }
-        } label: {
-            HStack(spacing: 12) {
-                if auth.isLoggedIn {
-                    // Whoever is signed in, shown as themselves.
-                    if let photo = auth.accountPhoto, let url = URL(string: photo) {
-                        RemoteImage(url: url, size: 40) { Circle().fill(palette.heroGradient) }
-                            .frame(width: 40, height: 40)
-                            .clipShape(Circle())
-                    } else {
-                        Circle().fill(palette.heroGradient)
-                            .frame(width: 40, height: 40)
-                            .overlay(Image(systemName: "person.fill").foregroundStyle(palette.onSurface))
+        let others = auth.otherAccounts.count
+        return VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Button {
+                    if auth.isLoggedIn { showAccount = true } else { showLogin = true }
+                } label: {
+                    HStack(spacing: 12) {
+                        cardPhoto(others: others)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(auth.isLoggedIn ? (auth.accountName ?? "Account") : "Add an account")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(palette.onSurface)
+                                .lineLimit(1)
+                            Text(cardSubtitle(others: others))
+                                .font(.system(size: 13))
+                                .foregroundStyle(palette.onSurfaceVariant)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
                     }
-                } else {
-                    iconChip("rectangle.portrait.and.arrow.right")
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(auth.isLoggedIn ? (auth.accountName ?? "Account") : "Login")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(palette.onSurface).lineLimit(1)
-                    if let email = auth.accountEmail, auth.isLoggedIn {
-                        Text(email)
-                            .font(.system(size: 13))
-                            .foregroundStyle(palette.onSurfaceVariant).lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-
-                if auth.isLoggedIn {
-                    Button { confirmLogout = true } label: {
-                        Text("Log out")
-                            .font(.system(size: 13, weight: .semibold))
+                if auth.isLoggedIn || others > 0 {
+                    Button {
+                        let opening = !expanded
+                        withAnimation(.easeOut(duration: 0.2)) { expanded = opening }
+                        if opening { loadChannels() }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(palette.onSurface)
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .overlay(Capsule().stroke(palette.onSurface.opacity(0.25), lineWidth: 1))
+                            .rotationEffect(.degrees(expanded ? 180 : 0))
+                            .frame(width: 40, height: 40)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Accounts and channels")
                 }
             }
-            .padding(.horizontal, 20).padding(.vertical, 16)
-            .background(palette.onSurface.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .padding(.leading, 16)
+            .padding(.trailing, 8)
+            .padding(.vertical, 12)
+
+            if expanded {
+                accountsPanel
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .buttonStyle(.plain)
+        .background(palette.onSurface.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func cardSubtitle(others: Int) -> String {
+        if others == 1 { return "1 more account" }
+        if others > 1 { return "\(others) more accounts" }
+        if auth.isLoggedIn { return auth.accountEmail ?? "Your account, channels and sync" }
+        return "Sign in with Google for your playlists and library"
+    }
+
+    /// The face of the account in use, or a plus when there is none, with the
+    /// count of the other saved accounts on its corner.
+    private func cardPhoto(others: Int) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            if auth.isLoggedIn {
+                accountPhoto(auth.accountPhoto, size: 44)
+            } else {
+                Circle()
+                    .fill(palette.accent.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: "plus")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(palette.accent),
+                    )
+            }
+            if others > 0 {
+                Text("+\(others)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(palette.accent))
+                    .offset(x: 6, y: 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func accountPhoto(_ photo: String?, size: CGFloat) -> some View {
+        if let photo, let url = URL(string: photo) {
+            RemoteImage(url: url, size: size, logo: false) { Circle().fill(palette.heroGradient) }
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            Circle().fill(palette.heroGradient)
+                .frame(width: size, height: size)
+                .overlay(Image(systemName: "person.fill").foregroundStyle(palette.onSurface))
+        }
+    }
+
+    /// The list under the arrow.
+    private var accountsPanel: some View {
+        let active = activeChannel
+        // A channel of this account saved from an earlier switch is already
+        // in the channel list; once is enough.
+        let others = auth.otherAccounts.filter { account in
+            !channels.contains(where: { $0.id == account.dataSyncId && $0.name == account.name })
+        }
+        return VStack(alignment: .leading, spacing: 2) {
+            Rectangle()
+                .fill(palette.onSurface.opacity(0.10))
+                .frame(height: 1)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
+
+            if loadingChannels {
+                ProgressView()
+                    .tint(palette.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+            }
+
+            // One line for somebody with one channel would only repeat the card.
+            if channels.count > 1 {
+                panelHeading("Channels on this account")
+                ForEach(channels) { channel in
+                    accountRow(name: channel.name, detail: channel.handle, photo: channel.photo,
+                               selected: channel.id == active?.id,
+                               onTap: { if channel.id != active?.id { switchToChannel(channel) } })
+                }
+            }
+
+            if !others.isEmpty {
+                panelHeading("Other accounts")
+                ForEach(others) { account in
+                    accountRow(name: account.name.isEmpty ? (account.email ?? "Account") : account.name,
+                               detail: account.email, photo: account.photo, selected: false,
+                               onTap: { switchTo(account) },
+                               onRemove: { auth.forget(account) })
+                }
+            }
+
+            Button { showLogin = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(palette.accent)
+                        .frame(width: 40, height: 40)
+                    Text("Add another account")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(palette.onSurface)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(switching)
+
+            if switching {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .tint(palette.accent)
+                        .frame(width: 40, height: 40)
+                    Text("Switching…")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+            }
+
+            // Inside the list rather than beside the name, where a button left
+            // room for only the first few letters of it.
+            if auth.isLoggedIn {
+                Button { confirmLogout = true } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(logoutRed)
+                            .frame(width: 40, height: 40)
+                        Text("Log out")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(logoutRed)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(switching)
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    private var logoutRed: Color { Color(hex: 0xE53935) }
+
+    private func panelHeading(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(palette.accent)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
+    }
+
+    private func accountRow(name: String, detail: String?, photo: String?, selected: Bool,
+                            onTap: @escaping () -> Void, onRemove: (() -> Void)? = nil) -> some View {
+        HStack(spacing: 8) {
+            Button(action: onTap) {
+                HStack(spacing: 12) {
+                    accountPhoto(photo, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(palette.onSurface)
+                            .lineLimit(1)
+                        if let detail, !detail.isEmpty {
+                            Text(detail)
+                                .font(.system(size: 12))
+                                .foregroundStyle(palette.onSurfaceVariant)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if selected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(palette.accent)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(switching)
+
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(palette.onSurfaceVariant)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(switching)
+                .accessibilityLabel("Remove from this phone")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+    }
+
+    /// The channel in use: the one this phone was told to use, or else
+    /// whichever the answer marks.
+    private var activeChannel: YouTube.AccountChannel? {
+        if let named = channels.first(where: { $0.id == auth.dataSyncId }) { return named }
+        if let marked = channels.first(where: { $0.isSelected }) { return marked }
+        return channels.first
+    }
+
+    // MARK: Switching
+
+    /// Asked when the list is first opened, never longer than 12 seconds.
+    private func loadChannels() {
+        guard auth.isLoggedIn, channels.isEmpty, !loadingChannels else { return }
+        loadingChannels = true
+        Task {
+            let found = await withTimeLimit(seconds: 12) { () async -> [YouTube.AccountChannel]? in
+                await YouTube.accountChannels()
+            } ?? []
+            await MainActor.run {
+                channels = found
+                loadingChannels = false
+            }
+        }
+    }
+
+    /// Make another saved account the one in use. Home and Library reload as
+    /// it underneath, so the panel closes once it has; one that no longer
+    /// answers changes nothing and says so.
+    private func switchTo(_ account: SavedAccount) {
+        guard !switching else { return }
+        switching = true
+        Task {
+            let ok = await auth.use(account)
+            await MainActor.run {
+                switching = false
+                if ok {
+                    channels = []
+                    expanded = false
+                    isPresented = false
+                } else {
+                    switchFailed = true
+                }
+            }
+        }
+    }
+
+    /// Another channel of the same Google account: the same sign-in, made on
+    /// behalf of a different channel.
+    private func switchToChannel(_ channel: YouTube.AccountChannel) {
+        let saved = auth.savedAccounts.first(where: { $0.id == auth.currentAccountKey })
+        var target = saved ?? SavedAccount(cookie: auth.cookie ?? "", visitorData: auth.visitorData,
+                                           dataSyncId: auth.dataSyncId, name: auth.accountName ?? "",
+                                           email: auth.accountEmail, photo: auth.accountPhoto)
+        guard !target.cookie.isEmpty else { return }
+        target.dataSyncId = channel.id
+        target.name = channel.name
+        target.photo = channel.photo
+        switchTo(target)
     }
 
     // MARK: Token + toggles

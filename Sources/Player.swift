@@ -235,6 +235,13 @@ final class Player: ObservableObject {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
         Task { await syncFavorites() }
+        // Another account in use: its liked songs come in, and the last one's go.
+        NotificationCenter.default.addObserver(
+            forName: .blazifyAccountChanged, object: nil, queue: .main,
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.syncFavorites() }
+        }
         Task { @MainActor in
             ListenTogether.shared.onRemote = { [weak self] action in
                 self?.applyRemote(action)
@@ -552,17 +559,48 @@ final class Player: ObservableObject {
     }
 
     /// Pull the account's Liked songs so hearts reflect the real library.
+    ///
+    /// The songs brought in this way are remembered, along with whose they
+    /// were. When the account in use is a different one, the last account's
+    /// come out before this one's go in, so two accounts' likes never mix.
+    /// Songs favourited here by hand are never taken out.
     func syncFavorites() async {
         guard Auth.shared.isLoggedIn else { return }
+        let owner = Auth.shared.currentAccountKey ?? ""
         let liked = await YouTube.likedSongs()
-        guard !liked.isEmpty else { return }
         await MainActor.run {
+            // Asked for an account that has since been switched away from:
+            // the newer sync speaks for the account in use.
+            guard Auth.shared.currentAccountKey == owner else { return }
+            let defaults = UserDefaults.standard
+            if defaults.string(forKey: Self.syncedOwnerKey) != owner {
+                self.dropSyncedFavorites()
+                defaults.set(owner, forKey: Self.syncedOwnerKey)
+            }
+            guard !liked.isEmpty else { return }
+            var synced = Set(defaults.stringArray(forKey: Self.syncedIdsKey) ?? [])
             for track in liked where !self.favorites.contains(track.videoId) {
                 self.favorites.insert(track.videoId)
                 self.favoriteTracks.append(track)
+                synced.insert(track.videoId)
             }
+            defaults.set(Array(synced), forKey: Self.syncedIdsKey)
             self.saveFavorites()
         }
+    }
+
+    /// Whose liked songs the synced favourites are, and which ones they are.
+    private static let syncedOwnerKey = "favoritesSyncedAccount"
+    private static let syncedIdsKey = "favoritesSyncedIds"
+
+    /// Take out every favourite that only came in from an account's likes.
+    private func dropSyncedFavorites() {
+        let synced = Set(UserDefaults.standard.stringArray(forKey: Self.syncedIdsKey) ?? [])
+        UserDefaults.standard.removeObject(forKey: Self.syncedIdsKey)
+        guard !synced.isEmpty else { return }
+        favorites.subtract(synced)
+        favoriteTracks.removeAll { synced.contains($0.videoId) }
+        saveFavorites()
     }
 
     private func saveFavorites() {

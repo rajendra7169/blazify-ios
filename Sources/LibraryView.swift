@@ -110,7 +110,7 @@ struct LibraryView: View {
                 .presentationBackground(.clear)
         }
         .sheet(isPresented: $showLogin) { LoginView() }
-        .task(id: auth.isLoggedIn) { await load() }
+        .task(id: auth.generation) { await load() }
     }
 
     /// Title, the Spotify pill and the account photo — the Android Library's own

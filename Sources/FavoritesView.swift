@@ -90,7 +90,7 @@ struct FavoritesView: View {
             }
         }
         .sheet(isPresented: $showLogin) { LoginView() }
-        .task(id: auth.isLoggedIn) { await load() }
+        .task(id: auth.generation) { await load() }
     }
 
     private var signedOut: some View {

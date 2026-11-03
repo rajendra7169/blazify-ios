@@ -99,7 +99,7 @@ struct YoursView: View {
             AccountPopup(player: player, isPresented: $showAccount)
                 .presentationBackground(.clear)
         }
-        .task(id: auth.isLoggedIn) { await load() }
+        .task(id: auth.generation) { await load() }
     }
 
     // MARK: Header — title, profile and Blaze Together all on one row

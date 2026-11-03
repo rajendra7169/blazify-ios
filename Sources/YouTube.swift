@@ -1397,6 +1397,93 @@ enum YouTube {
                            photo: (photo ?? "").isEmpty ? nil : photo)
     }
 
+    /// One channel a Google account can act as. `id` is what signed-in
+    /// requests are then made on behalf of.
+    struct AccountChannel: Identifiable, Hashable {
+        let id: String
+        let name: String
+        let handle: String?
+        let photo: String?
+        let isSelected: Bool
+    }
+
+    private static let webVersion = "2.20260213.00.00"
+    private static let musicAccountsList = "https://music.youtube.com/youtubei/v1/account/accounts_list?prettyPrint=false"
+
+    /// The channels of the signed-in Google account (InnerTube
+    /// `account/accounts_list`, the list behind the web app's "Switch
+    /// account"). Asked as the music site first, as it is the one the rest of
+    /// the app talks to; some accounts are only answered in full by the main
+    /// site, so an empty answer gets a second try as that.
+    static func accountChannels() async -> [AccountChannel] {
+        let music = await accountsList(clientName: "WEB_REMIX", number: "67", version: remixVersion)
+        if !music.isEmpty { return music }
+        return await accountsList(clientName: "WEB", number: "1", version: webVersion)
+    }
+
+    private static func accountsList(clientName: String, number: String, version: String) async -> [AccountChannel] {
+        var visitor = Auth.shared.visitorData
+        if visitor == nil { visitor = await visitorData() }
+        var client: [String: Any] = ["clientName": clientName, "clientVersion": version,
+                                     "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
+        if let visitor { client["visitorData"] = visitor }
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "requestType": "ACCOUNTS_LIST_REQUEST_TYPE_CHANNEL_SWITCHER",
+            "callCircumstance": "SWITCHING_USERS_FULL",
+        ]
+        // Asked as the Google account itself: asked as one of its channels,
+        // the answer can be only that channel.
+        guard let json = await post(musicAccountsList, name: number, version: version,
+                                    userAgent: webUA, visitor: visitor, body: body,
+                                    login: true, asChannel: false)
+        else { return [] }
+        var found: [AccountChannel] = []
+        collectChannels(json, into: &found)
+        var seen = Set<String>()
+        return found.filter { seen.insert($0.id).inserted }
+    }
+
+    /// The answer nests its account rows at different depths depending on the
+    /// client, so every `accountItem` anywhere in it is taken.
+    private static func collectChannels(_ node: Any, into found: inout [AccountChannel]) {
+        if let array = node as? [Any] {
+            for element in array { collectChannels(element, into: &found) }
+        } else if let object = node as? [String: Any] {
+            let row = object["accountItem"] ?? object["accountItemRenderer"]
+            if let item = row as? [String: Any] {
+                if let channel = accountChannel(item) { found.append(channel) }
+            } else {
+                for value in object.values { collectChannels(value, into: &found) }
+            }
+        }
+    }
+
+    private static func accountChannel(_ item: [String: Any]) -> AccountChannel? {
+        let name = runsJoined(item["accountName"])
+        guard !name.isEmpty else { return nil }
+        let endpoint = (item["serviceEndpoint"] as? [String: Any])?["selectActiveIdentityEndpoint"] as? [String: Any]
+        let tokens = endpoint?["supportedTokens"] as? [[String: Any]] ?? []
+        let syncToken = tokens.compactMap {
+            ($0["datasyncIdToken"] as? [String: Any])?["datasyncIdToken"] as? String
+        }.first
+        let pageId = tokens.compactMap {
+            ($0["pageIdToken"] as? [String: Any])?["pageId"] as? String
+        }.first
+        let syncId = syncToken?.components(separatedBy: "||").first ?? ""
+        let id = syncId.isEmpty ? (pageId ?? "") : syncId
+        guard !id.isEmpty else { return nil }
+        var handle = runsJoined(item["channelHandle"])
+        if handle.isEmpty { handle = runsJoined(item["accountByline"]) }
+        let photo = (
+            (item["accountPhoto"] as? [String: Any])?["thumbnails"] as? [[String: Any]]
+        )?.last?["url"] as? String
+        return AccountChannel(id: id, name: name,
+                              handle: handle.isEmpty ? nil : handle,
+                              photo: (photo ?? "").isEmpty ? nil : photo,
+                              isSelected: item["isSelected"] as? Bool ?? false)
+    }
+
     // MARK: - Like / library writes (signed-in)
 
     /// Like or un-like a song in the user's YouTube Music library.
@@ -1934,9 +2021,22 @@ enum YouTube {
 
     // MARK: - InnerTube POST
 
+    /// `asChannel: false` asks as the Google account itself rather than as the
+    /// channel in use — only the channel list wants that.
     private static func post(_ endpoint: String, name: String, version: String,
                              userAgent: String, visitor: String?, body: [String: Any],
-                             login: Bool = false) async -> [String: Any]? {
+                             login: Bool = false, asChannel: Bool = true) async -> [String: Any]? {
+        var body = body
+        // Signed-in requests from the two web clients are made on behalf of
+        // the channel in use. A Google account with several channels is
+        // otherwise always answered as its default one, whichever was picked.
+        if login, asChannel, name == "67" || name == "1", let channel = Auth.shared.channelId,
+           var context = body["context"] as? [String: Any] {
+            var user = context["user"] as? [String: Any] ?? [:]
+            user["onBehalfOfUser"] = channel
+            context["user"] = user
+            body["context"] = context
+        }
         guard let url = URL(string: endpoint),
               let payload = try? JSONSerialization.data(withJSONObject: body) else { return nil }
         var req = URLRequest(url: url)

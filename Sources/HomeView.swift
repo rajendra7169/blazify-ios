@@ -112,7 +112,8 @@ struct HomeView: View {
         .onChange(of: net.isOnline) {
             if net.isOnline { Task { await load() } }
         }
-        .onChange(of: auth.isLoggedIn) {
+        // Signed in, signed out, or another account: the feed is whoever's now.
+        .onChange(of: auth.generation) {
             Task { await load() }   // swap to (or from) the personalized feed
         }
         .sheet(isPresented: $showLogin) { LoginView() }
@@ -560,7 +561,7 @@ struct GreetingCard: View {
             .padding(.horizontal, 16)
             .padding(.top, 20)   // card sits higher; mascot hair reaches the wordmark
             .padding(.bottom, 8)
-            .task(id: auth.isLoggedIn) { await loadSupermix() }
+            .task(id: auth.generation) { await loadSupermix() }
     }
 
     /// The greeting, then the name — each on one line, fading out where the
