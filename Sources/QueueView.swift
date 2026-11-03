@@ -340,8 +340,15 @@ private struct QueueRowMenu: View {
             Button { playlistTrack = track } label: {
                 Label("Add to playlist", systemImage: "plus.circle")
             }
-            Button { Downloads.shared.download(track) } label: {
-                Label("Download", systemImage: "arrow.down.circle")
+            if Downloads.shared.state(track.videoId) == .downloading {
+                // Stops it where it is; a half-arrived song is not kept.
+                Button { Downloads.shared.cancel(track.videoId) } label: {
+                    Label("Stop downloading", systemImage: "xmark.circle")
+                }
+            } else {
+                Button { Downloads.shared.download(track) } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
             }
             Divider()
             Button(role: .destructive) {

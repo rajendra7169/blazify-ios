@@ -220,6 +220,7 @@ struct HomeSectionScreen: View {
     @State private var loading = true
     @State private var next: String?
     @State private var extending = false
+    @State private var confirmStopDownload = false
     @ObservedObject private var downloads = Downloads.shared
 
     /// What a shelf of songs is topped up to when the service offers no page of
@@ -281,6 +282,12 @@ struct HomeSectionScreen: View {
         .background(palette.scaffold.ignoresSafeArea())
         .navigationTitle(section.title)
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Stop downloading?", isPresented: $confirmStopDownload) {
+            Button("Keep downloading", role: .cancel) {}
+            Button("Stop", role: .destructive) { downloads.cancelAll(songs) }
+        } message: {
+            Text("Songs still waiting or arriving are stopped. Songs that already finished stay on your phone.")
+        }
         .task { await load() }
     }
 
@@ -335,22 +342,46 @@ struct HomeSectionScreen: View {
             // Keeps the whole shelf, skipping whatever is already kept — a
             // button that re-downloads forty songs to add the one that is
             // missing is a button nobody presses twice.
-            Button {
-                for track in songs where downloads.state(track.videoId) == .none {
-                    downloads.download(track)
-                }
-            } label: {
-                label(allKept ? "checkmark.circle.fill" : "arrow.down.circle",
-                      allKept ? "Downloaded" : "Download all")
-                    .foregroundStyle(allKept ? Blaze.amber : palette.onSurface)
+            //
+            // While some are still on their way it shows the download animation
+            // instead, and a tap offers to stop the rest.
+            if anyDownloading {
+                Button { confirmStopDownload = true } label: {
+                    HStack(spacing: 8) {
+                        BlazeDownloadLoader(size: 22)
+                        Text("Downloading").font(.blaze(15, .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9.5)
+                    .foregroundStyle(palette.onSurface)
                     .background(palette.onSurface.opacity(0.10))
                     .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Downloading. Tap to stop")
+            } else {
+                Button {
+                    for track in songs where downloads.state(track.videoId) == .none {
+                        downloads.download(track)
+                    }
+                } label: {
+                    label(allKept ? "checkmark.circle.fill" : "arrow.down.circle",
+                          allKept ? "Downloaded" : "Download all")
+                        .foregroundStyle(allKept ? Blaze.amber : palette.onSurface)
+                        .background(palette.onSurface.opacity(0.10))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(allKept)
             }
-            .buttonStyle(.plain)
-            .disabled(allKept)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
+    }
+
+    /// True while any song here is waiting or on its way.
+    private var anyDownloading: Bool {
+        songs.contains { downloads.state($0.videoId) == .downloading }
     }
 
     /// True once every song here is on the phone.

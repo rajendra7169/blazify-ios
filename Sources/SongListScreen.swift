@@ -202,6 +202,10 @@ struct SongListScreen: View {
             if !source.allSatisfy({ Downloads.shared.isDownloaded($0.videoId) }) {
                 Button("Download all") { Downloads.shared.downloadAll(source) }
             }
+            // Songs that already finished stay; only the rest are stopped.
+            if source.contains(where: { Downloads.shared.state($0.videoId) == .downloading }) {
+                Button("Stop downloading", role: .destructive) { Downloads.shared.cancelAll(source) }
+            }
             Button("Export playlist") { export() }
             // Only a playlist of your own can be handed over this way — the link
             // carries song ids, and a filtered view is not a playlist.
@@ -427,8 +431,9 @@ struct SongRowMenu: View {
                             Label("Remove download", systemImage: "checkmark.circle.fill")
                         }
                     case .downloading:
-                        Button { downloads.remove(track.videoId) } label: {
-                            Label("Downloading", systemImage: "arrow.down.circle.dotted")
+                        // Stops it where it is; a half-arrived song is not kept.
+                        Button { downloads.cancel(track.videoId) } label: {
+                            Label("Stop downloading", systemImage: "xmark.circle")
                         }
                     case .none:
                         Button { downloads.download(track) } label: {

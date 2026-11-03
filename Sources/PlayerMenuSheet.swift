@@ -169,15 +169,17 @@ struct PlayerMenuSheet: View {
                     dismiss()
                 }
                 action("plus.circle", "Add to playlist") { showAddToPlaylist = true }
-                action(downloadState == .done ? "arrow.down.circle.fill"
-                         : downloadState == .downloading ? "hourglass" : "arrow.down.circle",
-                       downloadState == .done ? "Downloaded"
-                         : downloadState == .downloading ? "Downloading" : "Download",
-                       tint: downloadState == .done ? Blaze.amber : .white,
-                       // A broadcast has no file to keep: it is a playlist that
-                       // keeps growing, and never the same twice.
-                       disabled: downloadState == .downloading || player.isCurrentLive) {
-                    if let t = player.current { downloads.toggle(t) }
+                if downloadState == .downloading {
+                    stopDownloadAction
+                } else {
+                    action(downloadState == .done ? "arrow.down.circle.fill" : "arrow.down.circle",
+                           downloadState == .done ? "Downloaded" : "Download",
+                           tint: downloadState == .done ? Blaze.amber : .white,
+                           // A broadcast has no file to keep: it is a playlist that
+                           // keeps growing, and never the same twice.
+                           disabled: player.isCurrentLive) {
+                        if let t = player.current { downloads.toggle(t) }
+                    }
                 }
                 action("person", "Artist") { openArtist() }
                 action("dot.radiowaves.left.and.right", "Start radio") {
@@ -217,6 +219,31 @@ struct PlayerMenuSheet: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
+    }
+
+    /// The download tile while the song is on its way: the download animation
+    /// in place of the icon, and a tap stops it.
+    private var stopDownloadAction: some View {
+        Button {
+            if let id = player.current?.videoId { downloads.cancel(id) }
+        } label: {
+            VStack(spacing: 6) {
+                BlazeDownloadLoader(size: 28, tint: Blaze.amber)
+                    .frame(height: 28)
+                Text("Stop download")
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .foregroundStyle(Color.white)
+            .frame(width: 108)
+            .padding(.vertical, 12)
+            .background(Color.white.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Downloading. Tap to stop")
     }
 
     /// The artist credited first, which is the one a listener means.

@@ -100,6 +100,8 @@ final class Downloads: ObservableObject {
     private var pending: [Track] = []
     private var activeCount = 0
     private let maxConcurrent = 3
+    /// The songs being fetched right now, so one can be stopped part-way.
+    private var running: [String: Task<Void, Never>] = [:]
 
     func download(_ track: Track) {
         let id = track.videoId
@@ -117,13 +119,36 @@ final class Downloads: ObservableObject {
         for t in tracks { download(t) }
     }
 
+    /// Stops one song that is waiting or on its way. Nothing of it is kept: a
+    /// song is only on the phone once all of it has arrived.
+    func cancel(_ id: String) {
+        guard state(id) == .downloading else { return }
+        pending.removeAll { $0.videoId == id }
+        running[id]?.cancel()
+        running[id] = nil
+        states[id] = nil
+        progress[id] = nil
+    }
+
+    /// Stops every song of a list that is still waiting or arriving. The ones
+    /// that already finished stay on the phone.
+    func cancelAll(_ tracks: [Track]) {
+        for t in tracks where state(t.videoId) == .downloading { cancel(t.videoId) }
+    }
+
     private func pump() {
         while activeCount < maxConcurrent, !pending.isEmpty {
             let next = pending.removeFirst()
+            let id = next.videoId
             activeCount += 1
+            let job = Task { await perform(next) }
+            running[id] = job
+            // The slot frees when the song is done, failed or stopped — a
+            // stopped one ends early, which is what lets the next one start.
             Task {
-                await perform(next)
+                await job.value
                 await MainActor.run {
+                    if self.running[id] == job { self.running[id] = nil }
                     self.activeCount -= 1
                     self.pump()
                 }
@@ -147,16 +172,20 @@ final class Downloads: ObservableObject {
         let id = track.videoId
         // One retry: a burst of enqueues sometimes drops the first resolve.
         var stream = await YouTube.streamURL(for: id)
-        if stream == nil {
+        if stream == nil, !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 800_000_000)
             stream = await YouTube.streamURL(for: id)
         }
+        // Stopped while the address was being looked up: cancel() has already
+        // put the row back, and it may have been asked for again since.
+        guard !Task.isCancelled else { return }
         guard let stream else {
             await MainActor.run { self.states[id] = DownloadState.none }
             return
         }
         do {
             let data = try await fetchAudio(stream.url, id: id)
+            try Task.checkCancellation()
             try? FileManager.default.removeItem(at: audioURL(for: id))
             try data.write(to: audioURL(for: id))
 
@@ -165,7 +194,9 @@ final class Downloads: ObservableObject {
             // lyrics hunt before the row would even say "downloaded".
             let stored = Track(videoId: id, title: track.title, artist: track.artist,
                                thumbnail: track.thumbnail, duration: stream.duration)
-            await MainActor.run {
+            let kept = await MainActor.run { () -> Bool in
+                // Stopped in the instant the last bytes landed: the stop wins.
+                guard !Task.isCancelled else { return false }
                 self.durations[id] = stream.duration
                 self.tracks.removeAll { $0.videoId == id }
                 self.tracks.insert(stored, at: 0)
@@ -173,6 +204,11 @@ final class Downloads: ObservableObject {
                 self.progress[id] = nil
                 self.saveMeta()
                 self.refreshSize()
+                return true
+            }
+            guard kept else {
+                try? FileManager.default.removeItem(at: audioURL(for: id))
+                return
             }
             // Detached, so the queue slot frees immediately. Awaiting this held
             // a slot through the artwork fetch AND a five-provider lyrics hunt,
@@ -182,6 +218,8 @@ final class Downloads: ObservableObject {
             }
         } catch {
             await MainActor.run {
+                // A stop already put the row back; leave a fresh request alone.
+                guard !Task.isCancelled else { return }
                 self.states[id] = DownloadState.none
                 self.progress[id] = nil
             }

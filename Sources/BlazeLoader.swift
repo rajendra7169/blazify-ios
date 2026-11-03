@@ -218,3 +218,99 @@ enum LoaderStory {
         ease(ramp(u, inStart, inEnd)) * (1 - ease(ramp(u, outStart, outEnd)))
     }
 }
+
+/// The wait for a download, told apart from every other wait: the logo's
+/// headphones held still as a frame while an arrow in the flame's colours drops
+/// in from above, lands in a small tray beneath them — which gives a little and
+/// glows as it does — then sinks into it and fades, while the next is on its way.
+/// Shown wherever a song or a whole list is saving to the phone.
+struct BlazeDownloadLoader: View {
+    @Environment(\.palette) private var palette
+    var size: CGFloat = 44
+    /// Overrides the theme's accent, for a loader on a coloured surface.
+    var tint: Color?
+
+    @State private var start = Date()
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { gc, canvasSize in
+                let t = CGFloat(timeline.date.timeIntervalSince(start))
+                let side = min(canvasSize.width, canvasSize.height)
+                let k = side / BlazeLogoShapes.viewSize
+                gc.translateBy(x: (canvasSize.width - side) / 2, y: (canvasSize.height - side) / 2)
+                gc.scaleBy(x: k, y: k)
+                gc.translateBy(x: -BlazeLogoShapes.viewLeft, y: -BlazeLogoShapes.viewTop)
+                DownloadStory.draw(in: &gc, t: t, colors: LoaderColors(tint ?? palette.accent))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("Downloading")
+    }
+}
+
+/// One drop of the arrow into the tray, in the logo's 1024-point box.
+private enum DownloadStory {
+    /// One drop, landing and sink.
+    static let seconds: CGFloat = 1.3
+
+    /// Shaft and head as one shape, so it fills in one go and keeps round joins.
+    static let arrow: Path = {
+        var p = Path()
+        p.move(to: CGPoint(x: 476, y: 330))
+        p.addLine(to: CGPoint(x: 548, y: 330))
+        p.addLine(to: CGPoint(x: 548, y: 536))
+        p.addLine(to: CGPoint(x: 640, y: 536))
+        p.addLine(to: CGPoint(x: 512, y: 676))
+        p.addLine(to: CGPoint(x: 384, y: 536))
+        p.addLine(to: CGPoint(x: 476, y: 536))
+        p.closeSubpath()
+        return p
+    }()
+
+    /// The tray: a U under the headphones that the arrow lands in.
+    static let tray: Path = {
+        var p = Path()
+        p.move(to: CGPoint(x: 380, y: 700))
+        p.addLine(to: CGPoint(x: 380, y: 770))
+        p.addLine(to: CGPoint(x: 644, y: 770))
+        p.addLine(to: CGPoint(x: 644, y: 700))
+        return p
+    }()
+
+    static func draw(in gc: inout GraphicsContext, t: CGFloat, colors c: LoaderColors) {
+        let u = t.truncatingRemainder(dividingBy: seconds) / seconds
+        let shading = GraphicsContext.Shading.linearGradient(
+            Gradient(colors: [c.top, c.bottom]),
+            startPoint: CGPoint(x: 512, y: 180), endPoint: CGPoint(x: 512, y: 780))
+
+        // The headphones: the part of the logo people know, held still as the frame.
+        var frame = gc
+        frame.opacity = 0.9
+        frame.fill(LoaderPaths.band, with: shading)
+        gc.fill(LoaderPaths.cupLeft, with: .color(c.cups))
+        gc.fill(LoaderPaths.cupRight, with: .color(c.cups))
+
+        // The arrow falls in from above, lands, and sinks into the tray as it fades.
+        let fall = LoaderStory.easeOut(LoaderStory.ramp(u, 0, 0.5))
+        let sink = LoaderStory.ease(LoaderStory.ramp(u, 0.62, 0.95))
+        let drop = -170 * (1 - fall) + 70 * sink
+        let shown = LoaderStory.ramp(u, 0, 0.18) * (1 - sink)
+        if shown > 0 {
+            var a = gc
+            a.opacity = Double(shown)
+            a.translateBy(x: 0, y: drop)
+            a.fill(arrow, with: shading)
+            a.stroke(arrow, with: shading, style: StrokeStyle(lineWidth: 34, lineJoin: .round))
+        }
+
+        // The tray gives a little as each arrow lands, and glows while it does.
+        let land = LoaderStory.envelope(u, 0.46, 0.56, 0.62, 0.86)
+        var tr = gc
+        tr.translateBy(x: 512, y: 770)
+        tr.scaleBy(x: 1 + 0.06 * land, y: 1 - 0.10 * land)
+        tr.translateBy(x: -512, y: -770)
+        tr.stroke(tray, with: .color(LoaderColors.mix(c.cups, UIColor(c.top), land)),
+                  style: StrokeStyle(lineWidth: 46, lineCap: .round, lineJoin: .round))
+    }
+}

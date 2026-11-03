@@ -18,6 +18,7 @@ struct PlaylistView: View {
     @State private var renaming = false
     @State private var newTitle = ""
     @State private var confirmDelete = false
+    @State private var confirmStopDownload = false
     @State private var notice: String?
     @Environment(\.dismiss) private var dismiss
 
@@ -139,6 +140,12 @@ struct PlaylistView: View {
         } message: {
             Text("It will be removed from your YouTube Music account too.")
         }
+        .alert("Stop downloading?", isPresented: $confirmStopDownload) {
+            Button("Keep downloading", role: .cancel) {}
+            Button("Stop", role: .destructive) { Downloads.shared.cancelAll(tracks) }
+        } message: {
+            Text("Songs still waiting or arriving are stopped. Songs that already finished stay on your phone.")
+        }
         .alert("Couldn't do that",
                isPresented: Binding(get: { notice != nil },
                                     set: { if !$0 { notice = nil } })) {
@@ -215,10 +222,15 @@ struct PlaylistView: View {
                 .disabled(true)
                 .accessibilityLabel("Downloaded")
         } else if states.contains(.downloading) {
-            BlazeLoader(size: 30)
-                .frame(width: 46, height: 46)
-                .background(palette.onSurface.opacity(0.10))
-                .clipShape(Circle())
+            // Still busy, and still a button: a tap offers to stop the rest.
+            Button { confirmStopDownload = true } label: {
+                BlazeDownloadLoader(size: 30)
+                    .frame(width: 46, height: 46)
+                    .background(palette.onSurface.opacity(0.10))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Downloading. Tap to stop")
         } else {
             roundButton("arrow.down") { Downloads.shared.downloadAll(tracks) }
                 .accessibilityLabel(downloadLabel)
