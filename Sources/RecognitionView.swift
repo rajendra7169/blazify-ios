@@ -19,7 +19,18 @@ struct RecognitionView: View {
         ZStack {
             palette.scaffold.ignoresSafeArea()
 
-            VStack(spacing: 28) {
+            // Behind everything, and only while there is something going on.
+            if recognizer.phase == .listening {
+                FlyingNotes(color: palette.accent)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
+            if recognizer.phase == .finding {
+                FindingSparks(color: palette.accent)
+                    .transition(.opacity)
+            }
+
+            VStack(spacing: 0) {
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
@@ -33,62 +44,155 @@ struct RecognitionView: View {
 
                 Spacer()
 
-                pulsingMic
-
-                Text(recognizer.status)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(palette.onSurfaceVariant)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-
-                if let match = recognizer.match {
-                    result(match)
+                Group {
+                    switch recognizer.phase {
+                    case .idle: ready
+                    case .listening: listening
+                    case .finding: finding
+                    case .found:
+                        if let match = recognizer.match { found(match) }
+                    case .notFound: notFound
+                    case .failed: failed
+                    }
                 }
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
 
                 Spacer()
-
-                if recognizer.isListening {
-                    Button("Stop") { recognizer.stop() }
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(palette.accent)
-                } else {
-                    Button {
-                        Task { await recognizer.start() }
-                    } label: {
-                        Text(recognizer.match == nil ? "Listen" : "Listen again")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(palette.onAccent)
-                            .padding(.horizontal, 36).padding(.vertical, 14)
-                            .background(palette.accent)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
                 Spacer().frame(height: 40)
             }
         }
-        .task { await recognizer.start() }
+        .animation(.easeInOut(duration: 0.3), value: recognizer.phase)
+        .onAppear { recognizer.begin() }
         .onDisappear { recognizer.stop() }
     }
 
-    private var pulsingMic: some View {
-        ZStack {
-            Circle()
-                .fill(palette.accent.opacity(0.16))
-                .frame(width: recognizer.isListening ? 190 : 150,
-                       height: recognizer.isListening ? 190 : 150)
-                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
-                           value: recognizer.isListening)
-            Circle()
-                .fill(palette.accent)
-                .frame(width: 110, height: 110)
-            Image(systemName: "waveform")
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(palette.onAccent)
+    // MARK: States
+
+    /// Waiting for a tap: the wave barely stirring inside the button.
+    private var ready: some View {
+        VStack(spacing: 24) {
+            Button { recognizer.begin() } label: {
+                ZStack {
+                    Circle()
+                        .fill(RadialGradient(colors: [palette.accent.opacity(0.3),
+                                                      palette.accent.opacity(0.1), .clear],
+                                             center: .center, startRadius: 0, endRadius: 100))
+                        .frame(width: 200, height: 200)
+                    Circle()
+                        .fill(palette.accent)
+                        .frame(width: 160, height: 160)
+                    SoundWaveBars(color: palette.onAccent, lively: false)
+                        .frame(width: 84, height: 84)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Recognise a song")
+
+            Text("Tap to recognise")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(palette.onSurface)
         }
     }
 
-    private func result(_ match: Recognizer.Match) -> some View {
+    /// Listening: rings of sound leaving the button and the wave dancing. The
+    /// button itself stops it, as does Cancel.
+    private var listening: some View {
+        VStack(spacing: 24) {
+            ZStack {
+                SoundRipples(color: palette.accent)
+                    .frame(width: 260, height: 260)
+                Button { recognizer.stop() } label: {
+                    ZStack {
+                        Circle()
+                            .fill(palette.accent)
+                            .frame(width: 160, height: 160)
+                        SoundWaveBars(color: palette.onAccent, lively: true)
+                            .frame(width: 96, height: 96)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Stop listening")
+            }
+
+            Text("Listening…")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(palette.accent)
+
+            Button { recognizer.stop() } label: {
+                Text("Cancel")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(palette.onSurface)
+                    .padding(.horizontal, 28).padding(.vertical, 10)
+                    .overlay(Capsule().stroke(palette.onSurface.opacity(0.3), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// Heard it; now asking what it was.
+    private var finding: some View {
+        VStack(spacing: 24) {
+            FindingRing(color: palette.accent)
+                .frame(width: 160, height: 160)
+            Text("Finding the song…")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(palette.onSurface)
+        }
+    }
+
+    /// Listened, and nothing matched.
+    private var notFound: some View {
+        VStack(spacing: 20) {
+            SongNotFoundArt()
+                .frame(width: 220, height: 220)
+
+            Text("Song not found")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(palette.onSurface)
+
+            Text("Hold your phone closer to the music, wait for a part with singing or a clear tune, and try again.")
+                .font(.system(size: 15))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            tryAgain
+        }
+    }
+
+    /// Couldn't listen at all — the microphone is off, or the audio never came.
+    private var failed: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "mic.slash.fill")
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .frame(width: 120, height: 120)
+                .background(palette.surfaceHigh)
+                .clipShape(Circle())
+
+            Text(recognizer.status)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            tryAgain
+        }
+    }
+
+    private var tryAgain: some View {
+        Button { recognizer.begin() } label: {
+            Label("Try again", systemImage: "arrow.clockwise")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(palette.onAccent)
+                .padding(.horizontal, 28).padding(.vertical, 14)
+                .background(palette.accent)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func found(_ match: Recognizer.Match) -> some View {
         VStack(spacing: 12) {
             RemoteImage(url: match.artworkURL, size: 140) { palette.onSurface.opacity(0.06) }
                 .frame(width: 140, height: 140)
@@ -122,6 +226,14 @@ struct RecognitionView: View {
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+
+            Button { recognizer.begin() } label: {
+                Text("Listen again")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(palette.accent)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
         }
         .padding(.horizontal, 24)
     }
@@ -141,9 +253,21 @@ final class Recognizer: ObservableObject {
         let artworkURL: URL?
     }
 
-    @Published var isListening = false
-    @Published var status = "Hold your phone towards the music"
-    @Published var match: Match?
+    /// Where an attempt has got to; the screen draws one picture per phase.
+    enum Phase: Equatable {
+        case idle, listening, finding, found, notFound, failed
+    }
+
+    @Published private(set) var phase: Phase = .idle
+    /// Why the last attempt couldn't listen, shown with `.failed`.
+    @Published private(set) var status = ""
+    @Published private(set) var match: Match?
+
+    /// Each attempt's number. Stopping moves it on, so an attempt still waiting
+    /// on the microphone or the network finds it is no longer the current one
+    /// and leaves the screen alone instead of announcing a stale result.
+    private var run = 0
+    private var job: Task<Void, Never>?
 
     private let engine = AVAudioEngine()
     private let sampleSeconds = 6.0
@@ -154,38 +278,59 @@ final class Recognizer: ObservableObject {
         "Dalvik/2.1.0 (Linux; U; Android 5.0; SM-G900F Build/LRX21T)",
     ]
 
-    func start() async {
-        guard !isListening else { return }
-        match = nil
+    /// Starts listening, unless an attempt is already under way.
+    func begin() {
+        guard job == nil else { return }
+        run += 1
+        let mine = run
+        job = Task { [weak self] in
+            await self?.listen(mine)
+            if self?.run == mine { self?.job = nil }
+        }
+    }
 
+    private func listen(_ mine: Int) async {
         guard await requestMic() else {
+            guard mine == run else { return }
+            match = nil
             status = "Microphone access is off. Turn it on in Settings to recognise songs."
+            phase = .failed
             return
         }
-
-        isListening = true
-        status = "Listening…"
+        guard mine == run else { return }
+        match = nil
+        phase = .listening
 
         do {
             let signature = try await captureSignature()
-            status = "Identifying…"
-            if let found = await lookup(signature) {
+            guard mine == run else { return }
+            // The microphone is done with; let it go while the lookup runs.
+            stopEngine()
+            phase = .finding
+            let found = await lookup(signature)
+            guard mine == run else { return }
+            if let found {
                 match = found
-                status = "Got it"
+                phase = .found
             } else {
-                status = "No match — try again with the music a little louder."
+                phase = .notFound
             }
         } catch {
+            guard mine == run else { return }
+            stopEngine()
             status = "Couldn't listen: \(error.localizedDescription)"
+            phase = .failed
         }
-        stopEngine()
-        isListening = false
     }
 
+    /// Stops whatever is under way and goes back to waiting for a tap. A result
+    /// already on screen stays there.
     func stop() {
+        run += 1
+        job?.cancel()
+        job = nil
         stopEngine()
-        isListening = false
-        if match == nil { status = "Hold your phone towards the music" }
+        if phase == .listening || phase == .finding { phase = .idle }
     }
 
     // MARK: Capture
