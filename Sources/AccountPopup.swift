@@ -24,6 +24,7 @@ struct AccountPopup: View {
     @State private var channelsLoaded = false
     @State private var switching = false
     @State private var switchFailed = false
+    @State private var confirmRemove: SavedAccount?
     @State private var moreContent = UserDefaults.standard.object(forKey: "useLoginForBrowse") as? Bool ?? true
     @State private var autoSync = UserDefaults.standard.object(forKey: "ytmSync") as? Bool ?? true
 
@@ -78,6 +79,20 @@ struct AccountPopup: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Downloaded songs are always kept.")
+        }
+        // Removing is asked about first: it sits one tap from switching, and
+        // getting the account back means signing in to it again.
+        .alert(
+            "Remove \(confirmRemove?.name ?? "this account") from this phone?",
+            isPresented: Binding(get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } })
+        ) {
+            Button("Remove", role: .destructive) {
+                if let account = confirmRemove { auth.forget(account) }
+                confirmRemove = nil
+            }
+            Button("Cancel", role: .cancel) { confirmRemove = nil }
+        } message: {
+            Text("To use this account here again, you will need to sign in to it again. Nothing changes on the Google account itself.")
         }
         .alert("Couldn't switch account", isPresented: $switchFailed) {
             Button("OK", role: .cancel) {}
@@ -372,7 +387,7 @@ struct AccountPopup: View {
                     accountRow(name: account.name.isEmpty ? (account.email ?? "Account") : account.name,
                                detail: account.email, photo: account.photo, selected: false,
                                onTap: { switchTo(account) },
-                               onRemove: { auth.forget(account) })
+                               onRemove: { confirmRemove = account })
                 }
             }
 
@@ -476,9 +491,9 @@ struct AccountPopup: View {
 
             if let onRemove {
                 Button(action: onRemove) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(palette.onSurfaceVariant)
+                    Image(systemName: "trash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.red)
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
                 }
