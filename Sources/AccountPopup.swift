@@ -240,7 +240,7 @@ struct AccountPopup: View {
                     if auth.isLoggedIn { showAccount = true } else { showLogin = true }
                 } label: {
                     HStack(spacing: 12) {
-                        cardPhoto(others: others)
+                        cardPhoto()
                         VStack(alignment: .leading, spacing: 2) {
                             Text(auth.isLoggedIn ? (auth.accountName ?? "Account") : "Add an account")
                                 .font(.system(size: 16, weight: .medium))
@@ -294,10 +294,10 @@ struct AccountPopup: View {
         return "Sign in with Google for your playlists and library"
     }
 
-    /// The face of the account in use, or a plus when there is none, with the
-    /// count of the other saved accounts on its corner.
-    private func cardPhoto(others: Int) -> some View {
-        ZStack(alignment: .bottomTrailing) {
+    /// The face of the account in use, or a plus when there is none. How many
+    /// other accounts are saved is said in the line under the name.
+    private func cardPhoto() -> some View {
+        ZStack {
             if auth.isLoggedIn {
                 accountPhoto(auth.accountPhoto, size: 44)
             } else {
@@ -309,15 +309,6 @@ struct AccountPopup: View {
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(palette.accent),
                     )
-            }
-            if others > 0 {
-                Text("+\(others)")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(palette.accent))
-                    .offset(x: 6, y: 4)
             }
         }
     }
