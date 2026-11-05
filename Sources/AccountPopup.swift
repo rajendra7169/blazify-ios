@@ -21,6 +21,7 @@ struct AccountPopup: View {
     @State private var expanded = false
     @State private var channels: [YouTube.AccountChannel] = []
     @State private var loadingChannels = false
+    @State private var channelsLoaded = false
     @State private var switching = false
     @State private var switchFailed = false
     @State private var moreContent = UserDefaults.standard.object(forKey: "useLoginForBrowse") as? Bool ?? true
@@ -258,17 +259,31 @@ struct AccountPopup: View {
                 .buttonStyle(.plain)
 
                 if auth.isLoggedIn || others > 0 {
+                    // The list is read before it opens, with the arrow turning into a
+                    // spinner meanwhile, so it opens complete instead of jumping.
                     Button {
-                        let opening = !expanded
-                        withAnimation(.easeOut(duration: 0.2)) { expanded = opening }
-                        if opening { loadChannels() }
+                        if expanded {
+                            withAnimation(.easeOut(duration: 0.2)) { expanded = false }
+                        } else if !loadingChannels {
+                            loadChannels {
+                                withAnimation(.easeOut(duration: 0.2)) { expanded = true }
+                            }
+                        }
                     } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(palette.onSurface)
-                            .rotationEffect(.degrees(expanded ? 180 : 0))
-                            .frame(width: 40, height: 40)
-                            .contentShape(Rectangle())
+                        Group {
+                            if loadingChannels {
+                                ProgressView()
+                                    .tint(palette.accent)
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(palette.onSurface)
+                                    .rotationEffect(.degrees(expanded ? 180 : 0))
+                            }
+                        }
+                        .frame(width: 40, height: 40)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Accounts and channels")
@@ -340,13 +355,6 @@ struct AccountPopup: View {
                 .frame(height: 1)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 4)
-
-            if loadingChannels {
-                ProgressView()
-                    .tint(palette.accent)
-                    .frame(maxWidth: .infinity)
-                    .padding(12)
-            }
 
             // One line for somebody with one channel would only repeat the card.
             if channels.count > 1 {
@@ -493,9 +501,11 @@ struct AccountPopup: View {
 
     // MARK: Switching
 
-    /// Asked when the list is first opened, never longer than 12 seconds.
-    private func loadChannels() {
-        guard auth.isLoggedIn, channels.isEmpty, !loadingChannels else { return }
+    /// Asked the first time the list is opened, never longer than 12 seconds;
+    /// `then` runs once the channels are in, or straight away when there is
+    /// nothing to ask.
+    private func loadChannels(then: @escaping () -> Void = {}) {
+        guard auth.isLoggedIn, !channelsLoaded, !loadingChannels else { then(); return }
         loadingChannels = true
         Task {
             let found = await withTimeLimit(seconds: 12) { () async -> [YouTube.AccountChannel]? in
@@ -503,7 +513,9 @@ struct AccountPopup: View {
             } ?? []
             await MainActor.run {
                 channels = found
+                channelsLoaded = true
                 loadingChannels = false
+                then()
             }
         }
     }
@@ -520,6 +532,7 @@ struct AccountPopup: View {
                 switching = false
                 if ok {
                     channels = []
+                    channelsLoaded = false
                     expanded = false
                     isPresented = false
                 } else {
