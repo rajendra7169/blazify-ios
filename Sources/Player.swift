@@ -439,19 +439,43 @@ final class Player: ObservableObject {
         guard !LocalMusic.isLocal(track.videoId), !track.videoId.isEmpty else { return }
 
         Task { @MainActor in
-            let shelves = await YouTube.related(videoId: track.videoId)
-            // The person may have moved on while that was in flight; adding to
-            // a queue they have since replaced would be worse than doing nothing.
-            guard self.current?.videoId == track.videoId, self.queue.count == 1 else { return }
-            let fresh = shelves
-                .flatMap(\.items)
-                .filter { $0.browseId == nil }
-                .map(\.asTrack)
-                .filter { !$0.videoId.isEmpty && $0.videoId != track.videoId }
-            guard !fresh.isEmpty else { return }
-            self.queue.append(contentsOf: fresh)
+            var fresh = await self.radioTracks(for: track)
+            if fresh.isEmpty {
+                // One more try: a slow or dropped answer left the queue one song long,
+                // and then it only filled once that song had ended.
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                fresh = await self.radioTracks(for: track)
+            }
+            // The person may have moved on to another song while this was in flight;
+            // songs like the old one would not belong behind the new one.
+            guard self.current?.videoId == track.videoId else {
+                VideoArtLog.note("radio \(track.videoId): moved on, \(fresh.count) not added")
+                return
+            }
+            // What is already queued stays (a Play next, an Add to queue made meanwhile);
+            // the radio goes after it, without repeats. It used to be dropped whenever the
+            // queue was no longer exactly this one song.
+            let known = Set(self.queue.map(\.videoId))
+            let add = fresh.filter { !known.contains($0.videoId) }
+            VideoArtLog.note("radio \(track.videoId): \(fresh.count) found, \(add.count) added to \(self.queue.count)")
+            guard !add.isEmpty else { return }
+            self.queue.append(contentsOf: add)
             self.originalQueue = self.queue
+            self.saveQueue()
         }
+    }
+
+    /// What to play after a song: YouTube's own radio for it (what YouTube Music and
+    /// Blazify on Android queue), else the songs on its Related page.
+    private func radioTracks(for track: Track) async -> [Track] {
+        let mix = await YouTube.mix(playlistId: "RDAMVM" + track.videoId)
+            .filter { !$0.videoId.isEmpty && $0.videoId != track.videoId }
+        if !mix.isEmpty { return mix }
+        return await YouTube.related(videoId: track.videoId)
+            .flatMap(\.items)
+            .filter { $0.browseId == nil }
+            .map(\.asTrack)
+            .filter { !$0.videoId.isEmpty && $0.videoId != track.videoId }
     }
 
     /// Advance if there's somewhere to go. Returns false at the end of the
