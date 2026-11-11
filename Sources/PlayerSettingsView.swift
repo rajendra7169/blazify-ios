@@ -52,18 +52,19 @@ struct PlayerSettingsView: View {
                 SettingsToggle(symbol: "arrow.triangle.merge", title: "Gapless",
                                subtitle: "No silence between tracks on a live album or a mix",
                                isOn: $prefs.gapless)
-                SettingsDivider()
-                SettingsToggle(symbol: "arrow.left.arrow.right", title: "Crossfade",
-                               subtitle: "Blend the end of one song into the next",
+                   
+                             SettingsToggle(symbol: "waveform.circle.fill", title: "Auto Mix",
+                               subtitle: "Seamlessly blend the end of one song into the next",
                                isOn: $prefs.crossfade)
                 if prefs.crossfade {
                     SettingsDivider()
-                    SettingsSlider(symbol: "timer", title: "Crossfade length",
+                    SettingsSlider(symbol: "timer", title: "Auto Mix duration",
                                    value: $prefs.crossfadeDuration,
                                    range: PlaybackPrefs.crossfadeRange, step: 0.5) {
                         String(format: "%.1f s", $0)
                     }
                 }
+
             }
 
             SettingsGroup(title: "Seeking") {
