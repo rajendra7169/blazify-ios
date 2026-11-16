@@ -18,20 +18,19 @@ enum Retro {
     static let darkKey = Color(hex: 0x2A241E)
 }
 
-/// A drawn cassette: the spool radii ARE the progress indicator (left unwinds,
-/// right winds on), and the 6-tooth hubs turn at 360°/3s while playing and
-/// freeze in place when paused.
+/// A drawn cassette that moves like a real tape. The tape runs past the heads at one steady
+/// speed, so each reel turns at that speed over the radius of the tape wound on it: the nearly
+/// empty reel spins fast and the full one slowly, and they trade places through the song. Each
+/// pack's size follows the tape on it (its area grows with the tape), a jump in the song winds
+/// the tape there at speed as fast-forward did, and paused, the reels stop where they are.
 struct CassetteTapeView: View {
     let isPlaying: Bool
     let progress: Double
     let accent: Color
     let artURL: URL?
 
-    // Rotation accumulates so pausing freezes the hubs where they are.
-    @State private var accumulated: Double = 0
-    @State private var startedAt = Date()
-
-    private static let degreesPerSecond = 120.0   // 360° / 3s
+    /// Where each reel has turned to, kept between frames.
+    @State private var reels = ReelMotion()
 
     var body: some View {
         GeometryReader { geo in
@@ -39,8 +38,7 @@ struct CassetteTapeView: View {
             let bh = geo.size.height
 
             TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying)) { timeline in
-                let angle = accumulated + (isPlaying
-                    ? timeline.date.timeIntervalSince(startedAt) * Self.degreesPerSecond : 0)
+                let angles = reels.step(at: timeline.date, tape: progress, playing: isPlaying)
 
                 ZStack(alignment: .topLeading) {
                     Canvas { ctx, size in drawBase(ctx, size) }
@@ -53,7 +51,7 @@ struct CassetteTapeView: View {
                         .offset(x: bw * 0.075, y: bh * 0.075)
 
                     Canvas { ctx, size in
-                        drawDetails(ctx, size, tape: progress, rotation: angle, accent: accent)
+                        drawDetails(ctx, size, tape: progress, left: angles.left, right: angles.right, accent: accent)
                     }
 
                     // Crisp little art chip on the label.
@@ -79,13 +77,8 @@ struct CassetteTapeView: View {
             }
         }
         .aspectRatio(1.55, contentMode: .fit)
-        .onChange(of: isPlaying) {
-            if isPlaying {
-                startedAt = Date()
-            } else {
-                accumulated += Date().timeIntervalSince(startedAt) * Self.degreesPerSecond
-            }
-        }
+        // Coming back from a pause, the clock picks up from now rather than counting the pause.
+        .onChange(of: isPlaying) { reels.restartClock() }
     }
 
     // MARK: Base (shell, screws, label backing)
@@ -142,7 +135,7 @@ struct CassetteTapeView: View {
     // MARK: Details (label print, window, reels, trapezoid)
 
     private func drawDetails(_ ctx: GraphicsContext, _ size: CGSize,
-                             tape: Double, rotation: Double, accent: Color) {
+                             tape: Double, left leftAngle: Double, right rightAngle: Double, accent: Color) {
         let s = size.width, t = size.height
         let p = CGFloat(min(max(tape, 0), 1))
 
@@ -179,9 +172,10 @@ struct CassetteTapeView: View {
         let reelY = t * 0.29
         let leftC = CGPoint(x: s * 0.385, y: reelY)
         let rightC = CGPoint(x: s * 0.615, y: reelY)
-        let minSpool = s * 0.055, maxSpool = s * 0.115
-        let leftSpool = minSpool + (maxSpool - minSpool) * (1 - p)
-        let rightSpool = minSpool + (maxSpool - minSpool) * p
+        // Each pack holds its share of the tape: the left gives it up, the right takes it on.
+        let hub = s * ReelMotion.hubShare
+        let leftSpool = hub * CGFloat(ReelMotion.packRadius(Double(1 - p)))
+        let rightSpool = hub * CGFloat(ReelMotion.packRadius(Double(p)))
 
         var clipped = ctx
         clipped.clip(to: window)
@@ -196,7 +190,7 @@ struct CassetteTapeView: View {
         sheen.addLine(to: CGPoint(x: rightC.x, y: winRect.maxY - t * 0.026))
         clipped.stroke(sheen, with: .color(.white.opacity(0.10)), lineWidth: t * 0.006)
 
-        for (center, spool) in [(leftC, leftSpool), (rightC, rightSpool)] {
+        for (center, spool, rotation) in [(leftC, leftSpool, leftAngle), (rightC, rightSpool, rightAngle)] {
             func circle(_ r: CGFloat) -> Path {
                 Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
             }
@@ -253,5 +247,46 @@ struct CassetteTapeView: View {
         ctx.fill(rr(s * 0.005, 0, s * 0.97, t * 0.955, s * 0.045), with: .linearGradient(
             Gradient(colors: [.white.opacity(0.07), .clear, .clear]),
             startPoint: .zero, endPoint: CGPoint(x: s * 0.9, y: t)))
+    }
+}
+
+/// Where the two reels have turned to, kept between frames, and how they move: the tape passes
+/// at one steady speed, so each turns by the tape that ran over its own radius.
+final class ReelMotion {
+    /// The hub's radius as a share of the cassette's width.
+    static let hubShare: CGFloat = 0.059
+    /// A full pack's radius in hub radii.
+    static let fullPack = 1.95
+    /// Tape speed past the heads while playing, in hub radii a second: an empty hub turns about
+    /// once a second.
+    static let playSpeed = 6.3
+    /// The whole tape in hub radii: a jump across all of it winds the small reel round about 25 times.
+    static let windLength = 160.0
+
+    /// A pack's radius in hub radii, holding [share] of the tape: its area grows with the tape on it.
+    static func packRadius(_ share: Double) -> Double {
+        (1 + (fullPack * fullPack - 1) * min(max(share, 0), 1)).squareRoot()
+    }
+
+    private(set) var left = 0.0
+    private(set) var right = 0.0
+    private var lastTape: Double?
+    private var lastTime: Date?
+
+    func restartClock() { lastTime = nil }
+
+    /// Moves the reels on to [date] and gives their angles in degrees.
+    func step(at date: Date, tape: Double, playing: Bool) -> (left: Double, right: Double) {
+        let tp = min(max(tape, 0), 1)
+        let dt = lastTime.map { min(max(date.timeIntervalSince($0), 0), 0.1) } ?? 0
+        var moved = (tp - (lastTape ?? tp)) * Self.windLength
+        if playing { moved += Self.playSpeed * dt }
+        lastTape = tp
+        lastTime = date
+        // Both reels turn the same way, anticlockwise from the front, as the tape runs left to right.
+        let degrees = 180 / Double.pi
+        left = (left - moved / Self.packRadius(1 - tp) * degrees).truncatingRemainder(dividingBy: 360)
+        right = (right - moved / Self.packRadius(tp) * degrees).truncatingRemainder(dividingBy: 360)
+        return (left, right)
     }
 }
