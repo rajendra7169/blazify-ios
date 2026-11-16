@@ -11,6 +11,7 @@ struct RootView: View {
     // A shared instance is observed, not owned; StateObject is for things a
     // view creates.
     @ObservedObject private var starPrompt = StarPrompt.shared
+    @ObservedObject private var updatePrompt = UpdatePrompt.shared
     @State private var tab: BlazeTab = LookFeel.shared.defaultTab.tab
     @Environment(\.colorScheme) private var scheme
 
@@ -190,9 +191,12 @@ struct RootView: View {
         .onAppear {
             performPendingRequest()
             PlayHistory.pruneOld()
-            // Asked once the app has been opened on three separate days, and
+            // One ask per launch: a new version first; the star only when none is on offer, and
             // never while anything is playing.
-            StarPrompt.shared.onOpened(somethingIsPlaying: player.isPlaying)
+            Task { @MainActor in
+                let offered = await UpdatePrompt.shared.check()
+                if !offered { StarPrompt.shared.onOpened(somethingIsPlaying: player.isPlaying) }
+            }
             // Signed in but nameless, from a session restored without one.
             Auth.shared.refreshAccountNameIfMissing()
             safeBottom = UIApplication.shared.connectedScenes
@@ -203,12 +207,32 @@ struct RootView: View {
             for: UIApplication.willEnterForegroundNotification)) { _ in
             performPendingRequest()
         }
-        .alert("Getting on with Blazify?", isPresented: $starPrompt.showing) {
-            Button("Star it") { starPrompt.open() }
-            Button("Later", role: .cancel) { starPrompt.dismiss() }
-            Button("No thanks", role: .destructive) { starPrompt.stop() }
-        } message: {
-            Text("It is made by one person and given away, with no ads and nothing tracked. A star on GitHub is most of how anyone else finds it.")
+        .overlay {
+            if let release = updatePrompt.offer {
+                BlazePromptCard(
+                    art: .rocket,
+                    title: "Blazify \(release.version) is here",
+                    message: "New features and fixes are ready. Your music and library stay just as they are.",
+                    primary: "Update", secondary: "Later",
+                    onPrimary: { updatePrompt.update() },
+                    onSecondary: { updatePrompt.later() },
+                    onDismiss: { updatePrompt.later() },
+                )
+                .environment(\.palette, palette)
+                .transition(.opacity)
+            } else if starPrompt.showing {
+                BlazePromptCard(
+                    art: .star,
+                    title: "Enjoying Blazify?",
+                    message: "A star on GitHub helps others find it. It's free, with no ads.",
+                    primary: "Star it", secondary: "Already starred",
+                    onPrimary: { starPrompt.open() },
+                    onSecondary: { starPrompt.stop() },
+                    onDismiss: { starPrompt.dismiss() },
+                )
+                .environment(\.palette, palette)
+                .transition(.opacity)
+            }
         }
         // Home Screen widget tiles arrive as blazify:// URLs.
         .onOpenURL { url in
