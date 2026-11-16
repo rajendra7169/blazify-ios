@@ -183,6 +183,10 @@ final class Player: ObservableObject {
     init() {
         configureSession()
         setupRemoteCommands()
+        Task { @MainActor [weak self] in
+            CastSession.shared.onEnded = { [weak self] in self?.castSongEnded() }
+            CastSession.shared.onStoppedThere = { [weak self] in self?.castStoppedThere() }
+        }
         loadFavorites()
         restoreModes()
         restoreQueue()
@@ -366,6 +370,8 @@ final class Player: ObservableObject {
             guard let self,
                   let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+            // The TV or speaker plays on through a call on the phone.
+            if self.isCastingNow { return }
             switch type {
             case .began:
                 self.isPlaying = false
@@ -803,6 +809,11 @@ final class Player: ObservableObject {
     /// inherit where an earlier one was joined.
     private func takeJoinAt() -> Double {
         defer { joinAt = 0 }
+        // Back from a TV or speaker: the phone carries on from where it got to there.
+        if let at = castResumeAt {
+            castResumeAt = nil
+            return at
+        }
         return joinAt
     }
 
@@ -881,6 +892,10 @@ final class Player: ObservableObject {
 
     private func stopForSleep() {
         cancelSleepTimer()
+        if isCastingNow {
+            if isPlaying { castToggle() }
+            return
+        }
         guard PlaybackPrefs.shared.sleepFadeOut, let player = avPlayer, isPlaying else {
             avPlayer?.pause()
             isPlaying = false
@@ -1230,6 +1245,12 @@ final class Player: ObservableObject {
         refreshSponsorSegments(for: videoId)
         warmVideoArt(for: track)
         Task { @MainActor in ListenTogether.shared.broadcastTrack(track, position: 0) }
+
+        // Playing on a TV or speaker: it gets the song's link and fetches it itself.
+        if isCastingNow {
+            castCurrent(track, at: takeJoinAt())
+            return
+        }
 
         // Your own files first — they have no network path at all — then a
         // deliberate download, then the automatic cache of things you've played.
@@ -1950,6 +1971,10 @@ final class Player: ObservableObject {
     }
 
     func toggle() {
+        if isCastingNow {
+            castToggle()
+            return
+        }
         // A session restored from disk has a queue but nothing loaded yet;
         // pressing play should start it rather than silently do nothing.
         guard let avPlayer else {
@@ -1989,6 +2014,14 @@ final class Player: ObservableObject {
     }
 
     func seek(to fraction: Double) {
+        if isCastingNow {
+            guard duration > 0 else { return }
+            let target = fraction * duration
+            currentTime = target
+            Task { @MainActor in CastSession.shared.seek(to: target) }
+            updateNowPlaying()
+            return
+        }
         guard duration > 0, let avPlayer else { return }
         let target = fraction * duration
         isSeeking = true
@@ -2039,6 +2072,10 @@ final class Player: ObservableObject {
     }
 
     private func resume() {
+        if isCastingNow {
+            if !isPlaying { castToggle() }
+            return
+        }
         guard let avPlayer else {
             // Nothing loaded — a restored session, or a song that failed. Start
             // it the way the play button in the app does rather than telling the
@@ -2055,7 +2092,158 @@ final class Player: ObservableObject {
         isPlaying = true
         updateNowPlaying()
     }
-    private func pause() { avPlayer?.pause(); isPlaying = false; updateNowPlaying() }
+
+    // MARK: - Casting to a TV or speaker
+
+    /// Where the phone carries on from after a cast ends, taken by the next load.
+    private var castResumeAt: Double?
+    private var castClock: Timer?
+
+    /// Whether songs are going to a TV or speaker rather than this phone.
+    var isCastingNow: Bool { CastSession.isConnectedNow }
+
+    /// Connected to a TV or speaker: the song playing here moves there, from the same second.
+    func castStarted() {
+        let at = currentTime
+        let wasPlaying = isPlaying || avPlayer == nil
+        discardPrepared()
+        cancelCrossfade()
+        removeTimeObserver()
+        statusObs = nil
+        rateObs = nil
+        avPlayer?.pause()
+        avPlayer?.replaceCurrentItem(with: nil)
+        avPlayer = nil
+        guard let track = current else { return }
+        if wasPlaying {
+            castCurrent(track, at: at)
+        } else {
+            // Paused here: it waits there, at the same second, for play.
+            currentTime = at
+            castResumeAt = at
+            isPlaying = false
+            startCastClock()
+        }
+    }
+
+    /// The cast has ended: the song comes back to this phone, paused where it had got to.
+    func castStopped(at position: Double) {
+        stopCastClock()
+        let at = position.isFinite ? max(position, 0) : currentTime
+        isPlaying = false
+        isLoading = false
+        currentTime = at
+        castResumeAt = at
+        saveQueue()
+        updateNowPlaying()
+    }
+
+    private func castCurrent(_ track: Track, at start: Double) {
+        avPlayer?.pause()
+        let videoId = track.videoId
+        if LocalMusic.shared.localAudioURL(for: videoId) != nil {
+            isLoading = false
+            isPlaying = false
+            Task { @MainActor in
+                CastSession.shared.problem = "Songs from this phone's own files can't be sent to a TV or speaker."
+            }
+            return
+        }
+        currentTime = start
+        isLoading = true
+        isPlaying = true
+        updateNowPlaying()
+        startCastClock()
+        warmLyrics(for: track, duration: track.duration)
+        let title = track.title
+        let artist = track.artist
+        let artwork = track.artURL(size: 1080)
+        let length = track.duration
+        Task { @MainActor in
+            await CastSession.shared.load(
+                videoId: videoId, title: title, artist: artist, artwork: artwork,
+                duration: length, startAt: start,
+            ) {
+                await YouTube.streamURL(for: videoId)?.url
+            }
+        }
+    }
+
+    private func castToggle() {
+        guard let track = current else { return }
+        if isPlaying {
+            Task { @MainActor in CastSession.shared.pause() }
+            isPlaying = false
+        } else if let at = castResumeAt {
+            // Nothing sent there yet: this play sends it.
+            castResumeAt = nil
+            castCurrent(track, at: at)
+            return
+        } else {
+            Task { @MainActor in CastSession.shared.resume() }
+            isPlaying = true
+        }
+        updateNowPlaying()
+    }
+
+    /// The song finished on the device: on to the next, as when one ends here.
+    private func castSongEnded() {
+        if repeatMode == .one, let track = current {
+            countRepeat()
+            castCurrent(track, at: 0)
+            return
+        }
+        endHandled = false
+        trackEnded()
+    }
+
+    /// The device stopped by itself, or the connection was lost.
+    private func castStoppedThere() {
+        if isCastingNow {
+            isPlaying = false
+            updateNowPlaying()
+        } else {
+            castStopped(at: currentTime)
+        }
+    }
+
+    /// While casting, the position, play state and loading follow what the device says.
+    private func startCastClock() {
+        guard castClock == nil else { return }
+        castClock = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                let session = CastSession.shared
+                guard session.isConnected else {
+                    self.stopCastClock()
+                    return
+                }
+                guard self.castResumeAt == nil else { return }
+                let position = session.currentPosition
+                if self.duration > 0 { self.currentTime = min(position, self.duration) }
+                if self.isLoading != session.loading { self.isLoading = session.loading }
+                if !session.loading, self.isPlaying != session.playing {
+                    self.isPlaying = session.playing
+                    self.updateNowPlaying()
+                }
+            }
+        }
+    }
+
+    private func stopCastClock() {
+        castClock?.invalidate()
+        castClock = nil
+    }
+
+    private func pause() {
+        if isCastingNow {
+            if isPlaying { castToggle() }
+            return
+        }
+        avPlayer?.pause()
+        isPlaying = false
+        updateNowPlaying()
+    }
 
     private func loadArtwork(_ url: URL?) {
         guard let url else { return }

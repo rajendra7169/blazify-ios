@@ -153,15 +153,7 @@ struct RingPlayerLayout: View {
     private var bottomRow: some View {
         HStack(spacing: 0) {
             key("list.bullet", "Queue", action: onOpenQueue)
-            VStack(spacing: 4) {
-                RoutePicker(tint: UIColor.white.withAlphaComponent(0.85),
-                            activeTint: UIColor(Blaze.amber))
-                    .frame(width: 26, height: 26)
-                Text("AirPlay").font(.system(size: 11)).lineLimit(1)
-            }
-            .foregroundStyle(.white.opacity(0.85))
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel("AirPlay and Bluetooth")
+            CastButton(player: player)
             key(player.sleepActive ? "moon.zzz.fill" : "moon.zzz", sleepLabel,
                 active: player.sleepActive, action: onOpenSleep)
             key("quote.bubble", "Lyrics", action: onShowLyrics)

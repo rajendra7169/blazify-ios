@@ -67,7 +67,7 @@ struct CassettePlayerLayout: View {
             RetroTransportRow(player: player).padding(.horizontal, 32)
             // The keys and the row underneath were almost touching.
             Spacer().frame(height: 26)
-            RetroBottomRow(accent: player.artColor, sleepActive: player.sleepActive,
+            RetroBottomRow(player: player, accent: player.artColor, sleepActive: player.sleepActive,
                            sleepLabel: sleepLabel,
                            onLyrics: onLyrics, onQueue: onQueue, onSleep: onSleep)
                 .padding(.horizontal, 32)
@@ -260,6 +260,7 @@ struct RetroKey<Content: View>: View {
 
 /// One pill of five butted segments; the lyrics segment is permanently accent-filled.
 struct RetroBottomRow: View {
+    @ObservedObject var player: Player
     let accent: Color
     let sleepActive: Bool
     /// What the sleep key says: the time left, "End of song", or its name.
@@ -271,16 +272,9 @@ struct RetroBottomRow: View {
     var body: some View {
         HStack(spacing: 0) {
             segment("list.bullet", "Queue", action: onQueue)
-            VStack(spacing: 3) {
-                RoutePicker(tint: UIColor(Retro.ink), activeTint: UIColor(accent))
-                    .frame(width: 22, height: 22)
-                Text("AirPlay").font(.system(size: 10, weight: .medium)).lineLimit(1)
-            }
-            .foregroundStyle(Retro.ink)
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background(Retro.cream)
-            .accessibilityLabel("AirPlay and Bluetooth")
+            CastButton(player: player, tint: Retro.ink, activeTint: accent, iconSize: 18, labelSize: 10)
+                .frame(height: 54)
+                .background(Retro.cream)
             segment(sleepActive ? "moon.zzz.fill" : "moon.zzz", sleepLabel,
                     tint: sleepActive ? accent : Retro.ink, action: onSleep)
             segment("text.alignleft", "Lyrics", tint: accent, action: onLyrics)

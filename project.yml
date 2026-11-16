@@ -39,6 +39,11 @@ targets:
         # Song recognition listens on the mic (ShazamKit). iOS kills the app on
         # the spot if it records without this string.
         NSMicrophoneUsageDescription: Blazify uses the microphone to recognise the song playing around you.
+        # Cast: finding Chromecasts, Google TVs and Nest speakers on the Wi-Fi. iOS asks the person
+        # once, with this text, and only looks for the services named below.
+        NSLocalNetworkUsageDescription: Blazify looks on your Wi-Fi for TVs and speakers to play your music on.
+        NSBonjourServices:
+          - _googlecast._tcp
         CFBundleURLTypes:
           - CFBundleURLName: com.rajendra.blazifyplayer
             CFBundleURLSchemes:
