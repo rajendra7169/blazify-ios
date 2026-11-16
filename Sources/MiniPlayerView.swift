@@ -53,33 +53,9 @@ struct MiniPlayerView: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 6) {
-                    switch look.miniPlayerDesign {
-                    case .flat:
-                        // LegacyMiniPlayer: plain play/pause and skip-next.
-                        plainButton(player.isPlaying ? "pause.fill" : "play.fill") {
-                            player.toggle()
-                        }
-                        plainButton("forward.end.fill") { player.next() }
-                    case .rounded:
-                        // MiniPlayerTransportCluster: prev · filled play · next.
-                        plainButton("backward.end.fill", size: 18) { player.prev() }
-                        Button { player.toggle() } label: {
-                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(palette.onAccent)
-                                .frame(width: 40, height: 40)
-                                .background(palette.accent)
-                                .clipShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        plainButton("forward.end.fill", size: 18) { player.next() }
-                    default:
-                        circleButton("person") { openArtist(track) }
-                        circleButton("plus") { showAddToPlaylist = true }
-                        circleButton(player.isCurrentFavorite ? "heart.fill" : "heart",
-                                     tint: player.isCurrentFavorite ? .red : ink) {
-                            player.toggleFavorite()
-                        }
+                    // The three buttons chosen for this design in Look & Feel, drawn in its style.
+                    ForEach(look.miniPlayerButtons(for: look.miniPlayerDesign)) { action in
+                        actionButton(action, track: track)
                     }
                 }
             }
@@ -151,6 +127,9 @@ struct MiniPlayerView: View {
                     },
             )
             .fullScreenCover(item: $artist) { ArtistView(browseId: $0.browseId, player: player) }
+            .sheet(isPresented: $showSleep) {
+                SleepTimerView(player: player).environment(\.palette, palette)
+            }
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistSheet(track: track)
             }
@@ -178,12 +157,72 @@ struct MiniPlayerView: View {
     }
 
     /// A bare icon button, as the flat design's transport uses.
-    private func plainButton(_ icon: String, size: CGFloat = 20,
+    @State private var showSleep = false
+
+    /// One chosen button, in the style of the design: plain on Flat, the transport cluster with a
+    /// filled play on Rounded, small circles on Modern and Floating.
+    @ViewBuilder private func actionButton(_ action: MiniPlayerAction, track: Track) -> some View {
+        let design = look.miniPlayerDesign
+        let (icon, tint, perform) = describe(action, track: track)
+        if design == .rounded, action == .playPause {
+            Button(action: perform) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(palette.onAccent)
+                    .frame(width: 40, height: 40)
+                    .background(palette.accent)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(action.title)
+        } else if design == .flat || design == .rounded {
+            plainButton(icon, size: design == .rounded ? 18 : 20, tint: tint, action: perform)
+                .accessibilityLabel(action.title)
+        } else {
+            circleButton(icon, tint: tint, action: perform)
+                .accessibilityLabel(action.title)
+        }
+    }
+
+    /// What a button shows now and what it does.
+    private func describe(_ action: MiniPlayerAction, track: Track) -> (String, Color?, () -> Void) {
+        switch action {
+        case .playPause:
+            return (player.isPlaying ? "pause.fill" : "play.fill", nil, { player.toggle() })
+        case .previous:
+            return ("backward.end.fill", nil, { player.prev() })
+        case .next:
+            return ("forward.end.fill", nil, { _ = player.next() })
+        case .like:
+            let liked = player.isCurrentFavorite
+            return (liked ? "heart.fill" : "heart", liked ? .red : nil, { player.toggleFavorite() })
+        case .addToPlaylist:
+            return ("plus", nil, { showAddToPlaylist = true })
+        case .viewArtist:
+            return ("person", nil, { openArtist(track) })
+        case .startRadio:
+            return ("dot.radiowaves.left.and.right", nil, { player.startRadio(from: track) })
+        case .download:
+            let done = Downloads.shared.isDownloaded(track.videoId)
+            return (done ? "checkmark.circle.fill" : "arrow.down.circle", done ? palette.accent : nil,
+                    { if !done { Downloads.shared.download(track) } })
+        case .sleepTimer:
+            return (player.sleepActive ? "moon.zzz.fill" : "moon.zzz", player.sleepActive ? palette.accent : nil,
+                    { showSleep = true })
+        case .shuffle:
+            return ("shuffle", player.isShuffled ? palette.accent : nil, { player.toggleShuffle() })
+        case .repeat:
+            let icon = player.repeatMode == .one ? "repeat.1" : "repeat"
+            return (icon, player.repeatMode == .off ? nil : palette.accent, { player.cycleRepeat() })
+        }
+    }
+
+    private func plainButton(_ icon: String, size: CGFloat = 20, tint: Color? = nil,
                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: size))
-                .foregroundStyle(ink)
+                .foregroundStyle(tint ?? ink)
                 .frame(width: 40, height: 44)
                 .contentShape(Rectangle())
         }

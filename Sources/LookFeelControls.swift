@@ -332,6 +332,9 @@ struct LookFeelMiniControls: View {
                 .padding(.horizontal, 16)
             }
 
+            // The three buttons on the mini-player, chosen for the design above.
+            MiniPlayerButtonsChooser()
+
             LookFeelGroup {
                 LookFeelRow(icon: "square.stack.3d.up",
                             title: "Background style",
