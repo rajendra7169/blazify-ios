@@ -206,13 +206,30 @@ struct RecognitionView: View {
                 .font(.system(size: 15))
                 .foregroundStyle(palette.onSurfaceVariant)
 
-            // Recognition tells us what it is; playback still comes from YouTube.
+            // Recognition tells us what it is; playback still comes from YouTube. The same song,
+            // matched the way playlist imports match (same title, one of the same artists, so not
+            // a cover or a karaoke version), plays with its radio after it; only when nothing
+            // matches do the plain search results play, as before.
             Button {
                 Task {
-                    let results = await YouTube.search("\(match.title) \(match.artist)")
-                    guard !results.isEmpty else { return }
+                    var found: Track?
+                    var fallback: [Track] = []
+                    for query in SongMatch.queries(title: match.title, artists: match.artist) {
+                        let results = await YouTube.search(query, scope: .songs)
+                        if fallback.isEmpty { fallback = results }
+                        found = SongMatch.pick(results, title: match.title, artists: match.artist, seconds: 0)
+                        if found != nil { break }
+                    }
+                    let song = found
+                    let results = fallback
                     await MainActor.run {
-                        player.play(results, startAt: 0)
+                        if let song {
+                            player.playWithRadio(song)
+                        } else if !results.isEmpty {
+                            player.play(results, startAt: 0)
+                        } else {
+                            return
+                        }
                         player.openFullPlayer()
                         dismiss()
                     }

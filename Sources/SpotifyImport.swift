@@ -2,7 +2,6 @@ import Foundation
 
 /// How far a result's length may differ from Spotify's before it is somebody
 /// else's song. At file scope because the matching runs off the main actor.
-private let toleranceSeconds = 8.0
 
 /// Searches in flight at once: enough to be quick, few enough to stay polite.
 private let atOnce = 4
@@ -112,26 +111,17 @@ enum SpotifyImport {
     }
 
     nonisolated private static func match(_ track: SpotifyPlaylist.Track) async -> Track? {
-        let query = [track.title, track.artists]
-            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            .joined(separator: " ")
-        let results = await YouTube.search(query, scope: .songs)
-        return pick(from: results, for: track)
+        // The plain title with the first artist first, then everything as given: a version tail
+        // like "- 2022 Remaster" sends a search somewhere else.
+        for query in SongMatch.queries(title: track.title, artists: track.artists) {
+            let results = await YouTube.search(query, scope: .songs)
+            if let found = pick(from: results, for: track) { return found }
+        }
+        return nil
     }
 
-    /// The closest result by length, or nothing.
-    ///
-    /// A track Spotify has no length for (it happens) is matched on names alone,
-    /// since there is nothing to compare.
+    /// The same song among the results, or nothing: see `SongMatch`.
     nonisolated static func pick(from results: [Track], for track: SpotifyPlaylist.Track) -> Track? {
-        guard !results.isEmpty else { return nil }
-        guard track.durationSeconds > 0 else { return results.first }
-        let wanted = Double(track.durationSeconds)
-        return results
-            .filter { $0.duration > 0 }
-            .map { ($0, abs($0.duration - wanted)) }
-            .filter { $0.1 <= toleranceSeconds }
-            .min { $0.1 < $1.1 }?
-            .0
+        SongMatch.pick(results, title: track.title, artists: track.artists, seconds: Double(track.durationSeconds))
     }
 }
