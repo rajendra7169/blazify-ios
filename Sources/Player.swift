@@ -686,6 +686,21 @@ final class Player: ObservableObject {
         saveQueue()
     }
 
+    /// Puts a song taken out of the queue back where it was (the queue's Undo). What is playing
+    /// carries on: only the rows around it move.
+    func restoreToQueue(_ track: Track, at position: Int) {
+        let at = min(max(position, 0), queue.count)
+        if queue.isEmpty {
+            queue = [track]
+            index = 0
+        } else {
+            queue.insert(track, at: at)
+            if at <= index { index += 1 }
+        }
+        if !originalQueue.contains(where: { $0.videoId == track.videoId }) { originalQueue.append(track) }
+        saveQueue()
+    }
+
     func jump(to i: Int) {
         cancelCrossfade()
         discardPrepared()

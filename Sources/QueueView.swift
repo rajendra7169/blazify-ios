@@ -7,12 +7,9 @@ struct QueueView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var auth = Auth.shared
 
-    /// Whether the rows are pinned down. Locked by default, as on Android: the
-    /// queue is read far more often than it is rearranged, and a list that
-    /// rearranges itself under a thumb meant for scrolling is worse than one
-    /// that asks first. It also buys back the swipes — iOS turns off swipe
-    /// actions entirely while a list is in edit mode.
-    @AppStorage("queueEditLocked") private var locked = true
+    /// The song just swiped out, and where it was, while its Undo is offered.
+    @State private var removed: (track: Track, position: Int)?
+    @State private var undoTimer: Task<Void, Never>?
 
     @State private var showSave = false
     @State private var playlistName = ""
@@ -51,7 +48,6 @@ struct QueueView: View {
                                 .foregroundStyle(palette.onSurfaceVariant)
                         }
                         Spacer(minLength: 0)
-                        lockKey
                     }
                     .textCase(nil)
                     .padding(.bottom, 8)
@@ -114,7 +110,7 @@ struct QueueView: View {
                     .listRowSeparator(.hidden)
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            player.removeFromQueue(at: pair.offset)
+                            remove(pair.element, at: pair.offset)
                         } label: {
                             Label("Remove", systemImage: "trash")
                         }
@@ -130,9 +126,10 @@ struct QueueView: View {
                         .tint(Blaze.amber)
                     }
                 }
+                // No lock and no edit mode: hold a row and drag it anywhere, as on Android, while
+                // both swipes keep working. iOS turns swipes off entirely in edit mode.
                 .onMove { from, to in player.moveInQueue(from: from, to: to) }
             }
-            .environment(\.editMode, .constant(locked ? .inactive : .active))
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(palette.scaffold.ignoresSafeArea())
@@ -163,7 +160,9 @@ struct QueueView: View {
                 bottomKeys
             }
             .overlay(alignment: .bottom) {
-                if let notice {
+                if let removed {
+                    undoBar(for: removed.track)
+                } else if let notice {
                     Text(notice)
                         .font(.blaze(13, .semibold))
                         .foregroundStyle(palette.onSurface)
@@ -206,28 +205,43 @@ struct QueueView: View {
         }
     }
 
-    /// Pinned or free to rearrange.
-    ///
-    /// Round, quiet while locked and amber while not, so the state is readable
-    /// without reading the padlock itself — and sitting at the end of the title
-    /// row, where it belongs to the whole list rather than to any one song.
-    private var lockKey: some View {
-        Button {
-            locked.toggle()
-        } label: {
-            Image(systemName: locked ? "lock" : "lock.open")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(locked ? palette.onSurfaceVariant : Blaze.amber)
-                .frame(width: 40, height: 40)
-                .background(
-                    Circle().fill(locked
-                        ? palette.onSurface.opacity(0.08)
-                        : Blaze.amber.opacity(0.18)),
-                )
+    /// Takes a song out of the queue and offers it back for ten seconds: long enough to notice
+    /// the swipe went too far and reach for Undo.
+    private func remove(_ track: Track, at position: Int) {
+        player.removeFromQueue(at: position)
+        withAnimation(.easeOut(duration: 0.2)) { removed = (track, position) }
+        undoTimer?.cancel()
+        undoTimer = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.2)) { removed = nil }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(locked ? "Queue locked" : "Queue unlocked")
-        .accessibilityHint("Unlock to drag songs into a different order")
+    }
+
+    private func undoBar(for track: Track) -> some View {
+        HStack(spacing: 12) {
+            Text("Removed \(track.title) from the queue")
+                .font(.blaze(13, .semibold))
+                .foregroundStyle(palette.onSurface)
+                .lineLimit(1)
+            Button {
+                undoTimer?.cancel()
+                if let removed { player.restoreToQueue(removed.track, at: removed.position) }
+                withAnimation(.easeIn(duration: 0.2)) { removed = nil }
+            } label: {
+                Text("Undo")
+                    .font(.blaze(13, .bold))
+                    .foregroundStyle(Blaze.amber)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 11)
+        .background(palette.surfaceHigh)
+        .clipShape(Capsule())
+        .padding(.horizontal, 16)
+        .padding(.bottom, 28)
+        .transition(.opacity)
     }
 
     /// Shuffle · Close · Repeat, over a fade into the page — the row the Android
