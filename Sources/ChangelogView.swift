@@ -212,21 +212,31 @@ struct MarkdownBody: View {
         }
     }
 
-    /// `@user` and bare URLs become tappable, everything else plain text.
+    /// The line's own markdown read as such: **bold**, *italics* and `[#23](address)` links,
+    /// which show as their label ("#23") rather than the brackets and the whole address. Then
+    /// `@user` and bare URLs in what is left become tappable too.
     private func linked(_ raw: String) -> some View {
-        var attributed = AttributedString(raw)
-        let ns = raw as NSString
+        var attributed = (try? AttributedString(
+            markdown: raw,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace),
+        )) ?? AttributedString(raw)
+        let shown = String(attributed.characters)
+        let ns = shown as NSString
         let pattern = #"(@[A-Za-z0-9_-]+)|(https?://[^\s]+)"#
         if let regex = try? NSRegularExpression(pattern: pattern) {
-            for match in regex.matches(in: raw, range: NSRange(location: 0, length: ns.length)) {
+            for match in regex.matches(in: shown, range: NSRange(location: 0, length: ns.length)) {
                 let token = ns.substring(with: match.range)
                 let target = token.hasPrefix("@")
                     ? "https://github.com/\(token.dropFirst())" : token
-                if let range = attributed.range(of: token), let url = URL(string: target) {
+                if let range = attributed.range(of: token), attributed[range].link == nil,
+                   let url = URL(string: target) {
                     attributed[range].link = url
-                    attributed[range].foregroundColor = palette.accent
                 }
             }
+        }
+        // Every link in the accent, whichever way it came.
+        for run in attributed.runs where run.link != nil {
+            attributed[run.range].foregroundColor = palette.accent
         }
         return Text(attributed)
             .font(.blaze(14))
