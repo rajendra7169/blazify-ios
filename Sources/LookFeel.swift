@@ -161,6 +161,8 @@ final class LookFeel: ObservableObject {
     @Published var gridItemSize: GridItemSize { didSet { save(gridItemSize.rawValue, "gridItemSize") } }
     @Published var showHomeGreeting: Bool { didSet { save(showHomeGreeting, "showHomeGreeting") } }
     @Published var showHomeSearchBar: Bool { didSet { save(showHomeSearchBar, "showHomeSearchBar") } }
+    /// The festive Home logo on major festivals in the person's country; on unless turned off.
+    @Published var festivalTouches: Bool { didSet { save(festivalTouches, "festivalTouches") } }
     @Published var defaultTab: DefaultTab { didSet { save(defaultTab.rawValue, "defaultOpenTab") } }
     // Appearance — the player options Look & Feel doesn't preview.
     @Published var swipeThumbnail: Bool { didSet { save(swipeThumbnail, "enableSwipeThumbnail") } }
@@ -191,6 +193,7 @@ final class LookFeel: ObservableObject {
         gridItemSize = read("gridItemSize", .small)
         showHomeGreeting = flag("showHomeGreeting", true)
         showHomeSearchBar = flag("showHomeSearchBar", true)
+        festivalTouches = flag("festivalTouches", true)
         defaultTab = read("defaultOpenTab", .home)
         swipeThumbnail = flag("enableSwipeThumbnail", true)
         cropAlbumArt = flag("cropAlbumArt", true)

@@ -57,7 +57,7 @@ fi
 # The handful of files that stand on their own — no app types, no networking —
 # can be checked properly, and their logic can even be run. Add to this list
 # only files that compile alone against plain Foundation.
-SELF_CONTAINED="Sources/PlaylistLink.swift Sources/CardOrder.swift Sources/LibraryCardText.swift"
+SELF_CONTAINED="Sources/PlaylistLink.swift Sources/CardOrder.swift Sources/LibraryCardText.swift Sources/Festival.swift"
 
 echo "Type-checking the files that stand on their own…"
 for file in $SELF_CONTAINED; do

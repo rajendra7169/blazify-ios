@@ -435,6 +435,10 @@ struct LookFeelHomeControls: View {
             LookFeelToggleRow(icon: "magnifyingglass", title: "Show home search bar",
                               subtitle: "The search pill under the greeting",
                               isOn: $look.showHomeSearchBar)
+            LookFeelDivider()
+            LookFeelToggleRow(icon: "party.popper", title: "Festival touches",
+                              subtitle: "A festive Blazify logo on major festivals in your country. Tap it to celebrate.",
+                              isOn: $look.festivalTouches)
         }
         .confirmationDialog("Default open tab", isPresented: $showDefaultTab,
                             titleVisibility: .visible) {

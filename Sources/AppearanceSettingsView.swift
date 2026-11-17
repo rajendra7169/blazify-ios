@@ -37,6 +37,10 @@ struct AppearanceSettingsView: View {
                 SettingsToggle(symbol: "magnifyingglass", title: "Search bar",
                                subtitle: "The search pill under the greeting",
                                isOn: $look.showHomeSearchBar)
+                SettingsDivider()
+                SettingsToggle(symbol: "party.popper", title: "Festival touches",
+                               subtitle: "A festive Blazify logo on major festivals in your country. Tap it to celebrate.",
+                               isOn: $look.festivalTouches)
             }
 
             SettingsGroup(title: "Player") {
