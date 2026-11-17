@@ -417,9 +417,7 @@ struct HomeView: View {
             }
             Spacer()
             HStack(spacing: 8) {
-                Image(bundleImage: "blaze_logo")
-                    .resizable()
-                    .scaledToFit()
+                headerLogo
                     .frame(width: 38, height: 38)
                     // The launch logo lands here: this one says where it is, keeps out of
                     // sight while that one is on its way, and fades in as it arrives.
@@ -452,6 +450,18 @@ struct HomeView: View {
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 0)
+    }
+
+    /// The logo, or on a festival day here the logo in festival dress, at the same size and
+    /// place, so nothing in the header moves.
+    @ViewBuilder private var headerLogo: some View {
+        if look.festivalTouches, let festival = Festival.on(.today, country: festivalCountry()) {
+            FestivalLogoArt(festival: festival)
+        } else {
+            Image(bundleImage: "blaze_logo")
+                .resizable()
+                .scaledToFit()
+        }
     }
 
     // MARK: - Search pill (opens full search)
