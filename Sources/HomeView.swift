@@ -27,6 +27,8 @@ struct HomeView: View {
     @State private var showAccount = false
     @State private var showSettings = false
     @State private var showRecognition = false
+    @State private var celebrating: Festival?
+    @State private var festiveModeOff = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -128,6 +130,37 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $showRecognition) {
             RecognitionView(player: player)
+        }
+        // The celebration fades in and out over Home by itself, so the cover must not slide.
+        .fullScreenCover(item: $celebrating) { festival in
+            FestivalCelebration(festival: festival, country: festivalCountry()) {
+                instantly { celebrating = nil }
+            } onTurnOff: {
+                instantly { celebrating = nil }
+                look.festivalTouches = false
+                withAnimation { festiveModeOff = true }
+                Task {
+                    try? await Task.sleep(nanoseconds: 3_500_000_000)
+                    withAnimation { festiveModeOff = false }
+                }
+            }
+            .presentationBackground(.clear)
+        }
+        .overlay(alignment: .bottom) {
+            if festiveModeOff {
+                Text("Festive mode is off. Turn it back on in Look & Feel › Home.")
+                    .font(.blaze(13, .semibold))
+                    .foregroundStyle(palette.onSurface)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .background(palette.surfaceHigh)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 90)
+                    .transition(.opacity)
+            }
         }
     }
 
@@ -456,12 +489,27 @@ struct HomeView: View {
     /// place, so nothing in the header moves.
     @ViewBuilder private var headerLogo: some View {
         if look.festivalTouches, let festival = Festival.on(.today, country: festivalCountry()) {
+            // Tapping it plays the celebration.
             FestivalLogoArt(festival: festival)
+                .contentShape(Rectangle())
+                .onTapGesture { instantly { celebrating = festival } }
+                .accessibilityElement()
+                .accessibilityLabel(Text(LocalizedStringKey(festival.greeting(in: festivalCountry()))))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { instantly { celebrating = festival } }
         } else {
             Image(bundleImage: "blaze_logo")
                 .resizable()
                 .scaledToFit()
         }
+    }
+
+    /// A change shown at once, with no animation: the celebration's cover neither slides up
+    /// nor down, as it fades over Home by itself.
+    private func instantly(_ change: () -> Void) {
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant, change)
     }
 
     // MARK: - Search pill (opens full search)
