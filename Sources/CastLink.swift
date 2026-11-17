@@ -52,29 +52,24 @@ final class CastLink: @unchecked Sendable {
     /// Connects and asks how the device is; false when it can't be reached.
     func open() async -> Bool {
         let opened: Bool = await withCheckedContinuation { continuation in
-            var answered = false
-            func answer(_ value: Bool) {
-                guard !answered else { return }
-                answered = true
-                continuation.resume(returning: value)
-            }
+            let answer = OneAnswer(continuation)
             connection.stateUpdateHandler = { [weak self] state in
                 guard let self else { return }
                 switch state {
                 case .ready:
-                    answer(true)
+                    answer.give(true)
                 case .failed, .cancelled:
-                    answer(false)
+                    answer.give(false)
                     self.finish()
                 case .waiting:
                     // Not reachable as things stand (a local network not allowed, a device gone).
-                    answer(false)
+                    answer.give(false)
                 default:
                     break
                 }
             }
             connection.start(queue: queue)
-            queue.asyncAfter(deadline: .now() + 10) { answer(false) }
+            queue.asyncAfter(deadline: .now() + 10) { answer.give(false) }
         }
         guard opened else {
             close()
@@ -120,12 +115,8 @@ final class CastLink: @unchecked Sendable {
                 }
                 self.nextRequestId += 1
                 let id = self.nextRequestId
-                var answered = false
-                self.waiting[id] = { json in
-                    guard !answered else { return }
-                    answered = true
-                    continuation.resume(returning: json)
-                }
+                let answer = OneAnswer(continuation)
+                self.waiting[id] = { json in answer.give(json) }
                 var message = body
                 message["requestId"] = id
                 self.write(namespace, to: destination, json: message)
@@ -176,22 +167,20 @@ final class CastLink: @unchecked Sendable {
                     return
                 }
                 let key = UUID()
-                var answered = false
-                func answer(_ json: [String: Any]?) {
-                    guard !answered else { return }
-                    answered = true
-                    self.watchers.removeValue(forKey: key)
-                    continuation.resume(returning: json)
-                }
+                let answer = OneAnswer(continuation)
                 self.watchers[key] = { json, namespace in
                     guard matches(json, namespace) else { return false }
-                    answer(json)
+                    self.watchers.removeValue(forKey: key)
+                    answer.give(json)
                     return true
                 }
                 self.nextRequestId += 1
                 let (namespace, destination, body) = sending(self.nextRequestId)
                 self.write(namespace, to: destination, json: body)
-                self.queue.asyncAfter(deadline: .now() + timeout) { answer(nil) }
+                self.queue.asyncAfter(deadline: .now() + timeout) {
+                    self.watchers.removeValue(forKey: key)
+                    answer.give(nil)
+                }
             }
         }
     }
@@ -280,5 +269,24 @@ final class CastLink: @unchecked Sendable {
               let transport = app["transportId"] as? String
         else { return nil }
         return App(sessionId: session, transportId: transport)
+    }
+}
+
+/// Resumes a continuation once, whichever of several callbacks gets there first; the rest are
+/// ignored. A lock rather than a captured flag, as those callbacks can arrive on any thread.
+private final class OneAnswer<T>: @unchecked Sendable {
+    private var continuation: CheckedContinuation<T, Never>?
+    private let lock = NSLock()
+
+    init(_ continuation: CheckedContinuation<T, Never>) {
+        self.continuation = continuation
+    }
+
+    func give(_ value: T) {
+        lock.lock()
+        let waiting = continuation
+        continuation = nil
+        lock.unlock()
+        waiting?.resume(returning: value)
     }
 }
