@@ -45,7 +45,7 @@ you want the source.
 | **Android**<br><sub>phones and tablets</sub> | [rajendra7169/blazify](https://github.com/rajendra7169/blazify) |
 | **Windows**<br><sub>installer</sub> | [rajendra7169/blazify-desktop](https://github.com/rajendra7169/blazify-desktop) |
 | **Linux**<br><sub>deb, AppImage or tar.gz</sub> | [rajendra7169/blazify-desktop](https://github.com/rajendra7169/blazify-desktop) |
-| **iPhone**<br><sub>sideloaded</sub> | [rajendra7169/blazify-ios](https://github.com/rajendra7169/blazify-ios) **← you are here** |
+| **iPhone**<br><sub>sideloaded</sub> | [rajendra7169/blazify-ios](https://github.com/rajendra7169/blazify-ios) **← you are here** · ▶ [how to install (video)](https://youtu.be/H0TF7mbJVbM) |
 
 Screenshots, install guides and everything else: **[blazify website](https://rajendra7169.github.io/blazify/)**
 
@@ -118,6 +118,10 @@ Screenshots, install guides and everything else: **[blazify website](https://raj
 Blazify is not on the App Store, and cannot be. Apps that stream audio from
 YouTube are removed from it. You install it yourself, free, with SideStore:
 
+<a href="https://youtu.be/H0TF7mbJVbM"><img src="https://img.youtube.com/vi/H0TF7mbJVbM/maxresdefault.jpg" width="560" alt="Video: how to install Blazify and any .ipa on iPhone" /></a>
+
+> **▶ [Watch the install video](https://youtu.be/H0TF7mbJVbM)** · 8 minutes, every step shown
+>
 > **📖 [Step-by-step install guide](docs/INSTALL.md)**: no jailbreak, no Mac, any computer (Windows, macOS or Linux).
 > The same steps install **any `.ipa`** on iPhone.
 

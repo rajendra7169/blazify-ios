@@ -8,6 +8,10 @@
 
 You need the computer once, at the start. After that everything happens on the iPhone.
 
+<a href="https://youtu.be/H0TF7mbJVbM"><img src="https://img.youtube.com/vi/H0TF7mbJVbM/maxresdefault.jpg" width="560" alt="Watch the video" /></a>
+
+**▶ [Prefer watching? The whole guide as an 8-minute video](https://youtu.be/H0TF7mbJVbM)**
+
 </div>
 
 ---
