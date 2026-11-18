@@ -118,10 +118,12 @@ Screenshots, install guides and everything else: **[blazify website](https://raj
 Blazify is not on the App Store, and cannot be. Apps that stream audio from
 YouTube are removed from it. You install it yourself, free, with SideStore:
 
-<a href="https://youtu.be/H0TF7mbJVbM"><img src="https://img.youtube.com/vi/H0TF7mbJVbM/maxresdefault.jpg" width="560" alt="Video: how to install Blazify and any .ipa on iPhone" /></a>
+### 📺 Videos
 
-> **▶ [Watch the install video](https://youtu.be/H0TF7mbJVbM)** · 8 minutes, every step shown
->
+<table><tr>
+<td align="center" width="250"><a href="https://youtu.be/H0TF7mbJVbM"><img src="https://img.youtube.com/vi/H0TF7mbJVbM/maxresdefault.jpg" width="230" alt="How to install on iPhone" /></a><br /><sub><b>How to install on iPhone</b></sub></td>
+</tr></table>
+
 > **📖 [Step-by-step install guide](docs/INSTALL.md)**: no jailbreak, no Mac, any computer (Windows, macOS or Linux).
 > The same steps install **any `.ipa`** on iPhone.
 
