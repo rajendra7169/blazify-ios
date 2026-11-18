@@ -116,18 +116,18 @@ Screenshots, install guides and everything else: **[blazify website](https://raj
 ## Install
 
 Blazify is not on the App Store, and cannot be. Apps that stream audio from
-YouTube are removed from it.
+YouTube are removed from it. You install it yourself, free, with SideStore:
 
-Open the **[latest release](https://github.com/rajendra7169/blazify-ios/releases/latest)** and take `Blazify.ipa`
-from the releases page. It is unsigned, so you install it with
-[SideStore](https://sidestore.io) or [AltStore](https://altstore.io).
+> **📖 [Step-by-step install guide](docs/INSTALL.md)**: no jailbreak, no Mac, any computer (Windows, macOS or Linux).
+> The same steps install **any `.ipa`** on iPhone.
 
-Two things to know before planning around it:
+In short: install SideStore once from a computer with **iloader**, then take
+`Blazify.ipa` from the **[latest release](https://github.com/rajendra7169/blazify-ios/releases/latest)**
+and open it in SideStore.
 
-- Sideloaded apps signed with a free Apple ID **expire after seven days** and
-  must be resigned. SideStore and AltStore can do that in the background, but
-  they have to be set up first.
 - iOS 17.0 or newer is required.
+- A free Apple Account allows **3 apps** this way at a time (SideStore is one), and they
+  must be **refreshed every 7 days**. The guide sets up a shortcut that does it for you.
 
 ### Building it yourself
 
