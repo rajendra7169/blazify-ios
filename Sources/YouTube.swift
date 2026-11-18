@@ -1240,7 +1240,53 @@ enum YouTube {
         var out: [Track] = []
         var seen = Set<String>()
         collectTracks(json, into: &out, seen: &seen)
+        // The service sends a playlist 100 songs at a time: each page ends with the key to the
+        // next, until the last. Pages are followed to the end (up to 5,000 songs).
+        var next = playlistNext(json)
+        var pages = 1
+        while let key = next, pages < 50, !Task.isCancelled {
+            let page: [String: Any] = ["context": ["client": client], "continuation": key]
+            guard let more = await post(musicBrowse, name: "67", version: remixVersion,
+                                        userAgent: webUA, visitor: visitor, body: page, login: true)
+            else { break }
+            let before = out.count
+            collectTracks(more, into: &out, seen: &seen)
+            next = playlistNext(more)
+            pages += 1
+            if out.count == before && next == nil { break }
+        }
         return out
+    }
+
+    /// The key to the next page of a playlist's own songs: it sits in the last row of the
+    /// playlist's list (`continuationItemRenderer`), on the first page and on every page after.
+    /// The page's section list carries a second key, which leads to suggested songs, not to
+    /// more of the playlist, so it is left alone.
+    private static func playlistNext(_ json: [String: Any]) -> String? {
+        var rows: [Any]?
+        if let shelf = firstNode(json, key: "musicPlaylistShelfRenderer") as? [String: Any] {
+            rows = shelf["contents"] as? [Any]
+        } else if let actions = json["onResponseReceivedActions"] as? [[String: Any]] {
+            rows = actions.lazy.compactMap { ($0["appendContinuationItemsAction"] as? [String: Any])?["continuationItems"] as? [Any] }.first
+        }
+        guard let rows else { return nil }
+        for row in rows.reversed() {
+            guard let item = (row as? [String: Any])?["continuationItemRenderer"] as? [String: Any] else { continue }
+            let endpoint = item["continuationEndpoint"] as? [String: Any]
+            if let token = (endpoint?["continuationCommand"] as? [String: Any])?["token"] as? String { return token }
+        }
+        return nil
+    }
+
+    /// The first value stored under `key` anywhere below `node`.
+    private static func firstNode(_ node: Any, key: String) -> Any? {
+        if let dict = node as? [String: Any] {
+            if let hit = dict[key] { return hit }
+            for (_, v) in dict { if let hit = firstNode(v, key: key) { return hit } }
+        } else if let arr = node as? [Any] {
+            for v in arr { if let hit = firstNode(v, key: key) { return hit } }
+        }
+        return nil
     }
 
     /// Playlist/album responses vary in shape (single vs two column), so walk the
