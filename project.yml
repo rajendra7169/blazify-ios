@@ -29,8 +29,8 @@ targets:
       path: Sources/Generated-Info.plist
       properties:
         CFBundleDisplayName: Blazify
-        CFBundleShortVersionString: "0.4.0"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ne, hi]
         # The one line that lets a music player keep going with the screen locked.
@@ -80,8 +80,8 @@ targets:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Blazify
-        CFBundleShortVersionString: "0.4.0"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
