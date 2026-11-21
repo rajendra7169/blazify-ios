@@ -476,6 +476,24 @@ final class Player: ObservableObject {
         }
     }
 
+    /// A song started from a result that gave no length (a top result, a Home
+    /// shelf) carried none for its whole stay in the queue, while every song
+    /// after it came with one. Once it plays the player knows the real length,
+    /// so the queue gets it too. By id, not by place, so a length can never
+    /// land on the song next to it; and only where there was none.
+    private func noteLength(_ seconds: Double, for videoId: String) {
+        guard seconds > 0, seconds.isFinite, !videoId.isEmpty,
+              queue.contains(where: { $0.videoId == videoId && $0.duration <= 0 }) else { return }
+        func filled(_ t: Track) -> Track {
+            guard t.videoId == videoId, t.duration <= 0 else { return t }
+            return Track(videoId: t.videoId, title: t.title, artist: t.artist, thumbnail: t.thumbnail,
+                         duration: seconds, artistId: t.artistId, explicit: t.explicit, video: t.video,
+                         videoType: t.videoType, setVideoId: t.setVideoId)
+        }
+        queue = queue.map(filled)
+        originalQueue = originalQueue.map(filled)
+    }
+
     // MARK: - Carrying on with similar songs
 
     /// A queue is still being filled in behind its first song (a radio on its
@@ -1339,6 +1357,7 @@ final class Player: ObservableObject {
         if let own = LocalMusic.shared.localAudioURL(for: videoId) {
             let dur = LocalMusic.shared.duration(for: videoId) ?? track.duration
             duration = dur
+            noteLength(dur, for: videoId)
             isLoading = false
             playStream(own, realDuration: dur, resumeAt: takeJoinAt())
             warmLyrics(for: track, duration: dur)
@@ -1348,6 +1367,7 @@ final class Player: ObservableObject {
         if let local = Downloads.shared.localAudioURL(for: videoId) {
             let dur = Downloads.shared.duration(for: videoId) ?? track.duration
             duration = dur
+            noteLength(dur, for: videoId)
             isLoading = false
             playStream(local, realDuration: dur, resumeAt: takeJoinAt())
             warmLyrics(for: track, duration: dur)
@@ -1379,6 +1399,7 @@ final class Player: ObservableObject {
                 }
                 self.currentTime = 0
                 self.duration = stream.duration
+                if !YouTube.isLive(videoId) { self.noteLength(stream.duration, for: videoId) }
                 if YouTube.isLive(videoId) {
                     // A station: no length, nothing to keep on disk, no words to
                     // look up, and nothing after it to prepare — it does not end,
@@ -1929,6 +1950,7 @@ final class Player: ObservableObject {
         // figure this whole dance exists to avoid.
         currentTime = 0
         duration = realDuration > 0 ? realDuration : track.duration
+        if !isCurrentLive { noteLength(realDuration, for: track.videoId) }
         isPlaying = true
 
         countPlay(track)
@@ -1978,6 +2000,7 @@ final class Player: ObservableObject {
                 let real = item.duration.seconds
                 if real.isFinite, real > 1 {
                     self.duration = real
+                    if let id = self.current?.videoId { self.noteLength(real, for: id) }
                 }
             }
             self.considerSponsorSkip()
