@@ -215,6 +215,11 @@ enum VideoArtFinder {
                 skip("everyday: skip \"\(clip(row.title))\" (no artist)")
                 continue
             }
+            guard !(row.artistBadge && !byArtist) else {
+                // Another artist's own channel: a cover, however it is titled.
+                skip("everyday: skip \"\(clip(row.title))\" (another artist \(row.channel))")
+                continue
+            }
             let trusted = row.artistBadge || row.verified || fold(row.channel).contains("vevo")
             guard trusted else {
                 skip("everyday: skip \"\(clip(row.title))\" (unverified \(row.channel))")
@@ -227,7 +232,7 @@ enum VideoArtFinder {
             if song.length > 0 && row.length > 0 {
                 score -= min(abs(row.length - song.length) / 60, 3)
             }
-            score -= 0.15 * Double(rank)
+            score -= 0.05 * Double(rank)
             kept.append((row, score))
         }
 
