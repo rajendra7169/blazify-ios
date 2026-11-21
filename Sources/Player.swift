@@ -440,11 +440,16 @@ final class Player: ObservableObject {
     ///
     /// So: play it now, and fill in behind it while it plays.
     func playWithRadio(_ track: Track) {
+        // Set before the song starts, so the carry-on below waits for this
+        // radio instead of fetching one of its own for the same song.
+        let fills = PlaybackPrefs.shared.autoplay && PlaybackPrefs.shared.autoRadioQueue
+            && !LocalMusic.isLocal(track.videoId) && !track.videoId.isEmpty
+        if fills { queueLoading = true }
         play([track], startAt: 0)
-        guard PlaybackPrefs.shared.autoplay, PlaybackPrefs.shared.autoRadioQueue else { return }
-        guard !LocalMusic.isLocal(track.videoId), !track.videoId.isEmpty else { return }
+        guard fills else { return }
 
         Task { @MainActor in
+            defer { self.queueLoading = false }
             var fresh = await self.radioTracks(for: track)
             if fresh.isEmpty {
                 // One more try: a slow or dropped answer left the queue one song long,
@@ -468,6 +473,67 @@ final class Player: ObservableObject {
             self.queue.append(contentsOf: add)
             self.originalQueue = self.queue
             self.saveQueue()
+        }
+    }
+
+    // MARK: - Carrying on with similar songs
+
+    /// A queue is still being filled in behind its first song (a radio on its
+    /// way): its one song so far is not the end of it.
+    private var queueLoading = false
+    /// A list running out is being carried on with similar songs; one request
+    /// at a time.
+    private var continuingWithSimilar = false
+    /// Songs heard this recently are left out when a list is carried on.
+    private static let similarSkipHeard: TimeInterval = 6 * 60 * 60
+
+    /// An album, a playlist or a list from the library has an end, and reaching
+    /// it used to mean the music stopped while the next songs were looked for.
+    /// With Similar content on (Autoplay and Start a radio, both on by
+    /// default), the last song's radio joins the end of the queue three songs
+    /// before it, and again each time the end comes near, as YouTube Music
+    /// does. Not while a queue is still loading, on repeat, on a live station
+    /// or in Listen Together.
+    private func maybeContinueWithSimilar() {
+        let prefs = PlaybackPrefs.shared
+        guard prefs.autoplay, prefs.autoRadioQueue,
+              !queueLoading, !continuingWithSimilar,
+              repeatMode == .off,
+              !queue.isEmpty, queue.count - index <= 3,
+              let current, !liveBroadcasts.contains(current.videoId) else { return }
+        // The radio of the last song that has one: an imported file or a
+        // station has none.
+        guard let seed = queue.last(where: {
+            !$0.videoId.isEmpty && !LocalMusic.isLocal($0.videoId) && !liveBroadcasts.contains($0.videoId)
+        }) else { return }
+        let lastQueued = queue.last?.videoId
+        continuingWithSimilar = true
+        Task { @MainActor in
+            defer { self.continuingWithSimilar = false }
+            // A guest follows the host's queue, and the host's own choice is
+            // what the room hears.
+            guard ListenTogether.shared.state != .inRoom else { return }
+            let queued = Set(self.queue.map(\.videoId))
+            let since = Date().addingTimeInterval(-Self.similarSkipHeard)
+            let heardLately = Set(PlayHistory.events.filter { $0.at >= since }.map(\.videoId))
+            let fresh = ContentPrefs.filtered(await self.radioTracks(for: seed))
+                .withoutBlockedArtists()
+                .filter { !queued.contains($0.videoId) }
+            var unique = Set<String>()
+            let deduped = fresh.filter { unique.insert($0.videoId).inserted }
+            // Only drop the songs heard lately when enough are left to keep playing.
+            let notHeard = deduped.filter { !heardLately.contains($0.videoId) }
+            let add = notHeard.count >= 5 ? notHeard : deduped
+            // The person may have started something else meanwhile; then this
+            // is not wanted.
+            guard !add.isEmpty, self.hasTrack, self.queue.last?.videoId == lastQueued else { return }
+            self.queue.append(contentsOf: add)
+            self.originalQueue.append(contentsOf: add)
+            self.saveQueue()
+            // The song playing may be the last one, already past the point
+            // where the next is made ready; now there is a next to get ready.
+            self.prefetchNext()
+            VideoArtLog.note("queue ran low: carrying on with \(add.count) songs like \(seed.videoId)")
         }
     }
 
@@ -1246,6 +1312,7 @@ final class Player: ObservableObject {
         // Only now that the position is reset — saving earlier stored the
         // previous song's position against this song's index.
         saveQueue()
+        maybeContinueWithSimilar()
         isLoading = true
         endHandled = false
         lastError = nil
@@ -1866,6 +1933,7 @@ final class Player: ObservableObject {
 
         countPlay(track)
         saveQueue()
+        maybeContinueWithSimilar()
         updateNowPlaying()
         warmLyrics(for: track, duration: duration)
         prefetchNext()
