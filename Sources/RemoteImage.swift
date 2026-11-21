@@ -144,16 +144,33 @@ struct RemoteImage<Placeholder: View>: View {
 
         // Downloaded art is a local file:// URL.
         if target.isFileURL {
-            guard let data = try? Data(contentsOf: target) else { return }
-            guard let decoded = Self.downsample(data, to: size) ?? UIImage(data: data) else { return }
+            guard let decoded = await Self.decode(file: target, maxPixels: decodeLimit) else { return }
             store(decoded, key: key)
             return
         }
 
         guard let data = await ArtFetch.data(from: target),
-              let decoded = Self.downsample(data, to: size) ?? UIImage(data: data) else { return }
+              let decoded = await Self.decode(data, maxPixels: decodeLimit) else { return }
         store(decoded, key: key)
     }
+
+    /// Decoding a picture takes a few milliseconds, and on the main thread each one held up the
+    /// scrolling for a frame or two, felt most as a list slows down; so it happens off it.
+    private nonisolated static func decode(_ data: Data, maxPixels pixels: CGFloat?) async -> UIImage? {
+        await Task.detached(priority: .userInitiated) {
+            Self.downsample(data, maxPixels: pixels) ?? UIImage(data: data)?.preparingForDisplay()
+        }.value
+    }
+
+    private nonisolated static func decode(file: URL, maxPixels pixels: CGFloat?) async -> UIImage? {
+        await Task.detached(priority: .userInitiated) {
+            guard let data = try? Data(contentsOf: file) else { return nil }
+            return Self.downsample(data, maxPixels: pixels) ?? UIImage(data: data)?.preparingForDisplay()
+        }.value
+    }
+
+    /// The largest side to decode to, in pixels; nil for "whatever the file is".
+    private var decodeLimit: CGFloat? { decodePixels > 0 ? CGFloat(decodePixels) : nil }
 
     private func store(_ ui: UIImage, key: NSString) {
         let cost = Int(ui.size.width * ui.size.height * 4)
@@ -163,13 +180,12 @@ struct RemoteImage<Placeholder: View>: View {
 
     /// Decode straight to the size we need. Full-size decoding is what makes a
     /// scrolling list of art stutter — the bytes are small, the bitmaps aren't.
-    private static func downsample(_ data: Data, to points: CGFloat?) -> UIImage? {
-        guard let points, points > 0,
+    private nonisolated static func downsample(_ data: Data, maxPixels: CGFloat?) -> UIImage? {
+        guard let maxPixels,
               let source = CGImageSourceCreateWithData(data as CFData,
                                                        [kCGImageSourceShouldCache: false] as CFDictionary)
         else { return nil }
 
-        let maxPixels = min(points * UIScreen.main.scale, 1080)
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,

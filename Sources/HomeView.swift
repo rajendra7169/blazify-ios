@@ -480,11 +480,6 @@ struct HomeView: View {
                     // sight while that one is on its way, and fades in as it arrives.
                     .opacity(launch.headerLogoShown ? 1 : 0)
                     .animation(.easeOut(duration: 0.16), value: launch.headerLogoShown)
-                    .background(GeometryReader { g in
-                        Color.clear
-                            .onAppear { launch.headerLogo = g.frame(in: .global) }
-                            .onChange(of: g.frame(in: .global)) { _, frame in launch.headerLogo = frame }
-                    })
                 Text("Blazify")
                     .font(.system(size: 24, weight: .bold))
                     // Letter-spaced wordmark, so it reads B l a z i f y. The

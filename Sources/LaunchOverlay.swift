@@ -7,8 +7,6 @@ import SwiftUI
 /// land on the other and become it.
 final class LaunchHandOff: ObservableObject {
     static let shared = LaunchHandOff()
-    /// Where the header's logo is drawn, in screen points.
-    @Published var headerLogo: CGRect?
     /// False while the launch logo is on its way, so there are never two logos at once.
     @Published var headerLogoShown = true
 }

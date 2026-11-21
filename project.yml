@@ -36,6 +36,8 @@ targets:
         # The one line that lets a music player keep going with the screen locked.
         UIBackgroundModes:
           - audio
+        # ProMotion: without this, iPhones with a 120 Hz screen cap the app's own animations at 60.
+        CADisableMinimumFrameDurationOnPhone: true
         # Song recognition listens on the mic (ShazamKit). iOS kills the app on
         # the spot if it records without this string.
         NSMicrophoneUsageDescription: Blazify uses the microphone to recognise the song playing around you.
