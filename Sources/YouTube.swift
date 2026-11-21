@@ -1886,21 +1886,32 @@ enum YouTube {
 
     // MARK: - Charts (what's trending on YouTube Music)
 
-    /// The global/region charts page: trending videos plus the top artists.
- /// Browses `FEmusic_charts`.
-    static func charts() async -> (songs: [Track], artists: [HomeItem]) {
+    /// The charts page for `country`: without one YouTube sends the Global
+    /// charts whatever the region, so the country goes in the page's own
+    /// choices (`formData`). A country without charts of its own (Nepal, for
+    /// one) gets the Global ones. Browses `FEmusic_charts`.
+    private static func chartsPage(country: String?) async -> [String: Any]? {
         var visitor = Auth.shared.visitorData
         if visitor == nil { visitor = await visitorData() }
         var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
                                      "hl": ContentPrefs.locale.hl, "gl": ContentPrefs.locale.gl]
         if let visitor { client["visitorData"] = visitor }
-        let body: [String: Any] = ["context": ["client": client],
+        var body: [String: Any] = ["context": ["client": client],
                                    "browseId": "FEmusic_charts",
                                    "params": "ggMGCgQIgAQ%3D"]
-        guard let json = await post(musicBrowse, name: "67", version: remixVersion,
-                                    userAgent: webUA, visitor: visitor, body: body,
-                                    login: Auth.shared.isLoggedIn)
-        else { return ([], []) }
+        if let code = country?.trimmingCharacters(in: .whitespaces), code.count == 2 {
+            body["formData"] = ["selectedValues": [code.uppercased()]]
+        }
+        return await post(musicBrowse, name: "67", version: remixVersion,
+                          userAgent: webUA, visitor: visitor, body: body,
+                          login: Auth.shared.isLoggedIn)
+    }
+
+    /// The charts page: trending videos plus the top artists, for the person's
+    /// country (the one chosen in Settings › Content, else the phone's region)
+    /// instead of always the Global charts.
+    static func charts() async -> (songs: [Track], artists: [HomeItem]) {
+        guard let json = await chartsPage(country: festivalCountry()) else { return ([], []) }
 
         // Top-songs shelves are list rows; the video charts are two-row cards.
         var songs: [Track] = []
@@ -1926,6 +1937,39 @@ enum YouTube {
         }
 
         return (songs, artists)
+    }
+
+    /// "Trending 20 <country>" for Home, from that country's charts: the list
+    /// YouTube Music builds itself (its id starts OLAK5uy_; the others are
+    /// music-video charts), as a shelf whose arrow opens the playlist. YouTube's
+    /// own shelves go by where the connection comes from, and many phones are
+    /// set to English (United States) wherever they are; this one follows the
+    /// country chosen in Settings, else the phone's region. Nil where there is
+    /// no such list, or too little of it is left after the filters.
+    static func trendingHere() async -> HomeSection? {
+        guard let country = festivalCountry(),
+              let json = await chartsPage(country: country) else { return nil }
+        var cards: [HomeItem] = []
+        var seen = Set<String>()
+        collectCards(json, into: &cards, seen: &seen)
+        func playlistId(_ item: HomeItem) -> String? {
+            guard let bid = item.browseId else { return nil }
+            let id = bid.hasPrefix("VL") ? String(bid.dropFirst(2)) : bid
+            return id.hasPrefix("OLAK5uy_") ? id : nil
+        }
+        let lists = cards.filter { playlistId($0) != nil }
+        // The page is read in no fixed order, so the one called Trending wins
+        // when there is more than one.
+        guard let chart = lists.first(where: { $0.title.localizedCaseInsensitiveContains("trending") }) ?? lists.first,
+              let id = playlistId(chart) else { return nil }
+        let fetched = ContentPrefs.filtered(await playlist(browseId: "VL" + id))
+        // The blocked list lives on the main actor.
+        let allowed = await MainActor.run { fetched.withoutBlockedArtists() }
+        var unique = Set<String>()
+        let songs = allowed.filter { !$0.videoId.isEmpty && unique.insert($0.videoId).inserted }
+        guard songs.count >= 4 else { return nil }
+        return HomeSection(title: chart.title, items: songs.map(\.asHomeItem), isSongs: true,
+                           browseId: "VL" + id)
     }
 
     /// Two-row chart cards that point at a video rather than a browse page.

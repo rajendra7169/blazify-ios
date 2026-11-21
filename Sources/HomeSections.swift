@@ -36,6 +36,9 @@ struct QuickPicksGrid: View {
     @Environment(\.palette) private var palette
     let section: HomeSection
     @ObservedObject var player: Player
+    /// A shelf of songs that is itself a playlist (the trending chart) gets the
+    /// arrow into it as well.
+    var onSeeAll: (() -> Void)?
 
     private let rows = Array(repeating: GridItem(.fixed(56), spacing: 8), count: 4)
 
@@ -47,6 +50,7 @@ struct QuickPicksGrid: View {
                 onPlayAll: section.items.isEmpty ? nil : {
                     player.play(section.items.map(\.asTrack), startAt: 0)
                 },
+                onSeeAll: onSeeAll,
             )
 
             ScrollView(.horizontal, showsIndicators: false) {

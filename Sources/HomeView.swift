@@ -22,6 +22,8 @@ struct HomeView: View {
     @State private var loading = true
     @State private var loadingMore = false
     @State private var localSections: [HomeSection] = []
+    /// "Trending 20 <country>" from the charts; nil where the country has none.
+    @State private var trending: HomeSection?
     @State private var path = NavigationPath()
     @State private var showLogin = false
     @State private var showAccount = false
@@ -63,6 +65,12 @@ struct HomeView: View {
 
                             ForEach(feed.sections) { section in
                                 row(section)
+                            }
+
+                            // Drawn like a YouTube shelf, after them; not under a chip,
+                            // which is a mood of its own.
+                            if selectedChip == nil, let trending {
+                                row(trending)
                             }
 
                             if !moods.isEmpty {
@@ -168,8 +176,16 @@ struct HomeView: View {
     /// with a heading that can play the row or open all of it.
     @ViewBuilder private func row(_ section: HomeSection) -> some View {
         if section.isSongs {
-            // A shelf of songs plays; it has no page worth opening.
-            QuickPicksGrid(section: section, player: player)
+            // A shelf of songs plays; it has no page worth opening, unless it
+            // is a playlist (the trending chart), whose arrow opens it.
+            if let id = section.browseId, id.hasPrefix("VL") {
+                QuickPicksGrid(section: section, player: player) {
+                    path.append(HomeItem(title: section.title, subtitle: "", thumbnail: section.items.first?.thumbnail ?? "",
+                                         videoId: nil, browseId: id, isCircular: false))
+                }
+            } else {
+                QuickPicksGrid(section: section, player: player)
+            }
         } else {
             // A shelf of playlists, albums or artists is looked through.
             HomeRail(section: section,
@@ -233,6 +249,14 @@ struct HomeView: View {
             let local = Self.buildLocalSections(player: player) + dynamic
             localSections = shuffle ? local.shuffled() : local
             loading = false
+        }
+        // Two more requests (the charts, then the list), so the feed does not
+        // wait for them; the shelf joins when it lands.
+        Task {
+            let found = await YouTube.trendingHere()
+            await MainActor.run {
+                if let found { trending = found }
+            }
         }
     }
 
