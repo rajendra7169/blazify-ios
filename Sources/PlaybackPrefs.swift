@@ -117,7 +117,6 @@ final class PlaybackPrefs: ObservableObject {
         crossfade = flag("crossfadeEnabled", false)
         crossfadeDuration = number("crossfadeDuration", 4)
         spatialSound = SpatialSound(rawValue: d.string(forKey: "spatialSound") ?? "") ?? .off
-        SpatialSoundSwitch.shared.set(spatialSound)
 
         persistentQueue = flag("persistentQueue", true)
         autoplay = flag("autoplay", true)
@@ -142,6 +141,10 @@ final class PlaybackPrefs: ObservableObject {
         sleepFadeOut = flag("sleepTimerFadeOut", true)
         sleepStopAfterSong = flag("sleepTimerStopAfterCurrentSong", false)
         sleepDefaultMinutes = number("sleepTimerDefault", 30)
+
+        // Only once every stored property has its value: Swift refuses to read
+        // self any earlier.
+        SpatialSoundSwitch.shared.set(spatialSound)
     }
 
     /// The label for a history-retention choice.
