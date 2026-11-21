@@ -30,8 +30,17 @@ final class CastSession: ObservableObject {
 
     @Published private(set) var devices: [Device] = []
     @Published private(set) var status: Status = .idle {
-        didSet { Self.isConnectedNow = isConnected }
+        didSet {
+            Self.isConnectedNow = isConnected || reconnecting
+            switch status {
+            case .connecting, .connected: CastKeepAlive.shared.hold()
+            case .idle: CastKeepAlive.shared.release(after: 5)
+            }
+        }
     }
+    /// The link dropped and the phone is finding the same device again; the player carries on as
+    /// if still connected meanwhile.
+    private(set) var reconnecting = false
     /// The same as `isConnected`, readable from anywhere, for the player's checks.
     nonisolated(unsafe) static var isConnectedNow = false
     /// Whether the list of TVs and speakers is open.
@@ -40,7 +49,13 @@ final class CastSession: ObservableObject {
     @Published var problem: String?
 
     // What the device says it is doing.
-    @Published private(set) var playing = false
+    @Published private(set) var playing = false {
+        didSet {
+            guard isConnected, playing != oldValue else { return }
+            // Paused there for a long while, the phone may go to sleep like any paused player.
+            if playing { CastKeepAlive.shared.hold() } else { CastKeepAlive.shared.release(after: 600) }
+        }
+    }
     @Published private(set) var loading = false
     private var position: Double = 0
     private var positionSaidAt = Date()
@@ -125,7 +140,7 @@ final class CastSession: ObservableObject {
 
     func connect(_ device: Device) async -> Bool {
         if connectedDevice == device { return true }
-        disconnect(stopPlaying: false)
+        if !reconnecting { disconnect(stopPlaying: false) } else { reset() }
         status = .connecting(device)
         problem = nil
         let link = CastLink(serviceName: device.id)
@@ -158,7 +173,12 @@ final class CastSession: ObservableObject {
 
     /// Ends the connection; with [stopPlaying] the device's player stops too, back to its own screen.
     func disconnect(stopPlaying: Bool) {
+        reconnecting = false
         if stopPlaying, let app { link?.stop(app) }
+        reset()
+    }
+
+    private func reset() {
         link?.close()
         link = nil
         app = nil
@@ -171,6 +191,38 @@ final class CastSession: ObservableObject {
     }
 
     private func dropped() {
+        // Usually a moment's trouble on the Wi-Fi: the device is still playing, so find it again
+        // and carry on, before telling the person anything.
+        if let device = connectedDevice, !reconnecting {
+            link = nil
+            app = nil
+            mediaSessionId = nil
+            reconnecting = true
+            status = .connecting(device)
+            Task { @MainActor in
+                for attempt in 0..<2 {
+                    if attempt > 0 { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+                    guard reconnecting else { return }
+                    if await connect(device) {
+                        reconnecting = false
+                        Self.isConnectedNow = true
+                        if let link, let app,
+                           let answer = await link.request(CastLink.mediaNS, to: app.transportId, body: ["type": "GET_STATUS"]) {
+                            mediaStatus(answer)
+                        }
+                        return
+                    }
+                }
+                guard reconnecting else { return }
+                reconnecting = false
+                lost()
+            }
+            return
+        }
+        lost()
+    }
+
+    private func lost() {
         link = nil
         app = nil
         mediaSessionId = nil

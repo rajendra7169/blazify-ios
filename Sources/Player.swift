@@ -2326,10 +2326,11 @@ final class Player: ObservableObject {
             guard let self else { return }
             MainActor.assumeIsolated {
                 let session = CastSession.shared
-                guard session.isConnected else {
+                guard session.isConnected || session.reconnecting else {
                     self.stopCastClock()
                     return
                 }
+                guard session.isConnected else { return }
                 guard self.castResumeAt == nil else { return }
                 let position = session.currentPosition
                 if self.duration > 0 { self.currentTime = min(position, self.duration) }
