@@ -2276,9 +2276,22 @@ final class Player: ObservableObject {
                 videoId: videoId, title: title, artist: artist, artwork: artwork,
                 duration: length, startAt: start,
             ) {
-                await YouTube.streamURL(for: videoId)?.url
+                let stream = await YouTube.streamURL(for: videoId)
+                // Songs from a radio queue can come without a length; the stream knows it, and without
+                // it the time and the bar stood at 0:00 on the phone and the lock screen.
+                if let seconds = stream?.duration, seconds > 0 {
+                    await MainActor.run { [weak self] in self?.castLength(seconds, for: videoId) }
+                }
+                return stream?.url
             }
         }
+    }
+
+    /// The length of the song being cast, once known.
+    private func castLength(_ seconds: Double, for videoId: String) {
+        guard isCastingNow, current?.videoId == videoId, abs(duration - seconds) > 1 else { return }
+        duration = seconds
+        updateNowPlaying()
     }
 
     private func castToggle() {
@@ -2332,9 +2345,18 @@ final class Player: ObservableObject {
                 }
                 guard session.isConnected else { return }
                 guard self.castResumeAt == nil else { return }
+                if session.mediaLength > 0, abs(self.duration - session.mediaLength) > 1 {
+                    self.duration = session.mediaLength
+                    self.updateNowPlaying()
+                }
                 let position = session.currentPosition
-                if self.duration > 0 { self.currentTime = min(position, self.duration) }
-                if self.isLoading != session.loading { self.isLoading = session.loading }
+                self.currentTime = self.duration > 0 ? min(position, self.duration) : position
+                if self.isLoading != session.loading {
+                    self.isLoading = session.loading
+                    // The lock screen counts on by itself from what it was last told: tell it again once the
+                    // song has really started there, or it runs ahead by however long the loading took.
+                    if !session.loading { self.updateNowPlaying() }
+                }
                 if !session.loading, self.isPlaying != session.playing {
                     self.isPlaying = session.playing
                     self.updateNowPlaying()

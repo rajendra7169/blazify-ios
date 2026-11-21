@@ -60,6 +60,8 @@ final class CastSession: ObservableObject {
     private var position: Double = 0
     private var positionSaidAt = Date()
     private var rate: Double = 1
+    /// The song's length as the device measured it, 0 until it says; songs in a radio queue can arrive without one.
+    private(set) var mediaLength: Double = 0
 
     /// The song has finished on the device: the player moves the queue on.
     var onEnded: (() -> Void)?
@@ -250,6 +252,7 @@ final class CastSession: ObservableObject {
         loadingVideoId = videoId
         loading = true
         playing = true
+        mediaLength = 0
         position = startAt
         positionSaidAt = Date()
         resend = { [weak self] at in
@@ -335,6 +338,9 @@ final class CastSession: ObservableObject {
     private func mediaStatus(_ json: [String: Any]) {
         guard let status = (json["status"] as? [[String: Any]])?.first else { return }
         if let id = status["mediaSessionId"] as? Int { mediaSessionId = id }
+        if let media = status["media"] as? [String: Any], let length = media["duration"] as? Double, length > 0 {
+            mediaLength = length
+        }
         if let at = status["currentTime"] as? Double {
             position = at
             positionSaidAt = Date()
