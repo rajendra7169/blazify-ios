@@ -2290,6 +2290,7 @@ final class Player: ObservableObject {
     /// The length of the song being cast, once known.
     private func castLength(_ seconds: Double, for videoId: String) {
         guard isCastingNow, current?.videoId == videoId, abs(duration - seconds) > 1 else { return }
+        VideoArtLog.note("cast: \(videoId) length \(Int(seconds))s from the stream (had \(Int(duration))s)")
         duration = seconds
         updateNowPlaying()
     }

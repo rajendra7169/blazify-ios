@@ -287,6 +287,8 @@ final class CastSession: ObservableObject {
         )
         guard loadingVideoId == videoId else { return }
         let type = answer?["type"] as? String
+        let state = ((answer?["status"] as? [[String: Any]])?.first?["playerState"] as? String) ?? "-"
+        VideoArtLog.note("cast: \(videoId) load answered \(type ?? "nothing"), \(state), length \(Int(duration))s asked")
         if answer == nil || type == "LOAD_FAILED" || type == "LOAD_CANCELLED" || type == "INVALID_REQUEST" {
             failedThere(videoId)
             return
@@ -338,8 +340,10 @@ final class CastSession: ObservableObject {
     private func mediaStatus(_ json: [String: Any]) {
         guard let status = (json["status"] as? [[String: Any]])?.first else { return }
         if let id = status["mediaSessionId"] as? Int { mediaSessionId = id }
-        if let media = status["media"] as? [String: Any], let length = media["duration"] as? Double, length > 0 {
+        if let media = status["media"] as? [String: Any], let length = media["duration"] as? Double, length > 0,
+           abs(length - mediaLength) > 1 {
             mediaLength = length
+            VideoArtLog.note("cast: device says the song is \(Int(length))s")
         }
         if let at = status["currentTime"] as? Double {
             position = at
