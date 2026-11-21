@@ -10,6 +10,32 @@ enum OfflineSource: Hashable {
     case device
 }
 
+/// Which kinds of saved songs Home plays when there is no connection. All of
+/// them unless switched off in Settings › Content.
+struct OfflineKinds {
+    var cached = true
+    var downloaded = true
+    var device = true
+
+    /// True when a song kept in `sources` is one of the kinds switched on.
+    func allows(_ sources: Set<OfflineSource>) -> Bool {
+        sources.contains { source in
+            switch source {
+            case .cached: return cached
+            case .downloaded: return downloaded
+            case .device: return device
+            }
+        }
+    }
+    /// The same for a song met somewhere else (history, favourites), asking
+    /// only about the kinds switched on, the disk last.
+    func allows(videoId id: String) -> Bool {
+        (device && LocalMusic.isLocal(id))
+            || (downloaded && Downloads.shared.isDownloaded(id))
+            || (cached && AudioCache.shared.isCached(id))
+    }
+}
+
 /// A song that plays without a connection, and where it is kept.
 struct SavedSong {
     let track: Track

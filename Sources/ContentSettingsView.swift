@@ -64,6 +64,22 @@ struct ContentSettingsView: View {
                                subtitle: "Top songs and most-played rails on Home and Yours",
                                isOn: $prefs.showStatsPlaylists)
             }
+
+            // With no connection, Home's For you and Speed dial play the songs
+            // saved on the phone; each kind of saved song can be left out.
+            SettingsGroup(title: "Home with no connection") {
+                SettingsToggle(symbol: "arrow.clockwise.icloud", title: "Cached songs",
+                               subtitle: "Songs kept whole in the song cache after you played them",
+                               isOn: $prefs.offlineHomeCached)
+                SettingsDivider()
+                SettingsToggle(symbol: "arrow.down.circle", title: "Downloaded songs",
+                               subtitle: "Songs you downloaded",
+                               isOn: $prefs.offlineHomeDownloaded)
+                SettingsDivider()
+                SettingsToggle(symbol: "music.note.list", title: "Songs on this device",
+                               subtitle: "Your own music files on this phone",
+                               isOn: $prefs.offlineHomeDevice)
+            }
         }
         .sheet(isPresented: $showLanguage) {
             ValuePickerSheet(title: "Content language",

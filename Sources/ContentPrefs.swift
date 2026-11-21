@@ -22,6 +22,16 @@ final class ContentPrefs: ObservableObject {
     @Published var randomizeHomeOrder: Bool { didSet { save(randomizeHomeOrder, "randomizeHomeOrder") } }
     @Published var showStatsPlaylists: Bool { didSet { save(showStatsPlaylists, "showMostStatsPlaylists") } }
 
+    /// What Home's For you and Speed dial play when there is no connection:
+    /// each kind of saved song can be left out. All on, as on Android.
+    @Published var offlineHomeCached: Bool { didSet { save(offlineHomeCached, "offlineHomeCached") } }
+    @Published var offlineHomeDownloaded: Bool { didSet { save(offlineHomeDownloaded, "offlineHomeDownloaded") } }
+    @Published var offlineHomeDevice: Bool { didSet { save(offlineHomeDevice, "offlineHomeDevice") } }
+
+    var offlineKinds: OfflineKinds {
+        OfflineKinds(cached: offlineHomeCached, downloaded: offlineHomeDownloaded, device: offlineHomeDevice)
+    }
+
     /// The languages and regions YouTube Music actually serves, kept short —
     /// the full ISO list would be a wall of rows nobody scrolls.
     static let languages: [(code: String, name: String)] = [
@@ -64,6 +74,9 @@ final class ContentPrefs: ObservableObject {
         showSubscriberCount = flag("showArtistSubscriberCount", true)
         randomizeHomeOrder = flag("randomizeHomeOrder", true)
         showStatsPlaylists = flag("showMostStatsPlaylists", true)
+        offlineHomeCached = flag("offlineHomeCached", true)
+        offlineHomeDownloaded = flag("offlineHomeDownloaded", true)
+        offlineHomeDevice = flag("offlineHomeDevice", true)
     }
 
     /// Applies the Hide-explicit and Hide-video-songs filters. Read straight

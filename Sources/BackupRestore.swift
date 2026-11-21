@@ -32,6 +32,7 @@ enum BlazifyBackup {
         "contentLanguage", "contentCountry", "hideExplicit", "hideVideoSongs",
         "showArtistDescription", "showArtistMonthlyListeners",
         "showArtistSubscriberCount", "randomizeHomeOrder", "showMostStatsPlaylists",
+        "offlineHomeCached", "offlineHomeDownloaded", "offlineHomeDevice",
         "pauseListenHistory", "pauseSearchHistory",
         // Storage
         "enableSongCache", "maxSongCacheMB", "maxImageCacheMB",

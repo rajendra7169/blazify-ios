@@ -561,6 +561,8 @@ struct GreetingCard: View {
     /// With no connection the buttons offer what is saved here instead, so they
     /// need to know when that is.
     @ObservedObject private var net = Reachability.shared
+    /// Which kinds of saved song the buttons may play offline.
+    @ObservedObject private var content = ContentPrefs.shared
     /// The card can start something playing, so it needs the player.
     @ObservedObject var player: Player
     /// Which song each button is offering. One cover per button, so pressing one
@@ -742,16 +744,23 @@ struct GreetingCard: View {
             .withoutBlockedArtists()
     }
 
-    /// Every song that plays with no connection: downloads, your own files, and
-    /// songs from your history and favourites whose audio is kept on the device.
-    /// With no connection both buttons play from these rather than starting
-    /// songs that cannot load. Kept in a fixed order so the cover rotation in
-    /// `CardOrder` holds; `play` shuffles what follows the cover.
+    /// Every song that plays with no connection: downloads, your own files,
+    /// songs from your history and favourites whose audio is kept on the
+    /// device, then the rest of the song cache — less the kinds switched off in
+    /// Settings › Content › Home with no connection. With no connection both
+    /// buttons play from these rather than starting songs that cannot load.
+    /// Kept in a fixed order so the cover rotation in `CardOrder` holds; `play`
+    /// shuffles what follows the cover.
     private var savedTracks: [Track] {
+        let kinds = content.offlineKinds
         var seen = Set<String>()
         let kept = (PlayHistory.recent + PlayHistory.mostPlayed(.all, limit: 200) + player.favoriteTracks)
-            .filter { Downloads.shared.isDownloaded($0.videoId) || AudioCache.shared.isCached($0.videoId) }
-        return (Downloads.shared.tracks + LocalMusic.shared.tracks + kept)
+            .filter { kinds.allows(videoId: $0.videoId) }
+        let saved = OfflineSongs.all().filter { kinds.allows($0.sources) }
+        let downloaded = saved.filter { $0.sources.contains(.downloaded) }.map(\.track)
+        let own = saved.filter { $0.sources.contains(.device) }.map(\.track)
+        let cached = saved.map(\.track)
+        return (downloaded + own + kept + cached)
             .filter { !$0.videoId.isEmpty && seen.insert($0.videoId).inserted }
             .withoutBlockedArtists()
     }
