@@ -99,6 +99,16 @@ else
 fi
 
 echo
+echo "Running the 3D sound test…"
+if "$SWIFTC" -O -o /tmp/blazify-spatial Sources/Spatializer.swift scripts/spatializer-test/main.swift 2>/dev/null; then
+    /tmp/blazify-spatial | tail -4
+    [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+else
+    echo "  could not build the test"
+    status=1
+fi
+
+echo
 if [ $status -eq 0 ]; then
     echo "Clean — no syntax errors. (Not a promise it builds: only Xcode type-checks.)"
 else

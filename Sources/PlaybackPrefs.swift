@@ -36,6 +36,14 @@ final class PlaybackPrefs: ObservableObject {
     @Published var gapless: Bool { didSet { save(gapless, "gaplessPlayback") } }
     @Published var crossfade: Bool { didSet { save(crossfade, "crossfadeEnabled") } }
     @Published var crossfadeDuration: Double { didSet { save(crossfadeDuration, "crossfadeDuration") } }
+    /// 3D sound: off, Surround or 8D. Reaches the song playing at once, without
+    /// a stop, since the audio tap reads it every buffer.
+    @Published var spatialSound: SpatialSound {
+        didSet {
+            save(spatialSound.rawValue, "spatialSound")
+            SpatialSoundSwitch.shared.set(spatialSound)
+        }
+    }
 
     // Queue
     @Published var persistentQueue: Bool { didSet { save(persistentQueue, "persistentQueue") } }
@@ -108,6 +116,8 @@ final class PlaybackPrefs: ObservableObject {
         gapless = flag("gaplessPlayback", true)
         crossfade = flag("crossfadeEnabled", false)
         crossfadeDuration = number("crossfadeDuration", 4)
+        spatialSound = SpatialSound(rawValue: d.string(forKey: "spatialSound") ?? "") ?? .off
+        SpatialSoundSwitch.shared.set(spatialSound)
 
         persistentQueue = flag("persistentQueue", true)
         autoplay = flag("autoplay", true)

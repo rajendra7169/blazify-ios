@@ -30,6 +30,8 @@ struct SettingsView: View {
     @State private var showIntegrations = false
     @State private var showAppearance = false
     @State private var showEqualizer = false
+    @State private var showSpatial = false
+    @ObservedObject private var playback = PlaybackPrefs.shared
 
     private struct Row: Identifiable {
         let id = UUID()
@@ -37,7 +39,7 @@ struct SettingsView: View {
         let title: String
         let subtitle: String
         var action: Action = .none
-        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content, backup, integrations, appearance, equalizer, report }
+        enum Action { case none, account, downloads, storage, about, lookFeel, together, privacy, changelog, lyrics, player, streams, content, backup, integrations, appearance, equalizer, spatial, report }
     }
 
     private struct Group: Identifiable {
@@ -63,6 +65,9 @@ struct SettingsView: View {
                 Row(icon: "slider.horizontal.3", title: "Equaliser",
                     subtitle: "Ten bands, bass and stereo width",
                     action: .equalizer),
+                Row(icon: "headphones", title: "3D sound",
+                    subtitle: playback.spatialSound.blurb,
+                    action: .spatial),
                 Row(icon: "antenna.radiowaves.left.and.right", title: "Stream sources",
                     subtitle: "Which clients resolve a song, and in what order",
                     action: .streams),
@@ -244,6 +249,7 @@ struct SettingsView: View {
                 .preferredColorScheme(theme.preferredColorScheme)
                 .environment(\.palette, Palette(dark: theme.resolvedDark))
         }
+        .sheet(isPresented: $showSpatial) { SpatialSoundSheet() }
         .confirmationDialog(
             "Report a problem",
             isPresented: $showReport,
@@ -441,6 +447,7 @@ struct SettingsView: View {
             case .integrations: showIntegrations = true
             case .appearance: showAppearance = true
             case .equalizer: showEqualizer = true
+            case .spatial: showSpatial = true
             case .none: break
             }
         } label: {
@@ -458,7 +465,10 @@ struct SettingsView: View {
                         .foregroundStyle(palette.onSurface).lineLimit(1)
                     Text(live ? row.subtitle : row.subtitle + " · coming soon")
                         .font(.blaze(12.5))
-                        .foregroundStyle(palette.onSurfaceVariant).lineLimit(1)
+                        .foregroundStyle(palette.onSurfaceVariant)
+                        // 3D sound's line says what each choice does, which
+                        // needs the room.
+                        .lineLimit(row.action == .spatial ? 2 : 1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")

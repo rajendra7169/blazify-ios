@@ -1761,6 +1761,12 @@ final class Player: ObservableObject {
         if realDuration > 0 {
             item.forwardPlaybackEndTime = CMTime(seconds: realDuration, preferredTimescale: 600)
         }
+        // The audio tap, as on every other item: without it the song faded in
+        // played the rest of its length with no equaliser and no 3D sound.
+        Task { @MainActor [weak item] in
+            guard let mix = await EqualizerTap.audioMix(for: asset) else { return }
+            item?.audioMix = mix
+        }
         fadeDuration = realDuration
         let incoming = AVPlayer(playerItem: item)
         incoming.volume = 0

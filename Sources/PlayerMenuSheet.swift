@@ -11,6 +11,7 @@ struct PlayerMenuSheet: View {
     @State private var showAddToPlaylist = false
     @State private var showRepeatTimes = false
     @State private var showSpeed = false
+    @State private var showSpatial = false
     @ObservedObject private var playback = PlaybackPrefs.shared
     @State private var artist: ArtistRoute?
     @State private var copied = false
@@ -138,6 +139,13 @@ struct PlayerMenuSheet: View {
                         player.sleepActive ? String(localized: "Sleep timer (on)")
                                            : String(localized: "Sleep timer"),
                         tint: player.sleepActive ? Blaze.amber : .white) { dismiss(); onSleep() }
+
+                    // 3D sound, last in this menu: the same choice as Settings,
+                    // a tap away while listening.
+                    row("headphones",
+                        playback.spatialSound == .off ? String(localized: "3D sound (Off)")
+                            : String(localized: "3D sound (\(playback.spatialSound.title))"),
+                        tint: playback.spatialSound == .off ? .white : Blaze.amber) { showSpatial = true }
                 }
                 .padding(.vertical, 6)
             }
@@ -155,6 +163,7 @@ struct PlayerMenuSheet: View {
             RepeatTimesSheet(player: player)
         }
         .sheet(isPresented: $showSpeed) { SpeedSheet() }
+        .sheet(isPresented: $showSpatial) { SpatialSoundSheet() }
         .sheet(isPresented: $showTogether) { TogetherView() }
         .fullScreenCover(item: $artist) { ArtistView(browseId: $0.browseId, player: player) }
     }
@@ -469,6 +478,65 @@ struct SpeedSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Blaze.surface.ignoresSafeArea())
         .presentationDetents([.height(300)])
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// 3D sound: Off, Surround or 8D, the same choice from the player's menu and
+/// from Settings. A choice reaches the song playing at once.
+struct SpatialSoundSheet: View {
+    @ObservedObject private var prefs = PlaybackPrefs.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "headphones")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Blaze.amber)
+                Text("3D sound")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 22)
+            .padding(.bottom, 8)
+
+            ForEach(SpatialSound.allCases) { sound in
+                Button {
+                    prefs.spatialSound = sound
+                    dismiss()
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(sound.title)
+                                .font(.system(size: 16))
+                                .foregroundStyle(.white)
+                            Text(sound.blurb)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.white.opacity(0.6))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                        if prefs.spatialSound == sound {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Blaze.amber)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Blaze.surface.ignoresSafeArea())
+        .presentationDetents([.medium])
         .preferredColorScheme(.dark)
     }
 }

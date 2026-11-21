@@ -22,7 +22,7 @@ enum BlazifyBackup {
         "hideStatusBarOnFullscreen", "lyricsProviderOrder",
         // Playback
         "audioQuality", "audioNormalization", "loudnessLevel", "playbackSpeed",
-        "preservePitch", "crossfadeEnabled", "crossfadeDuration",
+        "preservePitch", "crossfadeEnabled", "crossfadeDuration", "spatialSound",
         "persistentQueue", "autoplay", "autoRadioQueue", "autoLoadMore",
         "preventDuplicateTracks", "rememberShuffleAndRepeat", "shufflePlaylistFirst",
         "autoSkipNextOnError", "autoDownloadOnLike", "keepScreenOn",

@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import MediaToolbox
+import os
 import SwiftUI
 
 /// The named curves. Values are
@@ -154,17 +155,71 @@ enum EqualizerTap {
     }
 }
 
+/// The 3D sound choice as the audio thread sees it. Set from the settings,
+/// read once per buffer under a try-lock: if the settings happen to hold the
+/// lock, that buffer keeps the choice it had, which nobody can hear.
+final class SpatialSoundSwitch {
+    static let shared = SpatialSoundSwitch()
+
+    private var lock = os_unfair_lock_s()
+    private var sound: SpatialSound
+
+    private init() {
+        sound = SpatialSound(rawValue: UserDefaults.standard.string(forKey: "spatialSound") ?? "") ?? .off
+    }
+
+    func set(_ next: SpatialSound) {
+        os_unfair_lock_lock(&lock)
+        sound = next
+        os_unfair_lock_unlock(&lock)
+    }
+
+    /// The choice now, or nil when the lock is busy this instant.
+    func current() -> SpatialSound? {
+        guard os_unfair_lock_trylock(&lock) else { return nil }
+        let now = sound
+        os_unfair_lock_unlock(&lock)
+        return now
+    }
+}
+
+/// What one tap keeps between buffers: its own 3D sound engine, made in
+/// prepare for the item's sample rate when the sound is stereo, and the choice
+/// it last played with. Each item has its own, so two songs blending in a
+/// crossfade never share one room.
+private final class TapState {
+    var spatial: Spatializer?
+    var lastSound: SpatialSound = .off
+}
+
 private let tapInit: MTAudioProcessingTapInitCallback = { _, _, tapStorageOut in
-    tapStorageOut.pointee = nil
+    tapStorageOut.pointee = Unmanaged.passRetained(TapState()).toOpaque()
 }
 
-private let tapFinalize: MTAudioProcessingTapFinalizeCallback = { _ in }
+/// The tap's state, from the storage init gave it.
+private func tapState(_ tap: MTAudioProcessingTap) -> TapState? {
+    let storage: UnsafeMutableRawPointer? = MTAudioProcessingTapGetStorage(tap)
+    return storage.map { Unmanaged<TapState>.fromOpaque($0).takeUnretainedValue() }
+}
 
-private let tapPrepare: MTAudioProcessingTapPrepareCallback = { _, _, format in
+private let tapFinalize: MTAudioProcessingTapFinalizeCallback = { tap in
+    let storage: UnsafeMutableRawPointer? = MTAudioProcessingTapGetStorage(tap)
+    if let raw = storage { Unmanaged<TapState>.fromOpaque(raw).release() }
+}
+
+private let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, _, format in
     EqualizerDSP.shared.setSampleRate(Float(format.pointee.mSampleRate))
+    // Every buffer the 3D sound needs is taken here, never on the audio thread.
+    guard let state = tapState(tap) else { return }
+    let rate = format.pointee.mSampleRate
+    state.spatial = format.pointee.mChannelsPerFrame == 2 && rate > 0
+        ? Spatializer(rate: Int(rate)) : nil
+    state.lastSound = .off
 }
 
-private let tapUnprepare: MTAudioProcessingTapUnprepareCallback = { _ in }
+private let tapUnprepare: MTAudioProcessingTapUnprepareCallback = { tap in
+    tapState(tap)?.spatial = nil
+}
 
 private let tapProcess: MTAudioProcessingTapProcessCallback = {
     tap, numberFrames, _, bufferListInOut, numberFramesOut, flagsOut in
@@ -194,5 +249,33 @@ private let tapProcess: MTAudioProcessingTapProcessCallback = {
     if channelPointers.count >= 2 {
         dsp.widen(left: channelPointers[0], right: channelPointers[1], count: frames)
     }
+    spatialize(tap: tap, list: list)
     dsp.measure(channelPointers[0], count: frames)
+}
+
+/// 3D sound, after the equaliser, so the sound placed round the head is the
+/// sound the person tuned. Off, or anything but stereo, passes untouched.
+private func spatialize(tap: MTAudioProcessingTap, list: UnsafeMutableAudioBufferListPointer) {
+    guard let state = tapState(tap), let engine = state.spatial else { return }
+    let sound = SpatialSoundSwitch.shared.current() ?? state.lastSound
+    if sound == .off {
+        state.lastSound = .off
+        return
+    }
+    // Back on after a while off: start from silence, not the last echoes.
+    if state.lastSound == .off { engine.clear() }
+    state.lastSound = sound
+    engine.mode = sound == .orbit ? .orbit : .speakers
+
+    if list.count == 2 {
+        guard let l = list[0].mData, let r = list[1].mData else { return }
+        let frames = Int(min(list[0].mDataByteSize, list[1].mDataByteSize)) / MemoryLayout<Float>.size
+        engine.process(left: l.assumingMemoryBound(to: Float.self),
+                       right: r.assumingMemoryBound(to: Float.self),
+                       stride: 1, frames: frames)
+    } else if list.count == 1, list[0].mNumberChannels == 2, let data = list[0].mData {
+        let samples = data.assumingMemoryBound(to: Float.self)
+        let frames = Int(list[0].mDataByteSize) / MemoryLayout<Float>.size / 2
+        engine.process(left: samples, right: samples + 1, stride: 2, frames: frames)
+    }
 }
