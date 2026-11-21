@@ -46,9 +46,6 @@ actor SongVideos {
     /// How far apart a song and its video may be in length and still be the same cut.
     private let sameCutSeconds: Double = 3
 
-    /// How many search results are looked through for the song's own music video.
-    private let candidates = 5
-
     func forSong(_ track: Track, maxHeight: Int) async -> SongVideo? {
         let key = "\(track.videoId)@\(maxHeight)"
         if let found = known[key] {
@@ -58,8 +55,7 @@ actor SongVideos {
         if let running = pending[key] { return await running.value }
 
         let task = Task<SongVideo?, Never> { [track, maxHeight] in
-            await Self.find(track, maxHeight: maxHeight,
-                            candidates: candidates, sameCutSeconds: sameCutSeconds)
+            await Self.find(track, maxHeight: maxHeight, sameCutSeconds: sameCutSeconds)
         }
         pending[key] = task
         let found = await task.value
@@ -68,8 +64,7 @@ actor SongVideos {
         return found
     }
 
-    private static func find(_ track: Track, maxHeight: Int,
-                             candidates: Int, sameCutSeconds: Double) async -> SongVideo? {
+    private static func find(_ track: Track, maxHeight: Int, sameCutSeconds: Double) async -> SongVideo? {
         // A song that is itself a video already is the picture to show, and its own sound.
         if track.isVideo, !LocalMusic.isLocal(track.videoId) {
             guard let found = await YouTube.videoStream(for: track.videoId, maxHeight: maxHeight)
@@ -79,32 +74,54 @@ actor SongVideos {
         }
 
         // Otherwise the artist's own video, and only that. A lyric video, a fan
-        // upload, a slowed-and-reverbed edit — those are what a plain search
-        // hands back first, and none of them is the song's picture. YouTube
-        // marks its own with OMV, which is what the Android player looks for and
-        // why its videos look like music videos.
+        // upload, a slowed-and-reverbed edit, a festival stage — those are what
+        // a plain search hands back first, and none of them is the song's
+        // picture. The rules that tell them apart are in VideoArtFinder; this
+        // only asks the questions and writes down each answer.
         guard !track.title.isEmpty, !LocalMusic.isLocal(track.videoId) else { return nil }
-        let query = track.artist.isEmpty ? track.title : "\(track.title) \(track.artist)"
-        let results = await YouTube.search(query, scope: .videos)
-        let official = results.prefix(candidates).filter(\.isOfficialVideo)
-        VideoArtLog.note("lookup: \"\(query)\" → \(results.count) results, \(official.count) official")
-        guard !official.isEmpty else { return nil }
+        let song = VideoArtFinder.Song(title: track.title,
+                                       artists: VideoArtFinder.artists(in: track.artist),
+                                       length: track.duration)
 
-        // The official video closest in length to the song, rather than the
-        // first one found. An album track is often longer than its video —
-        // a 6:50 song with videos of 5:03 and 6:24 — and the first result was
-        // the short one, which ended with most of the song still to go. The
-        // same length as the song follows it in step; any other length runs
+        // YouTube Music first: the artist's own video, most watched and nearest
+        // the song's length. An album track is often longer than its video, and
+        // the nearest one ends with the least of the song still to go.
+        let musicQuery = VideoArtFinder.musicQuery(for: song)
+        let rows = await YouTube.musicVideoRows(musicQuery)
+        VideoArtLog.note("lookup: \"\(musicQuery)\" on YouTube Music → \(rows.count) videos")
+        let official = VideoArtFinder.officialVideo(for: song, in: rows)
+        official.notes.forEach { VideoArtLog.note("lookup: \($0)") }
+        var chosen = official.pick
+
+        // Then everyday YouTube, where most songs' videos were never marked
+        // as the artist's on YouTube Music. Only when the first found none.
+        if chosen == nil {
+            let everydayQuery = VideoArtFinder.everydayQuery(for: song)
+            let videos = await YouTube.everydayVideoRows(everydayQuery)
+            VideoArtLog.note("lookup: \"\(everydayQuery)\" on YouTube → \(videos.count) videos")
+            let everyday = VideoArtFinder.everydayVideo(for: song, in: videos)
+            everyday.notes.forEach { VideoArtLog.note("lookup: \($0)") }
+            chosen = everyday.pick
+        }
+
+        // The artist's own lyric video, as a last resort before the cover.
+        if chosen == nil, let fallback = official.fallback {
+            VideoArtLog.note("lookup: falling back to the artist's lyric video \(fallback.videoId)")
+            chosen = fallback
+        }
+        guard let pick = chosen else {
+            VideoArtLog.note("lookup: no video for \"\(track.title)\", the cover stays")
+            return nil
+        }
+
+        // The same length as the song follows it in step; any other length runs
         // on its own and goes round again when it ends.
-        let closest = track.duration > 0
-            ? official.min { abs($0.duration - track.duration) < abs($1.duration - track.duration) }
-            : nil
-        let candidate = closest ?? official[0]
-        let synced = closest.map { $0.duration > 0 && abs($0.duration - track.duration) <= sameCutSeconds } ?? false
-        VideoArtLog.note("lookup: chose \(candidate.videoId) (\(Int(candidate.duration))s for a \(Int(track.duration))s song, \(synced ? "in step" : "its own cut"))")
-        guard let found = await YouTube.videoStream(for: candidate.videoId, maxHeight: maxHeight)
+        let synced = track.duration > 0 && pick.length > 0
+            && abs(pick.length - track.duration) <= sameCutSeconds
+        VideoArtLog.note("lookup: chose \(pick.videoId) via \(pick.via.rawValue) (\(Int(pick.length))s for a \(Int(track.duration))s song, \(synced ? "in step" : "its own cut"))")
+        guard let found = await YouTube.videoStream(for: pick.videoId, maxHeight: maxHeight)
         else { return nil }
-        return SongVideo(videoId: candidate.videoId, url: found.url, synced: synced,
+        return SongVideo(videoId: pick.videoId, url: found.url, synced: synced,
                          maxHeight: maxHeight, alternate: found.alternate)
     }
 }

@@ -607,6 +607,119 @@ enum YouTube {
         return out
     }
 
+    // MARK: - Finding a song's video (Video Art)
+
+    /// The everyday site's own client, for the one question YouTube Music
+    /// cannot answer: a great many songs have a video that was never marked as
+    /// the artist's there, and only a search of youtube.com finds it.
+    private static let webVersion = "2.20251110.00.00"
+    private static let webSearch = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false"
+
+    /// YouTube Music's video search, row by row, with what the Video Art
+    /// finder weighs: the official mark, the artist line, views and length.
+    ///
+    /// Asked in English whatever the app's language, as the view counts are
+    /// read from text — "2.1B views" — and another language writes them
+    /// differently. Titles are the uploaders' own either way.
+    static func musicVideoRows(_ query: String) async -> [VideoArtFinder.MusicRow] {
+        let visitor = await visitorData()
+        var client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": remixVersion,
+                                     "hl": "en", "gl": ContentPrefs.locale.gl]
+        if let visitor { client["visitorData"] = visitor }
+        var body: [String: Any] = [
+            "context": ["client": client],
+            "query": query,
+        ]
+        if let params = SearchScope.videos.params { body["params"] = params }
+        guard let json = await post(musicSearch, name: "67", version: remixVersion,
+                                    userAgent: webUA, visitor: visitor, body: body),
+              let contents = json["contents"] as? [String: Any],
+              let tabbed = contents["tabbedSearchResultsRenderer"] as? [String: Any],
+              let tabs = tabbed["tabs"] as? [[String: Any]],
+              let tabRenderer = tabs.first?["tabRenderer"] as? [String: Any],
+              let content = tabRenderer["content"] as? [String: Any],
+              let sectionList = content["sectionListRenderer"] as? [String: Any],
+              let sections = sectionList["contents"] as? [[String: Any]]
+        else { return [] }
+
+        var out: [VideoArtFinder.MusicRow] = []
+        for section in sections {
+            guard let shelf = section["musicShelfRenderer"] as? [String: Any],
+                  let items = shelf["contents"] as? [[String: Any]] else { continue }
+            for item in items {
+                guard let r = item["musicResponsiveListItemRenderer"] as? [String: Any] else { continue }
+                let videoId = (r["playlistItemData"] as? [String: Any])?["videoId"] as? String
+                    ?? overlayVideoId(r["overlay"])
+                guard let vid = videoId, !vid.isEmpty else { continue }
+                let cols = r["flexColumns"] as? [[String: Any]] ?? []
+                // "Artist • 2.1B views • 3:44", or the uploading channel in the artist's place.
+                let parts = flexLine(cols, 1).components(separatedBy: "•")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                out.append(VideoArtFinder.MusicRow(
+                    videoId: vid,
+                    title: flexLine(cols, 0),
+                    artist: parts.first ?? "",
+                    views: VideoArtFinder.views(parts.first(where: { $0.contains("view") }) ?? ""),
+                    length: VideoArtFinder.seconds(parts.last ?? ""),
+                    isOfficial: deepString(r, key: "musicVideoType") == "MUSIC_VIDEO_TYPE_OMV"
+                ))
+            }
+        }
+        return out
+    }
+
+    /// Everyday YouTube's search, as its own website asks it: each video's
+    /// title, channel, the channel's badges, views and length, in the order
+    /// the site ranks them.
+    static func everydayVideoRows(_ query: String) async -> [VideoArtFinder.WebRow] {
+        let client: [String: Any] = ["clientName": "WEB", "clientVersion": webVersion,
+                                     "hl": "en", "gl": ContentPrefs.locale.gl]
+        let body: [String: Any] = ["context": ["client": client], "query": query]
+        guard let json = await post(webSearch, name: "1", version: webVersion, userAgent: webUA,
+                                    visitor: nil, body: body, site: "https://www.youtube.com")
+        else { return [] }
+        var renderers: [[String: Any]] = []
+        collectVideoRenderers(json, into: &renderers)
+        return renderers.map { r in
+            let badges = (r["ownerBadges"] as? [[String: Any]] ?? []).compactMap {
+                ($0["metadataBadgeRenderer"] as? [String: Any])?["style"] as? String
+            }
+            let views = (r["viewCountText"] as? [String: Any])?["simpleText"] as? String ?? ""
+            let length = (r["lengthText"] as? [String: Any])?["simpleText"] as? String ?? ""
+            return VideoArtFinder.WebRow(
+                videoId: r["videoId"] as? String ?? "",
+                title: runsJoined(r["title"]),
+                channel: runsJoined(r["ownerText"]),
+                artistBadge: badges.contains { $0.contains("ARTIST") },
+                verified: badges.contains { $0.contains("VERIFIED") },
+                views: VideoArtFinder.views(views),
+                length: VideoArtFinder.seconds(length)
+            )
+        }
+    }
+
+    /// Every `videoRenderer` below `node`, in page order. Arrays keep the
+    /// site's order; a dictionary has none, so its keys are visited sorted,
+    /// which at least gives the same answer every time.
+    private static func collectVideoRenderers(_ node: Any, into out: inout [[String: Any]]) {
+        if let dict = node as? [String: Any] {
+            if let r = dict["videoRenderer"] as? [String: Any] { out.append(r) }
+            for key in dict.keys.sorted() {
+                if let value = dict[key] { collectVideoRenderers(value, into: &out) }
+            }
+        } else if let arr = node as? [Any] {
+            for v in arr { collectVideoRenderers(v, into: &out) }
+        }
+    }
+
+    /// A flex column's whole text, every run joined.
+    private static func flexLine(_ cols: [[String: Any]], _ i: Int) -> String {
+        guard cols.indices.contains(i),
+              let r = cols[i]["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any]
+        else { return "" }
+        return runsJoined(r["text"])
+    }
+
     // MARK: - Home feed (WEB_REMIX browse FEmusic_home)
 
     /// The YouTube Music home: filter chips + carousels (personalized when signed in).
@@ -2112,10 +2225,12 @@ enum YouTube {
     // MARK: - InnerTube POST
 
     /// `asChannel: false` asks as the Google account itself rather than as the
-    /// channel in use — only the channel list wants that.
+    /// channel in use — only the channel list wants that. `site` is the page the
+    /// request says it comes from: YouTube Music, unless it is everyday YouTube's.
     private static func post(_ endpoint: String, name: String, version: String,
                              userAgent: String, visitor: String?, body: [String: Any],
-                             login: Bool = false, asChannel: Bool = true) async -> [String: Any]? {
+                             login: Bool = false, asChannel: Bool = true,
+                             site: String = "https://music.youtube.com") async -> [String: Any]? {
         var body = body
         // Signed-in requests from the two web clients are made on behalf of
         // the channel in use. A Google account with several channels is
@@ -2136,8 +2251,8 @@ enum YouTube {
         req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         req.setValue(name, forHTTPHeaderField: "X-Youtube-Client-Name")
         req.setValue(version, forHTTPHeaderField: "X-Youtube-Client-Version")
-        req.setValue("https://music.youtube.com", forHTTPHeaderField: "Origin")
-        req.setValue("https://music.youtube.com/", forHTTPHeaderField: "Referer")
+        req.setValue(site, forHTTPHeaderField: "Origin")
+        req.setValue(site + "/", forHTTPHeaderField: "Referer")
         if let visitor { req.setValue(visitor, forHTTPHeaderField: "X-Goog-Visitor-Id") }
         // Signed-in requests (library, personalized home) carry the cookie + SAPISIDHASH.
         if login {
