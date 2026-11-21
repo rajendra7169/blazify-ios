@@ -57,7 +57,7 @@ fi
 # The handful of files that stand on their own — no app types, no networking —
 # can be checked properly, and their logic can even be run. Add to this list
 # only files that compile alone against plain Foundation.
-SELF_CONTAINED="Sources/PlaylistLink.swift Sources/CardOrder.swift Sources/LibraryCardText.swift Sources/Festival.swift"
+SELF_CONTAINED="Sources/PlaylistLink.swift Sources/CardOrder.swift Sources/LibraryCardText.swift Sources/Festival.swift Sources/OfflineSearch.swift"
 
 echo "Type-checking the files that stand on their own…"
 for file in $SELF_CONTAINED; do
@@ -98,6 +98,15 @@ else
     status=1
 fi
 
+echo
+echo "Running the offline search test…"
+if "$SWIFTC" -o /tmp/blazify-offlinesearch Sources/OfflineSearch.swift scripts/offlinesearch-test/main.swift 2>/dev/null; then
+    /tmp/blazify-offlinesearch | tail -2
+    [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+else
+    echo "  could not build the test"
+    status=1
+fi
 echo
 echo "Running the 3D sound test…"
 if "$SWIFTC" -O -o /tmp/blazify-spatial Sources/Spatializer.swift scripts/spatializer-test/main.swift 2>/dev/null; then

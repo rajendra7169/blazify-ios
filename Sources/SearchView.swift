@@ -13,6 +13,12 @@ struct SearchView: View {
     var pushed = false
     @ObservedObject private var history = SearchHistory.shared
     @ObservedObject private var browseArt = BrowseArt.shared
+    /// With no connection, typing looks among the songs that play without one
+    /// instead of asking YouTube, which cannot answer.
+    @ObservedObject private var net = Reachability.shared
+    // Watched so a song saved, cached or added while the results are up joins them.
+    @ObservedObject private var downloads = Downloads.shared
+    @ObservedObject private var localMusic = LocalMusic.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var query = ""
@@ -49,6 +55,7 @@ struct SearchView: View {
     @FocusState private var fieldFocused: Bool
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespaces) }
+    private var offline: Bool { !net.isOnline }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -61,10 +68,15 @@ struct SearchView: View {
                     if let link = pastedLink {
                         linkRow(link)
                     }
-                    if didSearch, !trimmed.isEmpty, pastedLink == nil {
+                    if didSearch, !trimmed.isEmpty, pastedLink == nil, !offline {
                         scopePicker
                     }
-                    if searching {
+                    if offline, !trimmed.isEmpty, pastedLink == nil {
+                        // Offline, what was typed is looked for among the songs
+                        // that play without a connection; the empty box still
+                        // shows the recent searches as before.
+                        offlineResults
+                    } else if searching {
                         SkeletonTrackList(rows: 8).padding(.top, 8)
                     } else if scope == .everything, !results.isEmpty || !cards.isEmpty {
                         mixedResults
@@ -104,6 +116,11 @@ struct SearchView: View {
         .navigationDestination(item: $artistRoute) {
             ArtistView(browseId: $0.browseId, player: player)
         }
+        // The connection back with words in the box: what YouTube has for them,
+        // where the songs on the phone were showing.
+        .onChange(of: net.isOnline) {
+            if net.isOnline, !trimmed.isEmpty, pastedLink == nil { suggest() }
+        }
         .task {
             if moods.isEmpty { moods = await YouTube.moods() }
             browseArt.warm(for: moods)
@@ -130,7 +147,7 @@ struct SearchView: View {
                     .foregroundStyle(palette.onSurfaceVariant)
             }
 
-            TextField("Songs, artists, albums…", text: $query)
+            TextField(offline ? "Search songs on this phone…" : "Songs, artists, albums…", text: $query)
                 .font(.blaze(16))
                 .foregroundStyle(palette.onSurface)
                 .autocorrectionDisabled()
@@ -429,6 +446,46 @@ struct SearchView: View {
         }
     }
 
+    // MARK: Offline
+
+    /// With no connection: a line saying so, then the songs that play without
+    /// one whose title or artist hold every word typed. A tap plays them as a
+    /// list, starting from the one tapped; a radio would need the connection.
+    @ViewBuilder private var offlineResults: some View {
+        let found = OfflineSongs.search(trimmed)
+        HStack(spacing: 8) {
+            Image(systemName: "wifi.slash")
+                .font(.blaze(14))
+                .foregroundStyle(palette.onSurfaceVariant)
+            Text("No connection. Showing songs that play offline: downloaded, cached and on this device.")
+                .font(.blaze(12.5))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+        .padding(.bottom, 8)
+
+        if found.isEmpty {
+            Text("No results")
+                .font(.blaze(14))
+                .foregroundStyle(palette.onSurfaceVariant)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+        } else {
+            ForEach(Array(found.enumerated()), id: \.element.id) { index, track in
+                SongRow(track: track, player: player) {
+                    history.add(trimmed)
+                    player.play(found, startAt: index)
+                    player.openFullPlayer()
+                }
+                .padding(.leading, 16)
+                .padding(.vertical, 6)
+            }
+        }
+    }
+
     // MARK: Actions
 
     /// Debounced so a fast typist fires one request, not one per keystroke.
@@ -453,6 +510,13 @@ struct SearchView: View {
             didSearch = false
             return
         }
+        // Offline the songs on the phone show under the box as it is typed in;
+        // there is nobody to ask for suggestions.
+        guard !offline else {
+            suggestions = []
+            suggestedSongs = []
+            return
+        }
         suggestTask = Task {
             try? await Task.sleep(nanoseconds: 220_000_000)
             guard !Task.isCancelled else { return }
@@ -470,10 +534,20 @@ struct SearchView: View {
         let q = text.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return }
         suggestTask?.cancel()
-        suppressSuggest = true
+        // Only when the box really changes: otherwise no edit comes to clear
+        // it, and the next letter typed would get no suggestions.
+        suppressSuggest = query != q
         query = q
         history.add(q)
         fieldFocused = false
+        // Offline a recent search tapped goes into the box, which shows its
+        // songs from the phone; YouTube cannot be asked.
+        if offline, YouTubeLink.parse(q) == nil {
+            results = []
+            cards = []
+            didSearch = false
+            return
+        }
         searching = true
         didSearch = true
         scope = .everything
