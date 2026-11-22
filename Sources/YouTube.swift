@@ -611,8 +611,8 @@ enum YouTube {
 
     /// The everyday site's own client, for the one question YouTube Music
     /// cannot answer: a great many songs have a video that was never marked as
-    /// the artist's there, and only a search of youtube.com finds it.
-    private static let webVersion = "2.20251110.00.00"
+    /// the artist's there, and only a search of youtube.com finds it. It uses
+    /// the same web client version as the account list further down.
     private static let webSearch = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false"
 
     /// YouTube Music's video search, row by row, with what the Video Art
