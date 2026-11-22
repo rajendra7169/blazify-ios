@@ -481,11 +481,14 @@ final class Player: ObservableObject {
     /// after it came with one. Once it plays the player knows the real length,
     /// so the queue gets it too. By id, not by place, so a length can never
     /// land on the song next to it; and only where there was none.
+    /// Called only with a length that can be trusted: the stream's own, a
+    /// downloaded or kept file's recorded one. It also puts right a length the
+    /// queue already held that was wrong.
     private func noteLength(_ seconds: Double, for videoId: String) {
-        guard seconds > 0, seconds.isFinite, !videoId.isEmpty,
-              queue.contains(where: { $0.videoId == videoId && $0.duration <= 0 }) else { return }
+        func wrong(_ t: Track) -> Bool { t.videoId == videoId && abs(t.duration - seconds) > 3 }
+        guard seconds > 0, seconds.isFinite, !videoId.isEmpty, queue.contains(where: wrong) else { return }
         func filled(_ t: Track) -> Track {
-            guard t.videoId == videoId, t.duration <= 0 else { return t }
+            guard wrong(t) else { return t }
             return Track(videoId: t.videoId, title: t.title, artist: t.artist, thumbnail: t.thumbnail,
                          duration: seconds, artistId: t.artistId, explicit: t.explicit, video: t.video,
                          videoType: t.videoType, setVideoId: t.setVideoId)
@@ -1374,11 +1377,16 @@ final class Player: ObservableObject {
             prefetchNext()
             return
         }
-        if let cached = AudioCache.shared.cachedURL(for: videoId), track.duration > 0 {
-            duration = track.duration
+        // The kept copy only with the length recorded when it was fetched. The
+        // queue's figure won't do: it can be missing, or wrong, and a cached song
+        // played to a wrong length runs on in silence until it is reached.
+        if let real = AudioCache.shared.duration(for: videoId),
+           let cached = AudioCache.shared.cachedURL(for: videoId) {
+            duration = real
+            noteLength(real, for: videoId)
             isLoading = false
-            playStream(cached, realDuration: track.duration, resumeAt: takeJoinAt())
-            warmLyrics(for: track, duration: track.duration)
+            playStream(cached, realDuration: real, resumeAt: takeJoinAt())
+            warmLyrics(for: track, duration: real)
             prefetchNext()
             return
         }
@@ -1399,7 +1407,10 @@ final class Player: ObservableObject {
                 }
                 self.currentTime = 0
                 self.duration = stream.duration
-                if !YouTube.isLive(videoId) { self.noteLength(stream.duration, for: videoId) }
+                if !YouTube.isLive(videoId) {
+                    self.noteLength(stream.duration, for: videoId)
+                    AudioCache.shared.noteLength(stream.duration, for: videoId)
+                }
                 if YouTube.isLive(videoId) {
                     // A station: no length, nothing to keep on disk, no words to
                     // look up, and nothing after it to prepare — it does not end,
@@ -1834,8 +1845,9 @@ final class Player: ObservableObject {
         if let local = Downloads.shared.localAudioURL(for: track.videoId) {
             return (local, Downloads.shared.duration(for: track.videoId) ?? track.duration)
         }
-        if let cached = AudioCache.shared.cachedURL(for: track.videoId) {
-            return (cached, track.duration)
+        if let real = AudioCache.shared.duration(for: track.videoId),
+           let cached = AudioCache.shared.cachedURL(for: track.videoId) {
+            return (cached, real)
         }
         guard let stream = await YouTube.streamURL(for: track.videoId) else { return nil }
         return (stream.url, stream.duration)
@@ -1999,8 +2011,9 @@ final class Player: ObservableObject {
             if !self.isCurrentLive, self.duration <= 0, let item = player.currentItem {
                 let real = item.duration.seconds
                 if real.isFinite, real > 1 {
+                    // Shown, never kept: for this audio it can be twice the truth,
+                    // and a kept figure is later trusted as the song's real end.
                     self.duration = real
-                    if let id = self.current?.videoId { self.noteLength(real, for: id) }
                 }
             }
             self.considerSponsorSkip()
@@ -2407,17 +2420,32 @@ final class Player: ObservableObject {
         }.resume()
     }
 
+    /// The song and length the lock screen was last told, so the report notes each once.
+    private var lastLockScreen = ""
+
     private func updateNowPlaying() {
         guard let track = current else { return }
+        let length = duration.isFinite && duration > 0 ? duration : 0
+        let at = currentTime.isFinite ? max(currentTime, 0) : 0
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: track.title,
             MPMediaItemPropertyArtist: track.artist.isEmpty ? "Blazify" : track.artist,
-            MPMediaItemPropertyPlaybackDuration: duration,
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: NSNumber(value: length > 0 ? min(at, length) : at),
+            MPNowPlayingInfoPropertyPlaybackRate: NSNumber(value: isPlaying ? 1.0 : 0.0),
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: NSNumber(value: 1.0),
+            MPNowPlayingInfoPropertyMediaType: NSNumber(value: MPNowPlayingInfoMediaType.audio.rawValue),
+            MPNowPlayingInfoPropertyIsLiveStream: NSNumber(value: isCurrentLive),
         ]
+        // No length at all rather than a zero one: the lock screen draws a bar from it.
+        if length > 0 { info[MPMediaItemPropertyPlaybackDuration] = NSNumber(value: length) }
         if let artwork { info[MPMediaItemPropertyArtwork] = artwork }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        // One line per song and length, for the problem report.
+        let said = "\(track.videoId)|\(Int(length))"
+        if said != lastLockScreen {
+            lastLockScreen = said
+            VideoArtLog.note("lock screen: \(track.title), length \(Int(length))s, at \(Int(at))s, \(isPlaying ? "playing" : "paused")")
+        }
     }
 
     /// Lets go of the player entirely: nothing to resume, nothing to hear.

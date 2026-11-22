@@ -36,6 +36,11 @@ final class AudioCache: ObservableObject {
     private let dir: URL
     private let metaURL: URL
     private var lastUsed: [String: Date] = [:]
+    /// Each kept song's real length, as the stream said when it was fetched.
+    /// The file can't be asked: this audio format makes the player read about
+    /// twice the true length, and a song played to that figure ran on in
+    /// silence for as long again.
+    private var lengths: [String: Double] = [:]
     private var inFlight: Set<String> = []
 
     private init() {
@@ -113,6 +118,19 @@ final class AudioCache: ObservableObject {
         return url
     }
 
+    /// The real length of a kept song, when it was recorded.
+    func duration(for id: String) -> Double? {
+        guard let seconds = lengths[id], seconds > 0 else { return nil }
+        return seconds
+    }
+
+    /// Records a kept song's real length, learned while it played from the network.
+    func noteLength(_ seconds: Double, for id: String) {
+        guard seconds > 0, seconds.isFinite, isCached(id), lengths[id] != seconds else { return }
+        lengths[id] = seconds
+        save()
+    }
+
     func isCached(_ id: String) -> Bool {
         FileManager.default.fileExists(atPath: fileURL(for: id).path)
     }
@@ -166,6 +184,7 @@ final class AudioCache: ObservableObject {
                 self.inFlight.remove(id)
                 guard stored else { return }
                 self.lastUsed[id] = Date()
+                if fresh.duration > 0 { self.lengths[id] = fresh.duration }
                 self.tracks.removeAll { $0.videoId == id }
                 self.tracks.insert(track, at: 0)
                 self.enrich(track)
@@ -214,6 +233,7 @@ final class AudioCache: ObservableObject {
         try? FileManager.default.removeItem(at: fileURL(for: id))
         tracks.removeAll { $0.videoId == id }
         lastUsed[id] = nil
+        lengths[id] = nil
         save()
     }
 
@@ -221,6 +241,7 @@ final class AudioCache: ObservableObject {
         for track in tracks { try? FileManager.default.removeItem(at: fileURL(for: track.videoId)) }
         tracks = []
         lastUsed = [:]
+        lengths = [:]
         save()
         sizeBytes = 0
     }
@@ -230,10 +251,12 @@ final class AudioCache: ObservableObject {
     private struct Meta: Codable {
         let tracks: [Track]
         let lastUsed: [String: Date]
+        /// Missing in caches written before lengths were kept.
+        var lengths: [String: Double]?
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(Meta(tracks: tracks, lastUsed: lastUsed)) else { return }
+        guard let data = try? JSONEncoder().encode(Meta(tracks: tracks, lastUsed: lastUsed, lengths: lengths)) else { return }
         try? data.write(to: metaURL)
     }
 
@@ -241,6 +264,7 @@ final class AudioCache: ObservableObject {
         guard let data = try? Data(contentsOf: metaURL),
               let meta = try? JSONDecoder().decode(Meta.self, from: data) else { return }
         lastUsed = meta.lastUsed
+        lengths = meta.lengths ?? [:]
         // Only keep entries whose file actually survived the system's cache purge.
         tracks = meta.tracks.filter { isCached($0.videoId) }
     }
